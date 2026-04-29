@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""epic-progress.py — Live progress display for Claude stream-json output.
+
+Reads newline-delimited JSON from stdin (claude --output-format stream-json),
+displays a single-line progress indicator on stderr, and writes Claude's text
+output to a log file.
+
+Usage:
+    claude -p --output-format stream-json < prompt \
+      | python3 epic-progress.py --log session.log --phase PLAN
+"""
+
+import argparse
+import json
+import os
+import re
+import select
+import sys
+import time
+
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+REFRESH = 0.2  # seconds between spinner frames
+
+
+def parse_target(tool_name, buf):
+    """Extract a human-readable target from accumulated input_json_delta."""
+    patterns = {
+        "Read": r'"file_path"\s*:\s*"([^"]*)"',
+        "Edit": r'"file_path"\s*:\s*"([^"]*)"',
+        "Write": r'"file_path"\s*:\s*"([^"]*)"',
+        "NotebookEdit": r'"notebook_path"\s*:\s*"([^"]*)"',
+        "Glob": r'"pattern"\s*:\s*"([^"]*)"',
+        "Grep": r'"pattern"\s*:\s*"([^"]*)"',
+        "Bash": r'"command"\s*:\s*"([^"]*)"',
+        "Task": r'"description"\s*:\s*"([^"]*)"',
+        "WebFetch": r'"url"\s*:\s*"([^"]*)"',
+        "WebSearch": r'"query"\s*:\s*"([^"]*)"',
+    }
+    pat = patterns.get(tool_name)
+    if pat:
+        m = re.search(pat, buf)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def shorten(path, max_len):
+    """Shorten a file path or string to fit max_len."""
+    if len(path) <= max_len:
+        return path
+    # For file paths, show .../<last components>
+    if "/" in path:
+        parts = path.split("/")
+        result = parts[-1]
+        for p in reversed(parts[:-1]):
+            candidate = p + "/" + result
+            if len(candidate) + 4 > max_len:
+                break
+            result = candidate
+        return ".../" + result if len(".../" + result) <= max_len else result[:max_len]
+    return path[:max_len - 3] + "..."
+
+
+def format_elapsed(seconds):
+    """Format seconds as Xm XXs."""
+    m, s = divmod(int(seconds), 60)
+    return f"{m}m{s:02d}s"
+
+
+def render_line(spinner_char, elapsed, step, tool, target, term_width):
+    """Build the single-line progress string."""
+    prefix = f"  {spinner_char} {format_elapsed(elapsed)} │ "
+    if tool:
+        middle = f"Step {step:<3} │ {tool:<8}→ "
+        avail = term_width - len(prefix) - len(middle) - 1
+        target_str = shorten(target, max(10, avail)) if target else ""
+        return prefix + middle + target_str
+    else:
+        return prefix + f"Step {step:<3} │ Thinking..."
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Live progress for Claude stream-json")
+    parser.add_argument("--log", required=True, help="Path to write Claude text output")
+    parser.add_argument("--phase", default="RUN", help="Phase label (for display)")
+    args = parser.parse_args()
+
+    log_file = open(args.log, "a", encoding="utf-8")
+    start = time.time()
+    step = 0
+    tool_calls = 0
+    current_tool = ""
+    current_target = ""
+    input_buf = ""
+    spinner_idx = 0
+    activity = ""  # "tool" or "text" or ""
+
+    try:
+        term_width = os.get_terminal_size(sys.stderr.fileno()).columns
+    except (OSError, ValueError):
+        term_width = 80
+
+    stdin_fd = sys.stdin.fileno()
+    line_buf = ""
+
+    try:
+        while True:
+            ready, _, _ = select.select([stdin_fd], [], [], REFRESH)
+
+            if ready:
+                chunk = os.read(stdin_fd, 65536)
+                if not chunk:
+                    break  # EOF
+                line_buf += chunk.decode("utf-8", errors="replace")
+
+                while "\n" in line_buf:
+                    line, line_buf = line_buf.split("\n", 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        evt = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    evt_type = evt.get("type", "")
+
+                    if evt_type == "content_block_start":
+                        cb = evt.get("content_block", {})
+                        if cb.get("type") == "tool_use":
+                            step += 1
+                            tool_calls += 1
+                            current_tool = cb.get("name", "?")
+                            current_target = ""
+                            input_buf = ""
+                            activity = "tool"
+                        elif cb.get("type") == "text":
+                            if activity != "tool":
+                                activity = "text"
+                                current_tool = ""
+                                current_target = ""
+
+                    elif evt_type == "content_block_delta":
+                        delta = evt.get("delta", {})
+                        delta_type = delta.get("type", "")
+
+                        if delta_type == "input_json_delta":
+                            input_buf += delta.get("partial_json", "")
+                            new_target = parse_target(current_tool, input_buf)
+                            if new_target:
+                                current_target = new_target
+
+                        elif delta_type == "text_delta":
+                            text = delta.get("text", "")
+                            log_file.write(text)
+                            log_file.flush()
+                            if activity != "tool":
+                                activity = "text"
+
+                    elif evt_type == "content_block_stop":
+                        if activity == "tool":
+                            activity = ""
+                            input_buf = ""
+
+                    elif evt_type == "message_stop":
+                        pass  # handled by EOF
+
+            # Render progress
+            elapsed = time.time() - start
+            c = SPINNER[spinner_idx % len(SPINNER)]
+            spinner_idx += 1
+
+            if activity == "tool" and current_tool:
+                line_out = render_line(c, elapsed, step, current_tool, current_target, term_width)
+            elif activity == "text":
+                prefix = f"  {c} {format_elapsed(elapsed)} │ "
+                line_out = prefix + "Writing response..."
+            elif step > 0:
+                line_out = render_line(c, elapsed, step, current_tool, current_target, term_width)
+            else:
+                prefix = f"  {c} {format_elapsed(elapsed)} │ "
+                line_out = prefix + "Starting..."
+
+            # Overwrite line on stderr
+            sys.stderr.write(f"\r{line_out:<{term_width}}")
+            sys.stderr.flush()
+
+    except KeyboardInterrupt:
+        pass
+    finally:
+        log_file.close()
+
+    # Final summary line
+    elapsed = time.time() - start
+    summary = f"  ✓ {format_elapsed(elapsed)} │ Done    │ {tool_calls} tool calls"
+    sys.stderr.write(f"\r{summary:<{term_width}}\n")
+    sys.stderr.flush()
+
+
+if __name__ == "__main__":
+    main()

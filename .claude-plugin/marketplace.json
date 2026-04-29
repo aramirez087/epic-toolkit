@@ -1,0 +1,15 @@
+{
+  "name": "epic-toolkit",
+  "owner": {
+    "name": "aramirez087",
+    "url": "https://github.com/aramirez087"
+  },
+  "plugins": [
+    {
+      "name": "epic-toolkit",
+      "source": ".",
+      "description": "DAG-scheduled multi-session Claude Code epics with parallel-worktree execution.",
+      "version": "1.0.0"
+    }
+  ]
+}
