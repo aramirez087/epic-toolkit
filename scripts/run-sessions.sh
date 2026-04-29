@@ -149,7 +149,12 @@ if ! git rev-parse --is-inside-work-tree &>/dev/null; then
   exit 1
 fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# `git rev-parse --show-toplevel` on Git Bash for Windows returns Windows-style
+# paths (`C:/foo/bar`), while `pwd` and SESSIONS_DIR are MSYS-style (`/c/foo/bar`).
+# Mixing styles silently breaks the `${SESSIONS_DIR#$REPO_ROOT/}` prefix strip
+# downstream and yields malformed paths like `//c/foo/...`. Normalize REPO_ROOT
+# through `cd … && pwd` so every path uses the same style.
+REPO_ROOT="$(cd "$(git rev-parse --show-toplevel)" && pwd)"
 ORIG_REPO_ROOT="$REPO_ROOT"
 ORIG_SESSIONS_DIR="$SESSIONS_DIR"
 EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
