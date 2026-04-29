@@ -122,8 +122,21 @@ if ! command -v claude &>/dev/null; then
   err "claude CLI not found on PATH."
   exit 1
 fi
-if ! command -v python3 &>/dev/null; then
-  err "python3 not found on PATH (required for DAG scheduler)."
+# Python 3 detection. On Windows, `python3` may resolve to the Microsoft Store
+# install stub which exits non-zero rather than executing Python. Probe for a
+# working interpreter by actually running it.
+PYTHON_BIN=""
+for cand in python3 python; do
+  if command -v "$cand" &>/dev/null \
+     && "$cand" -c 'import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)' &>/dev/null; then
+    PYTHON_BIN="$cand"
+    break
+  fi
+done
+if [[ -z "$PYTHON_BIN" ]]; then
+  err "Python 3 not found on PATH (tried: python3, python)."
+  err "On Windows, the Microsoft Store \"python3\" stub does not count — install"
+  err "real Python from python.org or disable the App Execution Alias for python3.exe."
   exit 1
 fi
 if ! git rev-parse --is-inside-work-tree &>/dev/null; then
@@ -161,10 +174,10 @@ DAG_ARGS=()
 $STRICT && DAG_ARGS+=(--strict)
 
 if [[ ${#DAG_ARGS[@]} -gt 0 ]]; then
-  python3 "$DAG_SCRIPT" "$SESSIONS_DIR" --bash "${DAG_ARGS[@]}" > "$DAG_TMP" || {
+  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash "${DAG_ARGS[@]}" > "$DAG_TMP" || {
     err "DAG validation failed"; exit 1; }
 else
-  python3 "$DAG_SCRIPT" "$SESSIONS_DIR" --bash > "$DAG_TMP" || {
+  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash > "$DAG_TMP" || {
     err "DAG validation failed"; exit 1; }
 fi
 
@@ -241,14 +254,14 @@ fi
 
 # --- Show DAG and exit if requested ---
 if $SHOW_DAG; then
-  python3 "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
   exit 0
 fi
 
 # --- Dry-run: print plan and exit BEFORE any side effects (worktree, branches) ---
 if $DRY_RUN; then
   log "${BOLD}DRY RUN${NC} — no worktrees, no branches, no commits will be created."
-  python3 "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
   echo ""
   for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     ids="${WAVE_IDS[$wn]:-}"
@@ -360,7 +373,7 @@ log "Branch       : $BRANCH (trunk)"
   && log "Trunk wt     : ${TRUNK_WORKTREE_DIR/#$HOME/~}"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-python3 "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+"$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
 echo ""
 
 # --- Helpers ---
@@ -423,7 +436,7 @@ run_claude() {
       --verbose \
       < "$prompt_file" \
       2>"${log_file%.log}-stderr.tmp" \
-      | python3 "$PROGRESS_SCRIPT" --log "$log_file" --phase "$phase_label"
+      | "$PYTHON_BIN" "$PROGRESS_SCRIPT" --log "$log_file" --phase "$phase_label"
     local exit_code=${PIPESTATUS[0]}
     cat "${log_file%.log}-stderr.tmp" >> "$log_file" 2>/dev/null || true
     rm -f "${log_file%.log}-stderr.tmp"
