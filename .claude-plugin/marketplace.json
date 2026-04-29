@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "epic-toolkit",
-      "source": ".",
+      "source": "./",
       "description": "DAG-scheduled multi-session Claude Code epics with parallel-worktree execution.",
       "version": "1.0.0"
     }
