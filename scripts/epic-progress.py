@@ -13,9 +13,10 @@ Usage:
 import argparse
 import json
 import os
+import queue
 import re
-import select
 import sys
+import threading
 import time
 
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -100,18 +101,40 @@ def main():
     except (OSError, ValueError):
         term_width = 80
 
-    stdin_fd = sys.stdin.fileno()
+    # Cross-platform non-blocking stdin: a reader thread pumps chunks into a
+    # Queue; the main loop polls with a timeout so the spinner animates even
+    # while no events arrive. Replaces select.select(), which only works on
+    # POSIX sockets/pipes — it errors on Windows pipes.
+    stdin_buffer = sys.stdin.buffer
+    chunk_q: queue.Queue = queue.Queue()
+
+    def _reader() -> None:
+        while True:
+            try:
+                chunk = stdin_buffer.read1(65536)
+            except (OSError, ValueError):
+                chunk_q.put(b"")
+                return
+            chunk_q.put(chunk)
+            if not chunk:
+                return
+
+    threading.Thread(target=_reader, daemon=True).start()
     line_buf = ""
+    eof = False
 
     try:
         while True:
-            ready, _, _ = select.select([stdin_fd], [], [], REFRESH)
+            try:
+                chunk = chunk_q.get(timeout=REFRESH)
+            except queue.Empty:
+                chunk = None
 
-            if ready:
-                chunk = os.read(stdin_fd, 65536)
+            if chunk is not None:
                 if not chunk:
-                    break  # EOF
-                line_buf += chunk.decode("utf-8", errors="replace")
+                    eof = True
+                else:
+                    line_buf += chunk.decode("utf-8", errors="replace")
 
                 while "\n" in line_buf:
                     line, line_buf = line_buf.split("\n", 1)
@@ -184,6 +207,9 @@ def main():
             # Overwrite line on stderr
             sys.stderr.write(f"\r{line_out:<{term_width}}")
             sys.stderr.flush()
+
+            if eof and "\n" not in line_buf:
+                break
 
     except KeyboardInterrupt:
         pass
