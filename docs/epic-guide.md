@@ -90,7 +90,7 @@ has no frontmatter.
    - For each sibling in the wave (capped by `--max-parallel`, default 4): a
      per-session worktree is spun up at
      `.epic-worktrees/<repo>/epic--<name>--sNN-<slug>/` on a branch
-     `epic/<name>/sNN-<slug>` branched off trunk's current HEAD.
+     `epic/<name>--sNN-<slug>` branched off trunk's current HEAD.
    - Each session runs as a **fresh Claude process** with the operator rules,
      its session prompt, and concatenated handoff docs from its DAG parents.
    - Two-pass per session: PLAN (read-only exploration) → EXECUTE (commits).

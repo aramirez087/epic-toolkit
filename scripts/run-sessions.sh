@@ -41,6 +41,11 @@
 
 set -euo pipefail
 
+# Force UTF-8 in all child Python interpreters so the box-drawing characters
+# (║ ╠) and other non-ASCII output render correctly on Windows consoles, where
+# the default codepage is cp1252.
+export PYTHONIOENCODING=utf-8
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -746,7 +751,12 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 
     slug="${SESSION_SLUG_BY_ID[$sid]}"
     friendly="${slug//-/ }"
-    sess_branch="${BRANCH}/s$(printf '%02d' "$sid")-${slug}"
+    # Use "--" not "/" between trunk and per-session branch names. Git stores
+    # refs as files, so refs/heads/epic/<name> (the trunk leaf) and
+    # refs/heads/epic/<name>/sNN-slug (would need <name> to be a directory)
+    # cannot coexist — git rejects the second worktree creation with
+    # "cannot lock ref: ... is not a directory".
+    sess_branch="${BRANCH}--s$(printf '%02d' "$sid")-${slug}"
     sess_wt_dir_name="${BRANCH_SANITIZED}--s$(printf '%02d' "$sid")-${slug}"
     SESSION_BRANCH_BY_ID[$sid]="$sess_branch"
 

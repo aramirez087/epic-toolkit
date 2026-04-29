@@ -309,10 +309,11 @@ def emit_bash(plan: dict[str, Any]) -> None:
 
 
 def main() -> None:
-    # Force LF line endings on stdout so bash readers don't get \r-suffixed
-    # values on Windows (e.g. WAVE_COUNT="4\r" would break arithmetic).
+    # Force LF line endings + UTF-8 on stdout. Windows defaults to CRLF
+    # translation (which breaks bash arithmetic on values like "4\r") and
+    # cp1252 encoding (which corrupts the ║╠ box-drawing chars in --show).
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(newline="\n")
+        sys.stdout.reconfigure(newline="\n", encoding="utf-8")
 
     ap = argparse.ArgumentParser()
     ap.add_argument("sessions_dir")

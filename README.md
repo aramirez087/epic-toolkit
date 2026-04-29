@@ -29,7 +29,7 @@ That's it — `/epic` and `/epic.generate` are now available in any project.
    - Validates the DAG (no cycles, all deps exist).
    - Computes Kahn-style waves (independent sessions in the same wave).
    - Creates a trunk worktree on `epic/<name>` and per-session worktrees on
-     `epic/<name>/sNN-<slug>` for each sibling, branched off the trunk's HEAD.
+     `epic/<name>--sNN-<slug>` for each sibling, branched off the trunk's HEAD.
    - Runs up to `--max-parallel` (default 4) sessions in a wave concurrently
      with a fresh `claude -p` process each (PLAN pass → EXECUTE pass).
    - Iteratively `--no-ff` merges successful siblings into trunk between waves.
