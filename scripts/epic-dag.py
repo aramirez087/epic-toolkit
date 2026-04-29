@@ -48,6 +48,11 @@ from typing import Any
 SESSION_RE = re.compile(r"^session-(\d+)-(.+)\.md$")
 
 
+def _posix(p: str) -> str:
+    """Absolute path with forward slashes — bash/awk-safe on Windows too."""
+    return os.path.abspath(p).replace("\\", "/")
+
+
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Minimal YAML-frontmatter parser. Stdlib only."""
     if not text.startswith("---\n"):
@@ -304,6 +309,11 @@ def emit_bash(plan: dict[str, Any]) -> None:
 
 
 def main() -> None:
+    # Force LF line endings on stdout so bash readers don't get \r-suffixed
+    # values on Windows (e.g. WAVE_COUNT="4\r" would break arithmetic).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("sessions_dir")
     ap.add_argument("--bash", action="store_true", help="emit line-oriented format")
@@ -337,13 +347,13 @@ def main() -> None:
             overlaps.append((wi, a, b))
 
     plan = {
-        "operator_path": os.path.abspath(operator),
+        "operator_path": _posix(operator),
         "waves": [
             [
                 {
                     "id": s["id"],
                     "file": s["file"],
-                    "path": os.path.abspath(s["path"]),
+                    "path": _posix(s["path"]),
                     "slug": s["slug"],
                     "title": s["title"],
                     "depends_on": s["depends_on"],

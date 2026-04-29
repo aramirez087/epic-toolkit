@@ -193,6 +193,8 @@ declare -a SESSION_WAVE_OF       # by id
 WAVE_COUNT=0
 
 while IFS= read -r line; do
+  # Defensive: strip trailing CR in case Python emitted CRLF (Windows).
+  line="${line%$'\r'}"
   set -- $line
   case "$1" in
     META)
