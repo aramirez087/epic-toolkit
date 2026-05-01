@@ -41,11 +41,6 @@
 
 set -euo pipefail
 
-# Force UTF-8 in all child Python interpreters so the box-drawing characters
-# (║ ╠) and other non-ASCII output render correctly on Windows consoles, where
-# the default codepage is cp1252.
-export PYTHONIOENCODING=utf-8
-
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -127,30 +122,28 @@ if ! command -v claude &>/dev/null; then
   err "claude CLI not found on PATH."
   exit 1
 fi
-# Python 3 detection. On Windows, `python3` may resolve to the Microsoft Store
-# install stub which exits non-zero rather than executing Python. Probe for a
-# working interpreter by actually running it.
-PYTHON_BIN=""
-for cand in python3 python; do
-  if command -v "$cand" &>/dev/null \
-     && "$cand" -c 'import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)' &>/dev/null; then
-    PYTHON_BIN="$cand"
-    break
-  fi
-done
-if [[ -z "$PYTHON_BIN" ]]; then
-  err "Python 3 not found on PATH (tried: python3, python)."
-  err "On Windows, the Microsoft Store \"python3\" stub does not count — install"
-  err "real Python from python.org or disable the App Execution Alias for python3.exe."
+# Resolve python interpreter. On Windows, `python3` is often a Microsoft Store
+# stub that satisfies `command -v` but errors on actual invocation, so we
+# probe with --version instead of trusting PATH lookup alone.
+PYTHON_CMD=""
+if command -v python3 &>/dev/null && python3 --version &>/dev/null; then
+  PYTHON_CMD=python3
+elif command -v python &>/dev/null && python --version &>/dev/null; then
+  PYTHON_CMD=python
+else
+  err "python3 (or python) not found on PATH (required for DAG scheduler)."
   exit 1
 fi
+# Force UTF-8 stdio so the DAG renderer's box-drawing characters don't crash
+# on Windows consoles that default to cp1252.
+export PYTHONIOENCODING=utf-8
 if ! git rev-parse --is-inside-work-tree &>/dev/null; then
   err "Not inside a git repository."
   exit 1
 fi
 
 # `git rev-parse --show-toplevel` on Git Bash for Windows returns Windows-style
-# paths (`C:/foo/bar`), while `pwd` and SESSIONS_DIR are MSYS-style (`/c/foo/bar`).
+# (`C:/foo/bar`), while `pwd` and SESSIONS_DIR are MSYS-style (`/c/foo/bar`).
 # Mixing styles silently breaks the `${SESSIONS_DIR#$REPO_ROOT/}` prefix strip
 # downstream and yields malformed paths like `//c/foo/...`. Normalize REPO_ROOT
 # through `cd … && pwd` so every path uses the same style.
@@ -175,6 +168,7 @@ fi
 
 DAG_SCRIPT="$(dirname "$0")/epic-dag.py"
 PROGRESS_SCRIPT="$(dirname "$0")/epic-progress.py"
+UI_SCRIPT="$(dirname "$0")/epic-ui.py"
 
 # --- Build the DAG plan ---
 DAG_TMP="$(mktemp)"
@@ -184,10 +178,10 @@ DAG_ARGS=()
 $STRICT && DAG_ARGS+=(--strict)
 
 if [[ ${#DAG_ARGS[@]} -gt 0 ]]; then
-  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash "${DAG_ARGS[@]}" > "$DAG_TMP" || {
+  "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash "${DAG_ARGS[@]}" > "$DAG_TMP" || {
     err "DAG validation failed"; exit 1; }
 else
-  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash > "$DAG_TMP" || {
+  "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash > "$DAG_TMP" || {
     err "DAG validation failed"; exit 1; }
 fi
 
@@ -203,8 +197,6 @@ declare -a SESSION_WAVE_OF       # by id
 WAVE_COUNT=0
 
 while IFS= read -r line; do
-  # Defensive: strip trailing CR in case Python emitted CRLF (Windows).
-  line="${line%$'\r'}"
   set -- $line
   case "$1" in
     META)
@@ -266,14 +258,14 @@ fi
 
 # --- Show DAG and exit if requested ---
 if $SHOW_DAG; then
-  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+  "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
   exit 0
 fi
 
 # --- Dry-run: print plan and exit BEFORE any side effects (worktree, branches) ---
 if $DRY_RUN; then
   log "${BOLD}DRY RUN${NC} — no worktrees, no branches, no commits will be created."
-  "$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+  "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
   echo ""
   for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     ids="${WAVE_IDS[$wn]:-}"
@@ -385,8 +377,50 @@ log "Branch       : $BRANCH (trunk)"
   && log "Trunk wt     : ${TRUNK_WORKTREE_DIR/#$HOME/~}"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-"$PYTHON_BIN" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+"$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
 echo ""
+
+# --- Live UI setup ---
+STATUS_FILE="${TRUNK_SESSIONS_DIR}/.epic-status.json"
+DAG_PLAN_FILE="${TRUNK_SESSIONS_DIR}/.epic-dag-plan.bash"
+UI_PID=""
+LIVE_UI=false
+
+# Copy the dag plan to a stable path (DAG_TMP is deleted on EXIT)
+cp "$DAG_TMP" "$DAG_PLAN_FILE"
+
+# Initialize shared status JSON (all sessions start as "pending")
+"$PYTHON_CMD" - "$STATUS_FILE" "$EPIC_NAME_SLUG" "$DAG_PLAN_FILE" <<'PYEOF_INIT'
+import sys, json, time
+sf, epic, pf = sys.argv[1], sys.argv[2], sys.argv[3]
+sessions = {}
+with open(pf, encoding='utf-8', errors='replace') as f:
+    for line in f:
+        line = line.strip()
+        if not line.startswith('SESSION '): continue
+        parts = line.split(None, 6)
+        wn, sid, _, _, slug = parts[1], parts[2], parts[3], parts[4], parts[5]
+        sessions[sid] = {
+            'status': 'pending', 'slug': slug, 'wave': int(wn),
+            'title': slug.replace('-', ' ').title(),
+            'step': 0, 'tool': '', 'target': '', 'elapsed': 0.0,
+        }
+with open(sf, 'w') as f:
+    json.dump({'epic': epic, 'started_at': time.time(), 'sessions': sessions}, f, indent=2)
+PYEOF_INIT
+
+# Launch live dashboard only when stderr is a real TTY (cursor-up redraws work).
+# In Claude Code / piped contexts isatty() is false — shell's existing colored
+# output handles progress there; no background watcher needed.
+if [[ -f "$UI_SCRIPT" && -t 2 ]]; then
+  "$PYTHON_CMD" "$UI_SCRIPT" \
+    --plan-bash "$DAG_PLAN_FILE" \
+    --status-file "$STATUS_FILE" \
+    --epic "$EPIC_NAME_SLUG" &
+  UI_PID=$!
+  LIVE_UI=true
+  sleep 0.3   # brief pause so initial panel renders before wave messages
+fi
 
 # --- Helpers ---
 
@@ -432,26 +466,47 @@ $(cat "$path")
 }
 
 # Run a single claude pipe-invocation with optional progress stream.
-# Args: <prompt_file> <log_file> <phase_label> <quiet:true|false>
+# Args: <prompt_file> <log_file> <phase_label> <quiet:true|false> [session_id]
 DISALLOWED_TOOLS="EnterPlanMode,ExitPlanMode,AskUserQuestion,EnterWorktree"
 
 run_claude() {
-  local prompt_file="$1" log_file="$2" phase_label="$3" quiet="${4:-false}"
+  local prompt_file="$1" log_file="$2" phase_label="$3" quiet="${4:-false}" sid="${5:-0}"
+
+  # Build progress args (status file updates work even in quiet/parallel mode)
+  local progress_args=(--log "$log_file" --phase "$phase_label")
+  if [[ -n "${STATUS_FILE:-}" && -f "${STATUS_FILE:-}" && "$sid" -gt 0 ]]; then
+    progress_args+=(--session-id "$sid" --status-file "$STATUS_FILE")
+  fi
 
   set +e
-  if [[ "$quiet" == "false" ]] && [[ -f "$PROGRESS_SCRIPT" ]]; then
-    env -u CLAUDECODE claude -p \
-      --model "$MODEL" \
-      --dangerously-skip-permissions \
-      --disallowedTools "$DISALLOWED_TOOLS" \
-      --output-format stream-json \
-      --verbose \
-      < "$prompt_file" \
-      2>"${log_file%.log}-stderr.tmp" \
-      | "$PYTHON_BIN" "$PROGRESS_SCRIPT" --log "$log_file" --phase "$phase_label"
+  if [[ -f "$PROGRESS_SCRIPT" ]]; then
+    local stderr_tmp="${log_file%.log}-stderr.tmp"
+    if [[ "$quiet" == "false" ]]; then
+      # Non-quiet: stream-json → progress renderer (renders live spinner)
+      env -u CLAUDECODE claude -p \
+        --model "$MODEL" \
+        --dangerously-skip-permissions \
+        --disallowedTools "$DISALLOWED_TOOLS" \
+        --output-format stream-json \
+        --verbose \
+        < "$prompt_file" \
+        2>"$stderr_tmp" \
+        | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
+    else
+      # Quiet (parallel): still parse stream-json for status updates, suppress spinner display
+      env -u CLAUDECODE claude -p \
+        --model "$MODEL" \
+        --dangerously-skip-permissions \
+        --disallowedTools "$DISALLOWED_TOOLS" \
+        --output-format stream-json \
+        --verbose \
+        < "$prompt_file" \
+        2>"$stderr_tmp" \
+        | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}" 2>/dev/null
+    fi
     local exit_code=${PIPESTATUS[0]}
-    cat "${log_file%.log}-stderr.tmp" >> "$log_file" 2>/dev/null || true
-    rm -f "${log_file%.log}-stderr.tmp"
+    cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
+    rm -f "$stderr_tmp"
   else
     env -u CLAUDECODE claude -p \
       --model "$MODEL" \
@@ -462,6 +517,39 @@ run_claude() {
   fi
   set -e
   return $exit_code
+}
+
+# Atomically update one session's entry in the shared status JSON.
+# Args: <status_file> <session_id> <new_status> [elapsed_seconds]
+mark_session() {
+  local sf="${1:-}" sid="$2" st="$3" elapsed="${4:-0}"
+  [[ -z "$sf" || ! -f "$sf" ]] && return 0
+  "$PYTHON_CMD" - "$sf" "$sid" "$st" "$elapsed" <<'PYEOF'
+import sys, json, os, time
+sf, sid, st = sys.argv[1], sys.argv[2], sys.argv[3]
+elapsed = float(sys.argv[4]) if len(sys.argv) > 4 else 0
+lock = sf + '.lock'
+for _ in range(200):
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd); break
+    except (FileExistsError, OSError):
+        time.sleep(0.05)
+else:
+    sys.exit(0)
+try:
+    with open(sf, encoding='utf-8') as f: data = json.load(f)
+    entry = data['sessions'].setdefault(sid, {})
+    entry['status'] = st
+    if st == 'running': entry['started_at'] = time.time()
+    if elapsed > 0: entry['elapsed'] = elapsed
+    tmp = sf + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f: json.dump(data, f, indent=2)
+    os.replace(tmp, sf)
+finally:
+    try: os.unlink(lock)
+    except: pass
+PYEOF
 }
 
 # ---------------------------------------------------------------------------
@@ -536,7 +624,7 @@ SINGLE_EOF
 )"
     local prompt_file; prompt_file="$(mktemp)"
     echo "$prompt" > "$prompt_file"
-    run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" || rc=$?
+    run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
     rm -f "$prompt_file"
   else
     # PLAN pass
@@ -576,7 +664,7 @@ PLAN_EOF
 )"
     local prompt_file; prompt_file="$(mktemp)"
     echo "$plan_prompt" > "$prompt_file"
-    if ! run_claude "$prompt_file" "$plan_log" "S${sid}-PLAN" "$quiet"; then
+    if ! run_claude "$prompt_file" "$plan_log" "S${sid}-PLAN" "$quiet" "$sid"; then
       rm -f "$prompt_file"
       cd "$prev_cwd"
       return 1
@@ -636,7 +724,7 @@ EXEC_EOF
 )"
     prompt_file="$(mktemp)"
     echo "$exec_prompt" > "$prompt_file"
-    run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" || rc=$?
+    run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
     rm -f "$prompt_file"
   fi
 
@@ -681,10 +769,12 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   for sid in "${ALL_IN_WAVE[@]}"; do
     if [[ "$sid" -lt "$START_FROM" ]]; then
       SESSION_STATUS[$sid]="skipped"
+      mark_session "${STATUS_FILE:-}" "$sid" "skipped"
       continue
     fi
     if [[ "$sid" -gt "$END_AT" ]]; then
       SESSION_STATUS[$sid]="skipped"
+      mark_session "${STATUS_FILE:-}" "$sid" "skipped"
       continue
     fi
     IN_RANGE+=("$sid")
@@ -695,18 +785,20 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     continue
   fi
 
-  # Wave banner
-  echo ""
-  log "┌─────────────────────────────────────────────────────"
-  if [[ ${#IN_RANGE[@]} -gt 1 ]]; then
-    log "│ ${BOLD}Wave $wn / $WAVE_COUNT${NC}  (${MAGENTA}${#IN_RANGE[@]} sessions in parallel${NC})"
-  else
-    log "│ ${BOLD}Wave $wn / $WAVE_COUNT${NC}  (1 session, serial)"
+  # Wave banner (suppressed when live UI owns the display)
+  if ! $LIVE_UI; then
+    echo ""
+    log "┌─────────────────────────────────────────────────────"
+    if [[ ${#IN_RANGE[@]} -gt 1 ]]; then
+      log "│ ${BOLD}Wave $wn / $WAVE_COUNT${NC}  (${MAGENTA}${#IN_RANGE[@]} sessions in parallel${NC})"
+    else
+      log "│ ${BOLD}Wave $wn / $WAVE_COUNT${NC}  (1 session, serial)"
+    fi
+    for sid in "${IN_RANGE[@]}"; do
+      log "│   • session $(printf '%02d' "$sid") — ${SESSION_SLUG_BY_ID[$sid]}  (deps: ${SESSION_DEPS_BY_ID[$sid]})"
+    done
+    log "└─────────────────────────────────────────────────────"
   fi
-  for sid in "${IN_RANGE[@]}"; do
-    log "│   • session $(printf '%02d' "$sid") — ${SESSION_SLUG_BY_ID[$sid]}  (deps: ${SESSION_DEPS_BY_ID[$sid]})"
-  done
-  log "└─────────────────────────────────────────────────────"
 
   # Make sure trunk is checked out at TRUNK_WORKTREE_DIR (so siblings branch off it)
   if $USE_WORKTREE; then
@@ -728,10 +820,12 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
         SESSION_ELAPSED_BY_ID[$sid]=$elapsed
         if [[ $rc -eq 0 ]]; then
           SESSION_STATUS[$sid]="done"
-          ok "  ✓ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) finished in $(format_elapsed "$elapsed")"
+          mark_session "${STATUS_FILE:-}" "$sid" "done" "$elapsed"
+          ! $LIVE_UI && ok "  ✓ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) finished in $(format_elapsed "$elapsed")"
         else
           SESSION_STATUS[$sid]="failed"
-          err "  ✗ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) FAILED in $(format_elapsed "$elapsed") (exit $rc)"
+          mark_session "${STATUS_FILE:-}" "$sid" "failed" "$elapsed"
+          ! $LIVE_UI && err "  ✗ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) FAILED in $(format_elapsed "$elapsed") (exit $rc)"
         fi
       else
         new_pids+=("${JOB_PIDS[$i]}")
@@ -756,11 +850,10 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 
     slug="${SESSION_SLUG_BY_ID[$sid]}"
     friendly="${slug//-/ }"
-    # Use "--" not "/" between trunk and per-session branch names. Git stores
-    # refs as files, so refs/heads/epic/<name> (the trunk leaf) and
-    # refs/heads/epic/<name>/sNN-slug (would need <name> to be a directory)
-    # cannot coexist — git rejects the second worktree creation with
-    # "cannot lock ref: ... is not a directory".
+    # Use "--" not "/" as the trunk→session separator so per-session branch
+    # names don't try to nest under the trunk's ref path. Git rejects creating
+    # `epic/shipment-io/s01-charter` while `epic/shipment-io` already exists
+    # as a leaf branch (ref-directory conflict).
     sess_branch="${BRANCH}--s$(printf '%02d' "$sid")-${slug}"
     sess_wt_dir_name="${BRANCH_SANITIZED}--s$(printf '%02d' "$sid")-${slug}"
     SESSION_BRANCH_BY_ID[$sid]="$sess_branch"
@@ -788,10 +881,11 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     quiet="false"
     [[ ${#IN_RANGE[@]} -gt 1 ]] && quiet="true"
 
-    log "  ▶ session $(printf '%02d' "$sid") (${slug}) starting → branch $sess_branch"
+    ! $LIVE_UI && log "  ▶ session $(printf '%02d' "$sid") (${slug}) starting → branch $sess_branch"
 
     SESSION_STATUS[$sid]="running"
     SESSION_START_TS[$sid]=$(date +%s)
+    mark_session "${STATUS_FILE:-}" "$sid" "running"
     (
       run_one_session "$sid" "$sess_wt" "$friendly" "$handoff_text" "$quiet"
     ) &
@@ -822,7 +916,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
               -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH}" \
               "$sess_branch"
           then
-            ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk"
+            ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk"
             MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
           else
             err "  ⇢ MERGE CONFLICT merging session $(printf '%02d' "$sid") into trunk"
@@ -864,8 +958,13 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 done
 
 # ---------------------------------------------------------------------------
-# Final summary
+# Shut down live UI and print final summary
 # ---------------------------------------------------------------------------
+if [[ -n "$UI_PID" ]] && kill -0 "$UI_PID" 2>/dev/null; then
+  sleep 0.5    # allow one last redraw to show final state
+  kill "$UI_PID" 2>/dev/null || true
+  wait "$UI_PID" 2>/dev/null || true
+fi
 echo ""
 if ! $EPIC_FAILED; then
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -883,34 +982,30 @@ if ! $EPIC_FAILED; then
   ok "Plans: ${TRUNK_SESSIONS_DIR/#$HOME/~}/.session-*-plan.md"
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # --- Cleanup session artifacts before PR ---
-  log "Cleaning up session artifacts..."
+  # --- Cleanup orchestrator artifacts before PR ---
+  # Only remove the orchestrator's internal working files (dotfiles like
+  # `.session-NN-plan.md`, `.session-NN-{plan,exec}.log`). The session prompt
+  # files (`session-NN-*.md`) and the handoff docs under
+  # `docs/roadmap/<epic>/session-NN-handoff.md` are user-facing deliverables —
+  # they document the work, contain the CI-gate verdict, and are needed for
+  # epic resume / audit. Keeping them on the branch is the safe default.
+  log "Cleaning up orchestrator artifacts..."
   CLEANED=0
-  for f in "$TRUNK_SESSIONS_DIR"/.session-*; do
+  for f in "$TRUNK_SESSIONS_DIR"/.session-* \
+            "${STATUS_FILE:-}" "${DAG_PLAN_FILE:-}" \
+            "${STATUS_FILE:-}.lock" "${STATUS_FILE:-}.tmp"; do
     [[ -f "$f" ]] && rm -f "$f" && CLEANED=$((CLEANED + 1))
   done
-  for f in "$TRUNK_SESSIONS_DIR"/session-*.md; do
-    [[ -f "$f" ]] && rm -f "$f" && CLEANED=$((CLEANED + 1))
-  done
-  rmdir "$TRUNK_SESSIONS_DIR" 2>/dev/null || true
-
-  ROADMAP_DIR="$REPO_ROOT/docs/roadmap/$EPIC_NAME_SLUG"
-  if [[ -d "$ROADMAP_DIR" ]]; then
-    for f in "$ROADMAP_DIR"/session-*; do
-      [[ -f "$f" ]] && rm -f "$f" && CLEANED=$((CLEANED + 1))
-    done
-    rmdir "$ROADMAP_DIR" 2>/dev/null || true
-  fi
 
   if [[ $CLEANED -gt 0 ]]; then
     cd "$REPO_ROOT"
     git add -A
-    git commit -q -m "chore: clean up session artifacts
+    git commit -q -m "chore: clean up orchestrator artifacts
 
-Remove $CLEANED session files (prompts, plans, logs, handoffs).
+Remove $CLEANED internal working files (per-session plans + logs).
 
 Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
-    ok "Cleaned $CLEANED session artifacts"
+    ok "Cleaned $CLEANED orchestrator artifacts (handoffs preserved)"
   fi
 
   # --- Auto-PR ---

@@ -48,11 +48,6 @@ from typing import Any
 SESSION_RE = re.compile(r"^session-(\d+)-(.+)\.md$")
 
 
-def _posix(p: str) -> str:
-    """Absolute path with forward slashes — bash/awk-safe on Windows too."""
-    return os.path.abspath(p).replace("\\", "/")
-
-
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Minimal YAML-frontmatter parser. Stdlib only."""
     if not text.startswith("---\n"):
@@ -309,12 +304,13 @@ def emit_bash(plan: dict[str, Any]) -> None:
 
 
 def main() -> None:
-    # Force LF line endings + UTF-8 on stdout. Windows defaults to CRLF
-    # translation (which breaks bash arithmetic on values like "4\r") and
-    # cp1252 encoding (which corrupts the ║╠ box-drawing chars in --show).
-    if hasattr(sys.stdout, "reconfigure"):
+    # On Windows, Python's text-mode stdout translates "\n" to "\r\n", which
+    # breaks downstream bash parsing. Force LF newlines and UTF-8 so the
+    # shell wrapper sees clean output regardless of platform.
+    try:
         sys.stdout.reconfigure(newline="\n", encoding="utf-8")
-
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("sessions_dir")
     ap.add_argument("--bash", action="store_true", help="emit line-oriented format")
@@ -348,13 +344,13 @@ def main() -> None:
             overlaps.append((wi, a, b))
 
     plan = {
-        "operator_path": _posix(operator),
+        "operator_path": os.path.abspath(operator).replace("\\", "/"),
         "waves": [
             [
                 {
                     "id": s["id"],
                     "file": s["file"],
-                    "path": _posix(s["path"]),
+                    "path": os.path.abspath(s["path"]).replace("\\", "/"),
                     "slug": s["slug"],
                     "title": s["title"],
                     "depends_on": s["depends_on"],

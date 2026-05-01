@@ -19,6 +19,40 @@ import sys
 import threading
 import time
 
+
+def update_status_file(path: str, session_id: int, update: dict) -> None:
+    """Atomically merge `update` into sessions[session_id] in the shared status JSON."""
+    if not path or not os.path.isfile(path):
+        return
+    lock = path + '.lock'
+    acquired = False
+    for _ in range(100):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            acquired = True
+            break
+        except (FileExistsError, OSError):
+            time.sleep(0.02)
+    if not acquired:
+        return
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        key = str(session_id)
+        data.setdefault('sessions', {}).setdefault(key, {}).update(update)
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+    finally:
+        try:
+            os.unlink(lock)
+        except Exception:
+            pass
+
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 REFRESH = 0.2  # seconds between spinner frames
 
@@ -84,7 +118,12 @@ def main():
     parser = argparse.ArgumentParser(description="Live progress for Claude stream-json")
     parser.add_argument("--log", required=True, help="Path to write Claude text output")
     parser.add_argument("--phase", default="RUN", help="Phase label (for display)")
+    parser.add_argument("--session-id", type=int, default=0, help="Session ID (for status file)")
+    parser.add_argument("--status-file", default="", help="Shared status JSON path")
     args = parser.parse_args()
+
+    session_id  = args.session_id
+    status_file = args.status_file
 
     log_file = open(args.log, "a", encoding="utf-8")
     start = time.time()
@@ -95,6 +134,8 @@ def main():
     input_buf = ""
     spinner_idx = 0
     activity = ""  # "tool" or "text" or ""
+    last_status_ts = time.time()
+    STATUS_INTERVAL = 1.5  # seconds between periodic status file writes
 
     try:
         term_width = os.get_terminal_size(sys.stderr.fileno()).columns
@@ -157,6 +198,14 @@ def main():
                             current_target = ""
                             input_buf = ""
                             activity = "tool"
+                            # Immediately push new step + tool to the status file
+                            if session_id > 0 and status_file:
+                                now = time.time()
+                                update_status_file(status_file, session_id, {
+                                    'step': step, 'tool': current_tool,
+                                    'target': '', 'elapsed': now - start,
+                                })
+                                last_status_ts = now
                         elif cb.get("type") == "text":
                             if activity != "tool":
                                 activity = "text"
@@ -170,8 +219,17 @@ def main():
                         if delta_type == "input_json_delta":
                             input_buf += delta.get("partial_json", "")
                             new_target = parse_target(current_tool, input_buf)
-                            if new_target:
+                            if new_target and new_target != current_target:
                                 current_target = new_target
+                                # Push target update (throttled to 0.5 s)
+                                if session_id > 0 and status_file:
+                                    now = time.time()
+                                    if now - last_status_ts >= 0.5:
+                                        update_status_file(status_file, session_id, {
+                                            'target': current_target,
+                                            'elapsed': now - start,
+                                        })
+                                        last_status_ts = now
 
                         elif delta_type == "text_delta":
                             text = delta.get("text", "")
@@ -188,10 +246,24 @@ def main():
                     elif evt_type == "message_stop":
                         pass  # handled by EOF
 
+            if eof and not line_buf.strip():
+                break
+
             # Render progress
             elapsed = time.time() - start
             c = SPINNER[spinner_idx % len(SPINNER)]
             spinner_idx += 1
+
+            # Periodic status file update (elapsed + current tool/target)
+            now_abs = time.time()
+            if session_id > 0 and status_file and (now_abs - last_status_ts) >= STATUS_INTERVAL:
+                update_status_file(status_file, session_id, {
+                    'elapsed': elapsed,
+                    'step': step,
+                    'tool': current_tool,
+                    'target': current_target,
+                })
+                last_status_ts = now_abs
 
             if activity == "tool" and current_tool:
                 line_out = render_line(c, elapsed, step, current_tool, current_target, term_width)
@@ -207,9 +279,6 @@ def main():
             # Overwrite line on stderr
             sys.stderr.write(f"\r{line_out:<{term_width}}")
             sys.stderr.flush()
-
-            if eof and "\n" not in line_buf:
-                break
 
     except KeyboardInterrupt:
         pass
