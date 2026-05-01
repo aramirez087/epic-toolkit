@@ -1,0 +1,57 @@
+{
+  "epic": "epic-next-features",
+  "started_at": 1777677628.109524,
+  "sessions": {
+    "1": {
+      "status": "running",
+      "slug": "charter",
+      "wave": 1,
+      "title": "Charter",
+      "step": 0,
+      "tool": "",
+      "target": "",
+      "elapsed": 288.57258701324463,
+      "started_at": 1777677628.370067
+    },
+    "2": {
+      "status": "pending",
+      "slug": "dag-frontmatter",
+      "wave": 2,
+      "title": "Dag Frontmatter",
+      "step": 0,
+      "tool": "",
+      "target": "",
+      "elapsed": 0.0
+    },
+    "3": {
+      "status": "pending",
+      "slug": "runner-core",
+      "wave": 2,
+      "title": "Runner Core",
+      "step": 0,
+      "tool": "",
+      "target": "",
+      "elapsed": 0.0
+    },
+    "4": {
+      "status": "pending",
+      "slug": "documentation",
+      "wave": 2,
+      "title": "Documentation",
+      "step": 0,
+      "tool": "",
+      "target": "",
+      "elapsed": 0.0
+    },
+    "5": {
+      "status": "pending",
+      "slug": "ci-gate",
+      "wave": 3,
+      "title": "Ci Gate",
+      "step": 0,
+      "tool": "",
+      "target": "",
+      "elapsed": 0.0
+    }
+  }
+}
