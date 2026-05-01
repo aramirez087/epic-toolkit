@@ -1,10 +1,10 @@
 # epic-toolkit
 
-A Claude Code plugin for running multi-session epics as a **directed acyclic
-graph**, with **parallel siblings executing in their own git worktrees** and
-merging back into a coordinator trunk branch wave by wave.
+Run multi-session epics as a **directed acyclic graph**, with **parallel siblings
+executing in their own git worktrees** and merging back into a coordinator trunk
+branch wave by wave. Works with both **Claude Code** and **OpenCode**.
 
-Adds two slash commands to Claude Code:
+Adds two slash commands:
 
 - `/epic.generate <problem statement>` — turns a problem statement into a
   sequence of session prompt files with DAG metadata.
@@ -13,12 +13,36 @@ Adds two slash commands to Claude Code:
 
 ## Install
 
+**Claude Code:**
+
 ```
 /plugin marketplace add aramirez087/epic-toolkit
 /plugin install epic-toolkit@epic-toolkit
 ```
 
-That's it — `/epic` and `/epic.generate` are now available in any project.
+**OpenCode:**
+
+The `.opencode/commands/` directory is auto-detected. Just clone the repo or
+symlink it into your project and the `/epic` and `/epic.generate` commands
+will be available.
+
+## Dual-tool support
+
+The orchestrator auto-detects which CLI is running (`claude` vs `opencode`) via
+environment variables and PATH lookup. You can force a specific CLI with the
+`--cli` flag:
+
+```bash
+bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli opencode
+bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli claude
+```
+
+Progress display adapts to the CLI:
+- **Claude Code**: streams `--output-format stream-json` through
+  `epic-progress.py` for real-time step/tool/target tracking.
+- **OpenCode**: uses `epic-poll-progress.py` which tails the session log
+  file and parses tool-use markers for a live spinner + step count. Also
+  updates the shared status JSON so the TUI dashboard works.
 
 ## What it does
 
@@ -31,7 +55,7 @@ That's it — `/epic` and `/epic.generate` are now available in any project.
    - Creates a trunk worktree on `epic/<name>` and per-session worktrees on
      `epic/<name>/sNN-<slug>` for each sibling, branched off the trunk's HEAD.
    - Runs up to `--max-parallel` (default 4) sessions in a wave concurrently
-     with a fresh `claude -p` process each (PLAN pass → EXECUTE pass).
+     with a fresh CLI process each (PLAN pass → EXECUTE pass).
    - Iteratively `--no-ff` merges successful siblings into trunk between waves.
    - Auto-commits, auto-creates a GitHub PR via `gh`, cleans up worktrees.
 
@@ -42,7 +66,7 @@ docs/claude-sessions/<epic-name>/
   session-00-operator-rules.md     # prepended to every session
   session-01-charter.md            # solo wave (parallel_safe: false)
   session-02-auth.md               # wave 2 sibling (depends_on: [01])
-  session-03-email.md              # wave 2 sibling (depends_on: [01])
+  session-03-email.md               # wave 2 sibling (depends_on: [01])
   session-04-billing.md            # wave 2 sibling (depends_on: [01])
   session-05-admin-ui.md           # wave 3 (depends_on: [02, 04])
   session-06-ci-gate.md            # final solo wave (depends_on: all)
@@ -97,25 +121,26 @@ See [`docs/epic-guide.md`](docs/epic-guide.md) for the full reference.
 - `git` 2.20+
 - `gh` CLI (optional, for auto-PR creation)
 
-## Files in this plugin
+## Files
 
 ```
 .claude-plugin/
-  plugin.json              # plugin manifest
+  plugin.json              # Claude Code plugin manifest
   marketplace.json         # makes the repo a self-installable marketplace
 .opencode/
   commands/                # OpenCode slash commands
     epic.md
     epic.generate.md
+  package.json             # OpenCode plugin dependency
 commands/
   epic.md                  # Claude Code /epic slash command
   epic.generate.md         # Claude Code /epic.generate slash command
 scripts/
-  run-sessions.sh          # wave orchestrator
+  run-sessions.sh          # wave orchestrator (dual-tool: claude or opencode)
   epic-dag.py              # DAG builder + wave scheduler
   epic-progress.py         # stream-json progress display (Claude Code)
   epic-poll-progress.py     # polling progress display (OpenCode fallback)
-  epic-ui.py               # live terminal dashboard
+  epic-ui.py               # live terminal dashboard (used by run-sessions.sh)
 docs/
   epic-guide.md            # full user guide
   epic-prompt-template.md

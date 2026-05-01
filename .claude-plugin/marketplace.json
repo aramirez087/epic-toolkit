@@ -8,8 +8,8 @@
     {
       "name": "epic-toolkit",
       "source": "./",
-      "description": "DAG-scheduled multi-session Claude Code epics with parallel-worktree execution.",
-      "version": "1.0.0"
+      "description": "DAG-scheduled multi-session epics with parallel-worktree execution. Works with Claude Code and OpenCode.",
+      "version": "2.0.0"
     }
   ]
 }

@@ -45,7 +45,7 @@ parallel_safe: true
 
 # Session 03: Email worker
 
-Paste this into a new Claude Code session:
+Paste this into a new agent session:
 
 ​```md
 Continue from Session 01 artifacts.
@@ -91,7 +91,8 @@ has no frontmatter.
      per-session worktree is spun up at
      `.epic-worktrees/<repo>/epic--<name>--sNN-<slug>/` on a branch
      `epic/<name>--sNN-<slug>` branched off trunk's current HEAD.
-   - Each session runs as a **fresh Claude process** with the operator rules,
+   - Each session runs as a **fresh CLI process** (Claude Code or OpenCode,
+     auto-detected or forced via `--cli`) with the operator rules,
      its session prompt, and concatenated handoff docs from its DAG parents.
    - Two-pass per session: PLAN (read-only exploration) → EXECUTE (commits).
    - Sessions run concurrently. Their output streams to per-session log files;
@@ -112,7 +113,8 @@ has no frontmatter.
 | `--sequential` | off | Force one session per wave (legacy linear) |
 | `--show-dag` | off | Print the wave layout and exit |
 | `--dry-run` | off | Preview without executing (non-destructive) |
-| `--model M` | sonnet | Model: `opus`, `sonnet`, `haiku` |
+| `--model M` | sonnet | Model name (passed to CLI; e.g. `opus`, `sonnet`, `haiku` for Claude) |
+| `--cli CMD` | auto | Force CLI: `opencode` or `claude`. Auto-detects from env vars or PATH |
 | `--branch B` | `epic/<name>` | Trunk branch |
 | `--base B` | repo default | Base for new trunk branch |
 | `--no-commit` | off | Skip auto-commit fallback |
@@ -152,6 +154,26 @@ bash scripts/run-sessions.sh docs/claude-sessions/my-epic --max-parallel 6 --mod
 # Force a specific CLI (when running from a plain terminal)
 bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli opencode
 ```
+
+## CLI detection
+
+The orchestrator auto-detects which AI CLI to use:
+
+1. **`--cli` flag** — explicit override, highest priority.
+2. **Environment variables** — `OPENCODE_SESSION_ID` (set by OpenCode) or
+   `CLAUDECODE` (set by Claude Code).
+3. **PATH fallback** — looks for `opencode` then `claude` on `PATH`.
+
+Progress display adapts to the detected CLI:
+
+- **Claude Code** streams `--output-format stream-json` through
+  `epic-progress.py` for real-time step/tool/target tracking with a spinner.
+- **OpenCode** uses `epic-poll-progress.py`, which tails the session log
+  file, parses tool-use markers (`Read`, `Edit`, `Write`, `Bash`, etc.),
+  and renders a spinner with step count. It also updates the shared status
+  JSON so the TUI dashboard (`epic-ui.py`) shows live progress.
+- If neither progress script is available, the session runs with simple
+  log output (no spinner).
 
 ## Designing for parallelism
 
