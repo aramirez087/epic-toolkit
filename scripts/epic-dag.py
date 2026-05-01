@@ -146,6 +146,8 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 "implicit_dep": implicit,
                 "touches": [str(t) for t in touches],
                 "parallel_safe": bool(fm.get("parallel_safe", True)),
+                "model": fm.get("model", ""),
+                "cli": fm.get("cli", ""),
                 "has_frontmatter": bool(fm),
             }
         )
@@ -289,6 +291,11 @@ def render_ascii(waves: list[list[dict[str, Any]]]) -> str:
 
 
 def emit_bash(plan: dict[str, Any]) -> None:
+    """
+    Emit bash-parseable plan. SESSION lines have been extended with model/cli columns
+    for backward compatibility: older parsers can ignore the extra trailing columns.
+    Format: SESSION <wave> <id> <file> <deps> <slug> <parallel> <model> <cli>
+    """
     print(f"META operator_path={plan['operator_path']}")
     print(f"META operator_file={os.path.basename(plan['operator_path'])}")
     print(f"META wave_count={len(plan['waves'])}")
@@ -299,7 +306,7 @@ def emit_bash(plan: dict[str, Any]) -> None:
             parents = ",".join(f"{p}" for p in s["depends_on"]) or "-"
             print(
                 f"SESSION {wi} {s['id']} {s['file']} {parents} {s['slug']} "
-                f"{'1' if s['parallel_safe'] else '0'}"
+                f"{'1' if s['parallel_safe'] else '0'} {s['model']} {s['cli']}"
             )
 
 
@@ -356,6 +363,8 @@ def main() -> None:
                     "depends_on": s["depends_on"],
                     "touches": s["touches"],
                     "parallel_safe": s["parallel_safe"],
+                    "model": s["model"],
+                    "cli": s["cli"],
                 }
                 for s in w
             ]
