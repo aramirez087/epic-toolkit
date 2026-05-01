@@ -90,6 +90,8 @@ depends_on: [01]              # parents in the DAG
 touches:                      # globs this session may modify
   - src/email/**
 parallel_safe: true           # false forces a solo wave
+model: "opus"                 # override default model for this session
+cli: "claude"                 # override CLI auto-detection for this session
 ---
 ```
 
@@ -109,6 +111,8 @@ the toolkit is fully back-compatible with pre-DAG epics.
 | `--model M` | sonnet | Model name (passed to CLI; e.g. `opus`, `sonnet`, `haiku` for Claude) |
 | `--cli CMD` | auto | Force CLI: `opencode` or `claude` |
 | `--no-worktree` | off | Run trunk in CWD (forces sequential) |
+| `--timeout N` | 0 | Session timeout in minutes (0 = no timeout) |
+| `--retry N` | 0 | Retry failed sessions N times (0 = no retry) |
 
 See [`docs/epic-guide.md`](docs/epic-guide.md) for the full reference.
 
@@ -119,6 +123,22 @@ See [`docs/epic-guide.md`](docs/epic-guide.md) for the full reference.
 - Bash 3.2+
 - `git` 2.20+
 - `gh` CLI (optional, for auto-PR creation)
+
+## Configuration File
+
+Create `.epic-config.json` in your repository root to set default values:
+
+```json
+{
+  "timeout": 30,
+  "retry": 1,
+  "model": "sonnet",
+  "cli": "opencode",
+  "maxParallel": 6
+}
+```
+
+CLI flags override config file values. All keys are optional.
 
 ## Files
 
