@@ -80,6 +80,29 @@ has no frontmatter.
 | `touches` | recommended | List of file globs this session may modify. The runner uses these to detect overlaps between parallel siblings |
 | `parallel_safe` | yes | `false` forces a solo wave (charter, CI gate, anything mutating shared state). Default `true` |
 
+### Per-Session Overrides
+
+You can override the default model and CLI on a per-session basis:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | string | Override default model for this session (e.g., "opus", "sonnet") |
+| `cli` | string | Override CLI auto-detection for this session ("opencode" or "claude") |
+
+Example mixed-tool epic:
+
+```yaml
+---
+session: 02
+title: "Complex analysis"
+depends_on: [01]
+model: "opus"           # Use Opus for heavy reasoning
+cli: "claude"           # Force Claude for this session
+touches: ["analysis/**"]
+parallel_safe: true
+---
+```
+
 ## How execution works
 
 1. **DAG validation** — `epic-dag.py` parses every session's frontmatter, builds the
@@ -123,6 +146,26 @@ has no frontmatter.
 | `--no-worktree` | off | Run trunk in CWD (forces sequential) |
 | `--keep-worktree` | off | Retain trunk worktree on success |
 | `--keep-session-worktrees` | off | Retain per-session worktrees on success |
+| `--timeout N` | 0 | Session timeout in minutes (0 = no timeout) |
+| `--retry N` | 0 | Retry failed sessions N times (0 = no retry) |
+
+## Configuration File Reference
+
+Create `.epic-config.json` in your repository root to set defaults:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `timeout` | number | 0 | Session timeout in minutes (0 = disabled) |
+| `retry` | number | 0 | Retry count for failed sessions (0 = disabled) |
+| `cli` | string | "" | Force CLI: "opencode" or "claude" (empty = auto-detect) |
+| `model` | string | "sonnet" | Default model for all sessions |
+| `maxParallel` | number | 4 | Max concurrent sessions per wave |
+| `autoCommit` | boolean | true | Auto-commit on session success |
+| `autoPr` | boolean | true | Auto-create GitHub PR |
+| `skipPlan` | boolean | false | Single-pass execution (no plan phase) |
+| `keepWorktree` | boolean | false | Retain trunk worktree on success |
+
+CLI flags take precedence over config file values.
 
 ## Examples
 
@@ -153,6 +196,13 @@ bash scripts/run-sessions.sh docs/claude-sessions/my-epic --max-parallel 6 --mod
 
 # Force a specific CLI (when running from a plain terminal)
 bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli opencode
+
+# Use timeout and retry for flaky sessions
+/epic my-epic --timeout 45 --retry 2
+
+# Mixed configuration: some sessions timeout quickly, others have more time
+# (configure per-session via frontmatter model/cli overrides)
+/epic complex-analysis --timeout 60 --retry 1 --max-parallel 2
 ```
 
 ## CLI detection

@@ -1,5 +1,5 @@
 ---
-description: Run a multi-session epic autonomously. Sessions run as a DAG with parallel waves where possible. Usage /epic <name> [--start N] [--end N] [--dry-run] [--show-dag] [--max-parallel N] [--strict] [--sequential] [--model MODEL] [--cli opencode|claude] [--branch <name>]
+description: Run a multi-session epic autonomously. Sessions run as a DAG with parallel waves where possible. Usage /epic <name> [--start N] [--end N] [--timeout M] [--retry N] [--dry-run] [--show-dag] [--max-parallel N] [--strict] [--sequential] [--model MODEL] [--cli opencode|claude] [--branch <name>]
 ---
 
 You are the orchestrator for an autonomous multi-session epic. Your job is to invoke
@@ -35,10 +35,26 @@ Defaults:
 - `--base` — repo default branch (usually `main`)
 - `--dry-run` — false (when set, prints the plan and exits with no side effects)
 - `--no-worktree` — false (worktree isolation is ON by default)
+- `--timeout` — 0 (no timeout)
+- `--retry` — 0 (no retry)
 - `--keep-worktree` — false (trunk worktree auto-cleaned after PR creation)
 - `--keep-session-worktrees` — false (per-session worktrees cleaned after each wave)
 
 The sessions directory is: `docs/claude-sessions/<name>/`.
+
+Sessions can include per-session overrides in their frontmatter:
+
+```yaml
+---
+session: 02
+title: "Analysis task"
+depends_on: [01]
+model: "opus"           # Override default model
+cli: "claude"           # Override CLI auto-detection
+touches: ["analysis/**"]
+parallel_safe: true
+---
+```
 
 ## Validate
 
@@ -51,7 +67,7 @@ Run the global script, forwarding all flags:
 
 ```bash
 bash scripts/run-sessions.sh docs/claude-sessions/<name>/ \
-  [--start N] [--end N] [--max-parallel N] [--strict] [--sequential] \
+  [--start N] [--end N] [--timeout M] [--retry N] [--max-parallel N] [--strict] [--sequential] \
   [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] \
   [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
 ```
