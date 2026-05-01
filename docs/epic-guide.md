@@ -148,6 +148,9 @@ has no frontmatter.
 
 # From terminal directly
 bash scripts/run-sessions.sh docs/claude-sessions/my-epic --max-parallel 6 --model opus
+
+# Force a specific CLI (when running from a plain terminal)
+bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli opencode
 ```
 
 ## Designing for parallelism

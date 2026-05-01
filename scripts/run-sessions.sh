@@ -31,6 +31,7 @@
 #   --branch NAME        Trunk branch (default: epic/<name>)
 #   --base BRANCH        Base branch for trunk (default: repo default)
 #   --model MODEL        Model name (passed through to the CLI; e.g. opus, sonnet, haiku for Claude)
+#   --cli CMD            Force CLI: opencode or claude (default: auto-detect)
 #   --no-commit          Skip auto-commit fallback
 #   --no-pr              Skip auto-PR creation
 #   --skip-plan          Single-pass mode (no separate plan phase)
@@ -80,6 +81,7 @@ SKIP_PLAN=false
 USE_WORKTREE=true
 KEEP_WORKTREE=false
 KEEP_SESSION_WORKTREES=false
+CLI_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -93,6 +95,7 @@ while [[ $# -gt 0 ]]; do
     --branch)                   BRANCH="$2"; shift 2 ;;
     --base)                     BASE_BRANCH="$2"; shift 2 ;;
     --model)                    MODEL="$2"; shift 2 ;;
+    --cli)                      CLI_OVERRIDE="$2"; shift 2 ;;
     --no-commit)                AUTO_COMMIT=false; shift ;;
     --no-pr)                    AUTO_PR=false; shift ;;
     --skip-plan)                SKIP_PLAN=true; shift ;;
@@ -118,10 +121,16 @@ fi
 SESSIONS_DIR="$(cd "$SESSIONS_DIR" && pwd)"
 
 # --- Detect CLI ---
-# Prefer the invoking tool; fall back to whichever is available.
+# Prefer --cli override, then the invoking tool's env var, then PATH fallback.
 # OPENCODE_SESSION_ID is set by OpenCode; CLAUDECODE is set by Claude Code.
 CLI_CMD=""
-if [[ -n "${OPENCODE_SESSION_ID:-}" ]]; then
+if [[ -n "$CLI_OVERRIDE" ]]; then
+  CLI_CMD="$CLI_OVERRIDE"
+  if ! command -v "$CLI_CMD" &>/dev/null; then
+    err "Forced CLI '$CLI_CMD' not found on PATH."
+    exit 1
+  fi
+elif [[ -n "${OPENCODE_SESSION_ID:-}" ]]; then
   CLI_CMD=opencode
 elif [[ -n "${CLAUDECODE:-}" ]]; then
   CLI_CMD=claude
@@ -132,7 +141,7 @@ if [[ -z "$CLI_CMD" ]]; then
   elif command -v claude &>/dev/null; then
     CLI_CMD=claude
   else
-    err "Neither opencode nor claude CLI found on PATH."
+    err "Neither opencode nor claude CLI found on PATH. Use --cli to force one."
     exit 1
   fi
 fi
@@ -490,19 +499,6 @@ $(cat "$path")
   echo "$out"
 }
 
-# Build CLI-specific flag arrays.
-# Claude Code flags: --dangerously-skip-permissions, --disallowedTools, --output-format stream-json, --verbose
-# OpenCode flags:    --dangerously-skip-permissions, --disallowedTools (same interface when running via opencode)
-_cli_flags() {
-  if [[ "$CLI_CMD" == "opencode" ]]; then
-    echo "--dangerously-skip-permissions"
-  else
-    echo "--dangerously-skip-permissions"
-    echo "--disallowedTools"
-    echo "$DISALLOWED_TOOLS"
-  fi
-}
-
 # Run a single AI-CLI pipe-invocation with optional progress stream.
 # Args: <prompt_file> <log_file> <phase_label> <quiet:true|false> [session_id]
 DISALLOWED_TOOLS="EnterPlanMode,ExitPlanMode,AskUserQuestion,EnterWorktree"
@@ -523,6 +519,9 @@ run_cli() {
   else
     model_flag=(--model "$MODEL")
   fi
+
+  local POLL_PROGRESS_SCRIPT
+  POLL_PROGRESS_SCRIPT="$(dirname "$0")/epic-poll-progress.py"
 
   set +e
   if [[ -f "$PROGRESS_SCRIPT" ]]; then
@@ -554,16 +553,38 @@ run_cli() {
       cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
       rm -f "$stderr_tmp"
     else
-      # OpenCode: no stream-json support yet, run directly
-      opencode -p "${model_flag[@]}" \
-        --dangerously-skip-permissions \
-        < "$prompt_file" > "$log_file" 2>"${stderr_tmp:-/dev/null}"
-      local exit_code=$?
-      cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
-      rm -f "$stderr_tmp" 2>/dev/null || true
+      # OpenCode: no native stream-json; use polling progress watcher
+      if [[ -f "$POLL_PROGRESS_SCRIPT" ]]; then
+        # Start the poll watcher in background — it tails $log_file for
+        # tool-use markers and renders a spinner.  Stdout copy goes to
+        # $log_file for the watcher to read, plus we capture exit code.
+        local poll_pid=""
+        if [[ "$quiet" == "false" ]]; then
+          "$PYTHON_CMD" "$POLL_PROGRESS_SCRIPT" "${progress_args[@]}" &
+          poll_pid=$!
+        fi
+        opencode -p "${model_flag[@]}" \
+          --dangerously-skip-permissions \
+          < "$prompt_file" >> "$log_file" 2>"$stderr_tmp"
+        local exit_code=$?
+        # Give the poll watcher a moment to flush, then kill it
+        if [[ -n "$poll_pid" ]]; then
+          sleep 0.5
+          kill "$poll_pid" 2>/dev/null || true
+          wait "$poll_pid" 2>/dev/null || true
+        fi
+        cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
+        rm -f "$stderr_tmp" 2>/dev/null || true
+      else
+        # No progress scripts at all — simple direct run
+        opencode -p "${model_flag[@]}" \
+          --dangerously-skip-permissions \
+          < "$prompt_file" >> "$log_file" 2>&1
+        local exit_code=$?
+      fi
     fi
   else
-    # No progress script available
+    # No stream-json progress script available
     if [[ "$CLI_CMD" == "claude" ]]; then
       env -u CLAUDECODE claude -p \
         "${model_flag[@]}" \
@@ -572,10 +593,27 @@ run_cli() {
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
     else
-      opencode -p "${model_flag[@]}" \
-        --dangerously-skip-permissions \
-        < "$prompt_file" > "$log_file" 2>&1
-      local exit_code=$?
+      if [[ -f "$POLL_PROGRESS_SCRIPT" ]]; then
+        local poll_pid=""
+        if [[ "$quiet" == "false" ]]; then
+          "$PYTHON_CMD" "$POLL_PROGRESS_SCRIPT" "${progress_args[@]}" &
+          poll_pid=$!
+        fi
+        opencode -p "${model_flag[@]}" \
+          --dangerously-skip-permissions \
+          < "$prompt_file" >> "$log_file" 2>&1
+        local exit_code=$?
+        if [[ -n "$poll_pid" ]]; then
+          sleep 0.5
+          kill "$poll_pid" 2>/dev/null || true
+          wait "$poll_pid" 2>/dev/null || true
+        fi
+      else
+        opencode -p "${model_flag[@]}" \
+          --dangerously-skip-permissions \
+          < "$prompt_file" > "$log_file" 2>&1
+        local exit_code=$?
+      fi
     fi
   fi
   set -e

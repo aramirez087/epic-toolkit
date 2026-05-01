@@ -30,6 +30,7 @@ Defaults:
 - `--sequential` — false (forces one-session-per-wave; equivalent to `--max-parallel 1`)
 - `--show-dag` — false (when set, print the planned waves and exit)
 - `--model` — sonnet
+- `--cli` — auto-detect (forces opencode or claude; useful when running from a terminal outside either tool)
 - `--branch` — auto-derived as `epic/<name>` (the trunk branch)
 - `--base` — repo default branch (usually `main`)
 - `--dry-run` — false (when set, prints the plan and exits with no side effects)
@@ -51,7 +52,7 @@ Run the global script, forwarding all flags:
 ```bash
 bash scripts/run-sessions.sh docs/claude-sessions/<name>/ \
   [--start N] [--end N] [--max-parallel N] [--strict] [--sequential] \
-  [--show-dag] [--model M] [--branch B] [--base B] [--dry-run] \
+  [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] \
   [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
 ```
 

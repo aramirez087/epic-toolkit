@@ -83,14 +83,15 @@ the toolkit is fully back-compatible with pre-DAG epics.
 | `--dry-run` | off | Preview without executing (non-destructive) |
 | `--start N` | 1 | Resume from session N |
 | `--sequential` | off | Force one session per wave (legacy linear) |
-| `--model M` | sonnet | Model: `opus`, `sonnet`, `haiku` |
+| `--model M` | sonnet | Model name (passed to CLI; e.g. `opus`, `sonnet`, `haiku` for Claude) |
+| `--cli CMD` | auto | Force CLI: `opencode` or `claude` |
 | `--no-worktree` | off | Run trunk in CWD (forces sequential) |
 
 See [`docs/epic-guide.md`](docs/epic-guide.md) for the full reference.
 
 ## Requirements
 
-- Claude Code (`claude` CLI) on `PATH`
+- OpenCode (`opencode`) **or** Claude Code (`claude`) on `PATH` — auto-detected, or force with `--cli`
 - Python 3.8+ (stdlib only — no extra packages)
 - Bash 3.2+
 - `git` 2.20+
@@ -100,17 +101,23 @@ See [`docs/epic-guide.md`](docs/epic-guide.md) for the full reference.
 
 ```
 .claude-plugin/
-  plugin.json          # plugin manifest
-  marketplace.json     # makes the repo a self-installable marketplace
+  plugin.json              # plugin manifest
+  marketplace.json         # makes the repo a self-installable marketplace
+.opencode/
+  commands/                # OpenCode slash commands
+    epic.md
+    epic.generate.md
 commands/
-  epic.md              # /epic slash command
-  epic.generate.md     # /epic.generate slash command
+  epic.md                  # Claude Code /epic slash command
+  epic.generate.md         # Claude Code /epic.generate slash command
 scripts/
-  run-sessions.sh      # wave orchestrator
-  epic-dag.py          # DAG builder + wave scheduler
-  epic-progress.py     # live-progress display for a single session
+  run-sessions.sh          # wave orchestrator
+  epic-dag.py              # DAG builder + wave scheduler
+  epic-progress.py         # stream-json progress display (Claude Code)
+  epic-poll-progress.py     # polling progress display (OpenCode fallback)
+  epic-ui.py               # live terminal dashboard
 docs/
-  epic-guide.md        # full user guide
+  epic-guide.md            # full user guide
   epic-prompt-template.md
 ```
 
