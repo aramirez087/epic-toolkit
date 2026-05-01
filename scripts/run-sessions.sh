@@ -30,7 +30,7 @@
 #   --dry-run            Preview without executing
 #   --branch NAME        Trunk branch (default: epic/<name>)
 #   --base BRANCH        Base branch for trunk (default: repo default)
-#   --model MODEL        Claude model: opus, sonnet (default), haiku
+#   --model MODEL        Model name (passed through to the CLI; e.g. opus, sonnet, haiku for Claude)
 #   --no-commit          Skip auto-commit fallback
 #   --no-pr              Skip auto-PR creation
 #   --skip-plan          Single-pass mode (no separate plan phase)
@@ -117,11 +117,26 @@ if [[ ! -d "$SESSIONS_DIR" ]]; then
 fi
 SESSIONS_DIR="$(cd "$SESSIONS_DIR" && pwd)"
 
-# --- Validate environment ---
-if ! command -v claude &>/dev/null; then
-  err "claude CLI not found on PATH."
-  exit 1
+# --- Detect CLI ---
+# Prefer the invoking tool; fall back to whichever is available.
+# OPENCODE_SESSION_ID is set by OpenCode; CLAUDECODE is set by Claude Code.
+CLI_CMD=""
+if [[ -n "${OPENCODE_SESSION_ID:-}" ]]; then
+  CLI_CMD=opencode
+elif [[ -n "${CLAUDECODE:-}" ]]; then
+  CLI_CMD=claude
 fi
+if [[ -z "$CLI_CMD" ]]; then
+  if command -v opencode &>/dev/null; then
+    CLI_CMD=opencode
+  elif command -v claude &>/dev/null; then
+    CLI_CMD=claude
+  else
+    err "Neither opencode nor claude CLI found on PATH."
+    exit 1
+  fi
+fi
+log "Using CLI: $CLI_CMD"
 # Resolve python interpreter. On Windows, `python3` is often a Microsoft Store
 # stub that satisfies `command -v` but errors on actual invocation, so we
 # probe with --version instead of trusting PATH lookup alone.
@@ -137,6 +152,16 @@ fi
 # Force UTF-8 stdio so the DAG renderer's box-drawing characters don't crash
 # on Windows consoles that default to cp1252.
 export PYTHONIOENCODING=utf-8
+
+# Resolve plugin root — works in both Claude Code (CLAUDE_PLUGIN_ROOT) and
+# OpenCode (no env var; derive from script location).
+if [[ -z "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
+  # Derive plugin root from this script's location (works when invoked directly
+  # or via `bash run-sessions.sh` from the commands/ directory).
+  _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  CLAUDE_PLUGIN_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
+  unset _SCRIPT_DIR
+fi
 if ! git rev-parse --is-inside-work-tree &>/dev/null; then
   err "Not inside a git repository."
   exit 1
@@ -338,7 +363,7 @@ if $USE_WORKTREE; then
 Sync session prompt files onto the epic trunk so per-session worktrees
 inherit them when fanning out parallel waves.
 
-Co-Authored-By: Claude <noreply@anthropic.com>" || true
+Co-Authored-By: AI <noreply@ai>" || true
     log "Bootstrapped session prompts onto trunk"
   fi
 
@@ -465,11 +490,24 @@ $(cat "$path")
   echo "$out"
 }
 
-# Run a single claude pipe-invocation with optional progress stream.
+# Build CLI-specific flag arrays.
+# Claude Code flags: --dangerously-skip-permissions, --disallowedTools, --output-format stream-json, --verbose
+# OpenCode flags:    --dangerously-skip-permissions, --disallowedTools (same interface when running via opencode)
+_cli_flags() {
+  if [[ "$CLI_CMD" == "opencode" ]]; then
+    echo "--dangerously-skip-permissions"
+  else
+    echo "--dangerously-skip-permissions"
+    echo "--disallowedTools"
+    echo "$DISALLOWED_TOOLS"
+  fi
+}
+
+# Run a single AI-CLI pipe-invocation with optional progress stream.
 # Args: <prompt_file> <log_file> <phase_label> <quiet:true|false> [session_id]
 DISALLOWED_TOOLS="EnterPlanMode,ExitPlanMode,AskUserQuestion,EnterWorktree"
 
-run_claude() {
+run_cli() {
   local prompt_file="$1" log_file="$2" phase_label="$3" quiet="${4:-false}" sid="${5:-0}"
 
   # Build progress args (status file updates work even in quiet/parallel mode)
@@ -478,46 +516,74 @@ run_claude() {
     progress_args+=(--session-id "$sid" --status-file "$STATUS_FILE")
   fi
 
+  # Build the model flag — Claude accepts --model, OpenCode uses -m
+  local model_flag=()
+  if [[ "$CLI_CMD" == "opencode" ]]; then
+    if [[ -n "$MODEL" ]]; then model_flag=(-m "$MODEL"); fi
+  else
+    model_flag=(--model "$MODEL")
+  fi
+
   set +e
   if [[ -f "$PROGRESS_SCRIPT" ]]; then
     local stderr_tmp="${log_file%.log}-stderr.tmp"
-    if [[ "$quiet" == "false" ]]; then
-      # Non-quiet: stream-json → progress renderer (renders live spinner)
-      env -u CLAUDECODE claude -p \
-        --model "$MODEL" \
-        --dangerously-skip-permissions \
-        --disallowedTools "$DISALLOWED_TOOLS" \
-        --output-format stream-json \
-        --verbose \
-        < "$prompt_file" \
-        2>"$stderr_tmp" \
-        | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
+    if [[ "$CLI_CMD" == "claude" ]]; then
+      # Claude Code: stream-json → progress renderer
+      if [[ "$quiet" == "false" ]]; then
+        env -u CLAUDECODE claude -p \
+          "${model_flag[@]}" \
+          --dangerously-skip-permissions \
+          --disallowedTools "$DISALLOWED_TOOLS" \
+          --output-format stream-json \
+          --verbose \
+          < "$prompt_file" \
+          2>"$stderr_tmp" \
+          | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
+      else
+        env -u CLAUDECODE claude -p \
+          "${model_flag[@]}" \
+          --dangerously-skip-permissions \
+          --disallowedTools "$DISALLOWED_TOOLS" \
+          --output-format stream-json \
+          --verbose \
+          < "$prompt_file" \
+          2>"$stderr_tmp" \
+          | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}" 2>/dev/null
+      fi
+      local exit_code=${PIPESTATUS[0]}
+      cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
+      rm -f "$stderr_tmp"
     else
-      # Quiet (parallel): still parse stream-json for status updates, suppress spinner display
+      # OpenCode: no stream-json support yet, run directly
+      opencode -p "${model_flag[@]}" \
+        --dangerously-skip-permissions \
+        < "$prompt_file" > "$log_file" 2>"${stderr_tmp:-/dev/null}"
+      local exit_code=$?
+      cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
+      rm -f "$stderr_tmp" 2>/dev/null || true
+    fi
+  else
+    # No progress script available
+    if [[ "$CLI_CMD" == "claude" ]]; then
       env -u CLAUDECODE claude -p \
-        --model "$MODEL" \
+        "${model_flag[@]}" \
         --dangerously-skip-permissions \
         --disallowedTools "$DISALLOWED_TOOLS" \
-        --output-format stream-json \
-        --verbose \
-        < "$prompt_file" \
-        2>"$stderr_tmp" \
-        | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}" 2>/dev/null
+        < "$prompt_file" > "$log_file" 2>&1
+      local exit_code=$?
+    else
+      opencode -p "${model_flag[@]}" \
+        --dangerously-skip-permissions \
+        < "$prompt_file" > "$log_file" 2>&1
+      local exit_code=$?
     fi
-    local exit_code=${PIPESTATUS[0]}
-    cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
-    rm -f "$stderr_tmp"
-  else
-    env -u CLAUDECODE claude -p \
-      --model "$MODEL" \
-      --dangerously-skip-permissions \
-      --disallowedTools "$DISALLOWED_TOOLS" \
-      < "$prompt_file" > "$log_file" 2>&1
-    local exit_code=$?
   fi
   set -e
   return $exit_code
 }
+
+# Backward-compat alias
+run_claude() { run_cli "$@"; }
 
 # Atomically update one session's entry in the shared status JSON.
 # Args: <status_file> <session_id> <new_status> [elapsed_seconds]
@@ -617,7 +683,7 @@ PHASE 3: EXECUTION PROTOCOL
 
    <2-3 sentences>
 
-   Co-Authored-By: Claude <noreply@anthropic.com>"
+   Co-Authored-By: AI <noreply@ai>"
 
 5. Print a brief completion summary.
 SINGLE_EOF
@@ -717,7 +783,7 @@ EXECUTION INSTRUCTIONS
 
    <2-3 sentences>
 
-   Co-Authored-By: Claude <noreply@anthropic.com>"
+   Co-Authored-By: AI <noreply@ai>"
 
 Do NOT wait for approval. Execute immediately.
 EXEC_EOF
@@ -737,7 +803,7 @@ EXEC_EOF
 
 Automated execution of $fname.
 
-Co-Authored-By: Claude <noreply@anthropic.com>" || true
+Co-Authored-By: AI <noreply@ai>" || true
     fi
   fi
 
@@ -1004,7 +1070,7 @@ if ! $EPIC_FAILED; then
 
 Remove $CLEANED internal working files (per-session plans + logs).
 
-Co-Authored-By: Claude <noreply@anthropic.com>" 2>/dev/null || true
+Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
     ok "Cleaned $CLEANED orchestrator artifacts (handoffs preserved)"
   fi
 
@@ -1045,7 +1111,7 @@ Executed ${WAVE_COUNT} wave(s) across the parallel scheduler using \`${MODEL}\`.
 
 ${DIFF_STATS}
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code) DAG epic runner"
+🤖 Generated with DAG epic runner"
 
         PR_URL="$(gh pr create --title "$PR_TITLE" --body "$PR_BODY" 2>&1)" || true
         if [[ "$PR_URL" == http* ]]; then

@@ -49,7 +49,7 @@ The sessions directory is: `docs/claude-sessions/<name>/`.
 Run the global script, forwarding all flags:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/scripts/run-sessions.sh" docs/claude-sessions/<name>/ \
+bash scripts/run-sessions.sh docs/claude-sessions/<name>/ \
   [--start N] [--end N] [--max-parallel N] [--strict] [--sequential] \
   [--show-dag] [--model M] [--branch B] [--base B] [--dry-run] \
   [--no-worktree] [--keep-worktree] [--keep-session-worktrees]

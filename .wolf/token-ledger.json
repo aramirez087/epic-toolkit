@@ -3,15 +3,38 @@
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
     "total_tokens_estimated": 0,
-    "total_reads": 0,
+    "total_reads": 1,
     "total_writes": 0,
-    "total_sessions": 0,
+    "total_sessions": 2,
     "anatomy_hits": 0,
-    "anatomy_misses": 0,
+    "anatomy_misses": 1,
     "repeated_reads_blocked": 0,
     "estimated_savings_vs_bare_cli": 0
   },
-  "sessions": [],
+  "sessions": [
+    {
+      "id": "session-2026-05-01-1642",
+      "started": "2026-05-01T22:42:32.326Z",
+      "ended": "2026-05-01T22:44:28.700Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/.config/opencode/opencode.json",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    }
+  ],
   "daemon_usage": [],
   "waste_flags": [],
   "optimization_report": {

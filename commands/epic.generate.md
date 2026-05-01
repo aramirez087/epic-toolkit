@@ -137,5 +137,5 @@ Inside each fenced prompt for sessions 01 and above, include:
 5. Create the directory `docs/claude-sessions/<epic-name>/` if it does not exist.
 6. Write every required session file into that directory.
 7. Ensure each file matches the required outer markdown structure exactly, including frontmatter on sessions 01+.
-8. After writing the files, run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/epic-dag.py" docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
+8. After writing the files, run `python3 scripts/epic-dag.py docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
 9. In your response, report: the created directory, the session files written, the wave layout (paste the `epic-dag.py --show` output), and the stack/quality-gate set you selected.

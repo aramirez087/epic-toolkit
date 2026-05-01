@@ -1,17 +1,17 @@
 # Epic Sessions Guide
 
-Run multi-session Claude Code tasks autonomously. Sessions are scheduled as a
-**directed acyclic graph** and **parallel siblings run concurrently in
+Run multi-session epic tasks autonomously in Claude Code or OpenCode. Sessions are
+scheduled as a **directed acyclic graph** and **parallel siblings run concurrently in
 per-session worktrees**, then merge into the trunk branch wave by wave.
 
 ## Quick start
 
 ```bash
-# Inside Claude Code
+# Inside Claude Code or OpenCode
 /epic x-api-surface-expansion
 
 # From your terminal (equivalent)
-"${CLAUDE_PLUGIN_ROOT}/scripts/run-sessions.sh" docs/claude-sessions/x-api-surface-expansion
+bash scripts/run-sessions.sh docs/claude-sessions/x-api-surface-expansion
 ```
 
 ## Directory convention
@@ -147,7 +147,7 @@ has no frontmatter.
 /epic my-epic --dry-run
 
 # From terminal directly
-"${CLAUDE_PLUGIN_ROOT}/scripts/run-sessions.sh" docs/claude-sessions/my-epic --max-parallel 6 --model opus
+bash scripts/run-sessions.sh docs/claude-sessions/my-epic --max-parallel 6 --model opus
 ```
 
 ## Designing for parallelism

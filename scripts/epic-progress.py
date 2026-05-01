@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""epic-progress.py — Live progress display for Claude stream-json output.
+"""epic-progress.py — Live progress display for AI-CLI stream-json output.
 
-Reads newline-delimited JSON from stdin (claude --output-format stream-json),
-displays a single-line progress indicator on stderr, and writes Claude's text
-output to a log file.
+Reads newline-delimited JSON from stdin (claude --output-format stream-json
+or compatible output format), displays a single-line progress indicator on
+stderr, and writes the AI's text output to a log file.
 
 Usage:
-    claude -p --output-format stream-json < prompt \
+    claude -p --output-format stream-json < prompt \\
       | python3 epic-progress.py --log session.log --phase PLAN
 """
 
