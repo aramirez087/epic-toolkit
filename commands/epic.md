@@ -59,6 +59,14 @@ Run this via the Bash tool. This is a **long-running command** — use `run_in_b
 
 If the user only wants to *see* the planned waves (no execution), forward `--show-dag` — that prints the wave layout and exits.
 
+## After launch
+
+Immediately after starting the background job, tell the user:
+- The epic branch all sessions will commit to (e.g., `epic/<name>`, or the explicit `--branch` value if provided — **never say "main"**)
+- That you will report back when it completes
+
+Example: "Running epic '<name>' — all sessions will commit to branch `epic/<name>`. I'll report back when it completes."
+
 ## After completion
 
 When the script finishes:
