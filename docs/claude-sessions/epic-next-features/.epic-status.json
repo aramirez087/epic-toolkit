@@ -1,17 +1,17 @@
 {
   "epic": "epic-next-features",
-  "started_at": 1777677628.109524,
+  "started_at": 1777678712.2383418,
   "sessions": {
     "1": {
       "status": "running",
       "slug": "charter",
       "wave": 1,
       "title": "Charter",
-      "step": 0,
-      "tool": "",
+      "step": 1,
+      "tool": "todowrite",
       "target": "",
-      "elapsed": 288.57258701324463,
-      "started_at": 1777677628.370067
+      "elapsed": 8.33656907081604,
+      "started_at": 1777678712.325262
     },
     "2": {
       "status": "pending",
