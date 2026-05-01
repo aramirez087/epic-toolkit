@@ -146,6 +146,26 @@ if [[ -z "$CLI_CMD" ]]; then
   fi
 fi
 log "Using CLI: $CLI_CMD"
+
+# --- Map model shorthand to CLI-specific model IDs ---
+# Claude accepts bare names (sonnet, opus, haiku).  OpenCode needs fully
+# qualified IDs in provider/model format (opencode/claude-sonnet-4).
+# If the user passed a slash-containing ID (e.g. opencode/glm-5.1) we
+# leave it untouched — it's already a full ID.
+if [[ "$CLI_CMD" == "opencode" && "$MODEL" != */* ]]; then
+  case "$MODEL" in
+    sonnet)   MODEL="opencode/claude-sonnet-4" ;;
+    sonnet4)  MODEL="opencode/claude-sonnet-4" ;;
+    opus)     MODEL="opencode/claude-opus-4-7" ;;
+    haiku)    MODEL="opencode/claude-haiku-4-5" ;;
+    gpt5)     MODEL="opencode/gpt-5" ;;
+    gpt5nano) MODEL="opencode/gpt-5-nano" ;;
+    gemini)   MODEL="opencode/gemini-3-flash" ;;
+    glm)      MODEL="opencode/glm-5.1" ;;
+    *)        log "Model '$MODEL' is not a known OpenCode shorthand — using as-is" ;;
+  esac
+fi
+
 # Resolve python interpreter. On Windows, `python3` is often a Microsoft Store
 # stub that satisfies `command -v` but errors on actual invocation, so we
 # probe with --version instead of trusting PATH lookup alone.
@@ -520,9 +540,6 @@ run_cli() {
     model_flag=(--model "$MODEL")
   fi
 
-  local POLL_PROGRESS_SCRIPT
-  POLL_PROGRESS_SCRIPT="$(dirname "$0")/epic-poll-progress.py"
-
   set +e
   if [[ -f "$PROGRESS_SCRIPT" ]]; then
     local stderr_tmp="${log_file%.log}-stderr.tmp"
@@ -553,35 +570,25 @@ run_cli() {
       cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
       rm -f "$stderr_tmp"
     else
-      # OpenCode: no native stream-json; use polling progress watcher
-      if [[ -f "$POLL_PROGRESS_SCRIPT" ]]; then
-        # Start the poll watcher in background — it tails $log_file for
-        # tool-use markers and renders a spinner.  Stdout copy goes to
-        # $log_file for the watcher to read, plus we capture exit code.
-        local poll_pid=""
-        if [[ "$quiet" == "false" ]]; then
-          "$PYTHON_CMD" "$POLL_PROGRESS_SCRIPT" "${progress_args[@]}" &
-          poll_pid=$!
-        fi
-        opencode -p "${model_flag[@]}" \
+      # OpenCode: --format json → progress renderer (same as Claude stream-json)
+      if [[ "$quiet" == "false" ]]; then
+        opencode run "${model_flag[@]}" \
+          --format json \
           --dangerously-skip-permissions \
-          < "$prompt_file" >> "$log_file" 2>"$stderr_tmp"
-        local exit_code=$?
-        # Give the poll watcher a moment to flush, then kill it
-        if [[ -n "$poll_pid" ]]; then
-          sleep 0.5
-          kill "$poll_pid" 2>/dev/null || true
-          wait "$poll_pid" 2>/dev/null || true
-        fi
-        cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
-        rm -f "$stderr_tmp" 2>/dev/null || true
+          < "$prompt_file" \
+          2>"$stderr_tmp" \
+          | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
       else
-        # No progress scripts at all — simple direct run
-        opencode -p "${model_flag[@]}" \
+        opencode run "${model_flag[@]}" \
+          --format json \
           --dangerously-skip-permissions \
-          < "$prompt_file" >> "$log_file" 2>&1
-        local exit_code=$?
+          < "$prompt_file" \
+          2>"$stderr_tmp" \
+          | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}" 2>/dev/null
       fi
+      local exit_code=${PIPESTATUS[0]}
+      cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
+      rm -f "$stderr_tmp"
     fi
   else
     # No stream-json progress script available
@@ -593,27 +600,11 @@ run_cli() {
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
     else
-      if [[ -f "$POLL_PROGRESS_SCRIPT" ]]; then
-        local poll_pid=""
-        if [[ "$quiet" == "false" ]]; then
-          "$PYTHON_CMD" "$POLL_PROGRESS_SCRIPT" "${progress_args[@]}" &
-          poll_pid=$!
-        fi
-        opencode -p "${model_flag[@]}" \
-          --dangerously-skip-permissions \
-          < "$prompt_file" >> "$log_file" 2>&1
-        local exit_code=$?
-        if [[ -n "$poll_pid" ]]; then
-          sleep 0.5
-          kill "$poll_pid" 2>/dev/null || true
-          wait "$poll_pid" 2>/dev/null || true
-        fi
-      else
-        opencode -p "${model_flag[@]}" \
-          --dangerously-skip-permissions \
-          < "$prompt_file" > "$log_file" 2>&1
-        local exit_code=$?
-      fi
+      opencode run "${model_flag[@]}" \
+        --format json \
+        --dangerously-skip-permissions \
+        < "$prompt_file" > "$log_file" 2>&1
+      local exit_code=$?
     fi
   fi
   set -e

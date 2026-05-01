@@ -40,9 +40,8 @@ bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli claude
 Progress display adapts to the CLI:
 - **Claude Code**: streams `--output-format stream-json` through
   `epic-progress.py` for real-time step/tool/target tracking.
-- **OpenCode**: uses `epic-poll-progress.py` which tails the session log
-  file and parses tool-use markers for a live spinner + step count. Also
-  updates the shared status JSON so the TUI dashboard works.
+- **OpenCode**: streams `--format json` through `epic-progress.py` for the
+  same real-time tracking. Both formats are auto-detected.
 
 ## What it does
 

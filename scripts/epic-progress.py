@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """epic-progress.py — Live progress display for AI-CLI stream-json output.
 
-Reads newline-delimited JSON from stdin (claude --output-format stream-json
-or compatible output format), displays a single-line progress indicator on
-stderr, and writes the AI's text output to a log file.
+Reads newline-delimited JSON from stdin and displays a single-line progress
+indicator on stderr. Writes the AI's text output to a log file.
+
+Supports two JSON formats (auto-detected):
+  - Claude Code: --output-format stream-json  (content_block_start/delta/stop)
+  - OpenCode:    --format json                 (step_start/tool_use/text/step_finish)
 
 Usage:
     claude -p --output-format stream-json < prompt \\
+      | python3 epic-progress.py --log session.log --phase PLAN
+
+    opencode run --format json -m opencode/claude-sonnet-4 < prompt \\
       | python3 epic-progress.py --log session.log --phase PLAN
 """
 
@@ -58,7 +64,7 @@ REFRESH = 0.2  # seconds between spinner frames
 
 
 def parse_target(tool_name, buf):
-    """Extract a human-readable target from accumulated input_json_delta."""
+    """Extract a human-readable target from accumulated input_json_delta (Claude)."""
     patterns = {
         "Read": r'"file_path"\s*:\s*"([^"]*)"',
         "Edit": r'"file_path"\s*:\s*"([^"]*)"',
@@ -77,6 +83,42 @@ def parse_target(tool_name, buf):
         if m:
             return m.group(1)
     return ""
+
+
+def parse_opencode_target(tool_name, state_input):
+    """Extract a human-readable target from opencode tool state.input dict."""
+    if not isinstance(state_input, dict):
+        return ""
+    field_map = {
+        "read": "filePath",
+        "edit": "filePath",
+        "write": "filePath",
+        "glob": "pattern",
+        "grep": "pattern",
+        "bash": "command",
+        "task": "description",
+        "webfetch": "url",
+        "websearch": "query",
+    }
+    field = field_map.get(tool_name, "")
+    if field:
+        val = state_input.get(field, "")
+        if isinstance(val, str):
+            return val
+    return ""
+
+
+OPENCODE_TOOL_ALIASES = {
+    "read": "Read",
+    "edit": "Edit",
+    "write": "Write",
+    "glob": "Glob",
+    "grep": "Grep",
+    "bash": "Bash",
+    "task": "Task",
+    "webfetch": "WebFetch",
+    "websearch": "WebSearch",
+}
 
 
 def shorten(path, max_len):
@@ -189,6 +231,7 @@ def main():
 
                     evt_type = evt.get("type", "")
 
+                    # ── Claude stream-json events ──
                     if evt_type == "content_block_start":
                         cb = evt.get("content_block", {})
                         if cb.get("type") == "tool_use":
@@ -198,7 +241,6 @@ def main():
                             current_target = ""
                             input_buf = ""
                             activity = "tool"
-                            # Immediately push new step + tool to the status file
                             if session_id > 0 and status_file:
                                 now = time.time()
                                 update_status_file(status_file, session_id, {
@@ -221,7 +263,6 @@ def main():
                             new_target = parse_target(current_tool, input_buf)
                             if new_target and new_target != current_target:
                                 current_target = new_target
-                                # Push target update (throttled to 0.5 s)
                                 if session_id > 0 and status_file:
                                     now = time.time()
                                     if now - last_status_ts >= 0.5:
@@ -244,7 +285,52 @@ def main():
                             input_buf = ""
 
                     elif evt_type == "message_stop":
-                        pass  # handled by EOF
+                        pass
+
+                    # ── OpenCode --format json events ──
+                    elif evt_type == "step_start":
+                        step += 1
+                        activity = ""
+                        current_tool = ""
+                        current_target = ""
+
+                    elif evt_type == "tool_use":
+                        part = evt.get("part", {})
+                        raw_tool = part.get("tool", "?")
+                        current_tool = OPENCODE_TOOL_ALIASES.get(raw_tool, raw_tool)
+                        tool_calls += 1
+                        state = part.get("state", {})
+                        state_input = state.get("input", {}) if isinstance(state, dict) else {}
+                        current_target = parse_opencode_target(raw_tool, state_input)
+                        activity = "tool"
+                        if session_id > 0 and status_file:
+                            now = time.time()
+                            update_status_file(status_file, session_id, {
+                                'step': step, 'tool': current_tool,
+                                'target': current_target, 'elapsed': now - start,
+                            })
+                            last_status_ts = now
+
+                    elif evt_type == "text":
+                        part = evt.get("part", {})
+                        text = part.get("text", "")
+                        if text:
+                            log_file.write(text)
+                            log_file.flush()
+                        activity = "text"
+
+                    elif evt_type == "step_finish":
+                        if activity == "tool":
+                            activity = ""
+                            current_tool = ""
+                            current_target = ""
+
+                    elif evt_type == "error":
+                        err_data = evt.get("error", {})
+                        err_msg = err_data.get("message", "") if isinstance(err_data, dict) else str(err_data)
+                        if err_msg:
+                            log_file.write(f"\n[ERROR] {err_msg}\n")
+                            log_file.flush()
 
             if eof and not line_buf.strip():
                 break
