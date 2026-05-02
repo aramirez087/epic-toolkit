@@ -24,6 +24,8 @@
 #   --start N            Resume from session N (default: 1)
 #   --end N              Stop after session N (default: run all)
 #   --max-parallel N     Max concurrent sessions per wave (default: 4)
+#   --timeout MINS       Session timeout in minutes (default: 0 = disabled)
+#   --retry N            Retry attempts per failed session (default: 0 = disabled)
 #   --strict             Fail when sibling sessions declare overlapping `touches` globs
 #   --sequential         Force one-session-per-wave (treats DAG as a linear chain)
 #   --show-dag           Print the planned waves and exit
@@ -82,6 +84,8 @@ USE_WORKTREE=true
 KEEP_WORKTREE=false
 KEEP_SESSION_WORKTREES=false
 CLI_OVERRIDE=""
+TIMEOUT=0
+RETRY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -96,6 +100,8 @@ while [[ $# -gt 0 ]]; do
     --base)                     BASE_BRANCH="$2"; shift 2 ;;
     --model)                    MODEL="$2"; shift 2 ;;
     --cli)                      CLI_OVERRIDE="$2"; shift 2 ;;
+    --timeout)                  TIMEOUT="$2"; shift 2 ;;
+    --retry)                    RETRY="$2"; shift 2 ;;
     --no-commit)                AUTO_COMMIT=false; shift ;;
     --no-pr)                    AUTO_PR=false; shift ;;
     --skip-plan)                SKIP_PLAN=true; shift ;;
@@ -119,6 +125,53 @@ if [[ ! -d "$SESSIONS_DIR" ]]; then
   exit 1
 fi
 SESSIONS_DIR="$(cd "$SESSIONS_DIR" && pwd)"
+
+# Get repo root early for config file loading
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  err "Not inside a git repository."
+  exit 1
+fi
+REPO_ROOT="$(cd "$(git rev-parse --show-toplevel)" && pwd)"
+
+# --- Load .epic-config.json configuration ---
+CONFIG_FILE="$REPO_ROOT/.epic-config.json"
+if [[ -f "$CONFIG_FILE" ]]; then
+  log "Loading configuration from ${CONFIG_FILE/#$HOME/~}"
+  
+  # Extract config values using bash regex (Bash 3.2+ compatible)
+  if config_content="$(cat "$CONFIG_FILE" 2>/dev/null)"; then
+    # Only override defaults if CLI didn't specify the value
+    if [[ "$TIMEOUT" -eq 0 && "$config_content" =~ \"timeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+      TIMEOUT="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$RETRY" -eq 0 && "$config_content" =~ \"retry\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+      RETRY="${BASH_REMATCH[1]}"
+    fi
+    if [[ -z "$CLI_OVERRIDE" && "$config_content" =~ \"cli\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+      CLI_OVERRIDE="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$MODEL" == "sonnet" && "$config_content" =~ \"model\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+      MODEL="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$MAX_PARALLEL" -eq 4 && "$config_content" =~ \"maxParallel\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+      MAX_PARALLEL="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$AUTO_COMMIT" == "true" && "$config_content" =~ \"autoCommit\"[[:space:]]*:[[:space:]]*false ]]; then
+      AUTO_COMMIT=false
+    fi
+    if [[ "$AUTO_PR" == "true" && "$config_content" =~ \"autoPr\"[[:space:]]*:[[:space:]]*false ]]; then
+      AUTO_PR=false
+    fi
+    if [[ "$SKIP_PLAN" == "false" && "$config_content" =~ \"skipPlan\"[[:space:]]*:[[:space:]]*true ]]; then
+      SKIP_PLAN=true
+    fi
+    if [[ "$KEEP_WORKTREE" == "false" && "$config_content" =~ \"keepWorktree\"[[:space:]]*:[[:space:]]*true ]]; then
+      KEEP_WORKTREE=true
+    fi
+  else
+    warn "Could not read configuration file: $CONFIG_FILE"
+  fi
+fi
 
 # --- Detect CLI ---
 # Prefer --cli override, then the invoking tool's env var, then PATH fallback.
@@ -191,10 +244,6 @@ if [[ -z "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
   CLAUDE_PLUGIN_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
   unset _SCRIPT_DIR
 fi
-if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-  err "Not inside a git repository."
-  exit 1
-fi
 
 # `git rev-parse --show-toplevel` on Git Bash for Windows returns Windows-style
 # (`C:/foo/bar`), while `pwd` and SESSIONS_DIR are MSYS-style (`/c/foo/bar`).
@@ -247,6 +296,8 @@ declare -a SESSION_SLUG_BY_ID    # by id
 declare -a SESSION_DEPS_BY_ID    # by id ("a,b,c" or "-")
 declare -a SESSION_PARALLEL      # by id ("1"/"0")
 declare -a SESSION_WAVE_OF       # by id
+declare -a SESSION_MODEL_BY_ID   # by id
+declare -a SESSION_CLI_BY_ID     # by id
 
 WAVE_COUNT=0
 
@@ -265,14 +316,17 @@ while IFS= read -r line; do
       :
       ;;
     SESSION)
-      # SESSION <wave> <id> <file> <deps> <slug> <parallel>
+      # SESSION <wave> <id> <file> <deps> <slug> <parallel> [<model> <cli>]
       sw="$2"; sid="$3"; sfile="$4"; sdeps="$5"; sslug="$6"; sparallel="$7"
+      smodel="${8:-}"; scli="${9:-}"
       WAVE_IDS[$sw]="${WAVE_IDS[$sw]:-} $sid"
       SESSION_FILE_BASENAME[$sid]="$sfile"
       SESSION_SLUG_BY_ID[$sid]="$sslug"
       SESSION_DEPS_BY_ID[$sid]="$sdeps"
       SESSION_PARALLEL[$sid]="$sparallel"
       SESSION_WAVE_OF[$sid]="$sw"
+      SESSION_MODEL_BY_ID[$sid]="$smodel"
+      SESSION_CLI_BY_ID[$sid]="$scli"
       ;;
   esac
 done < "$DAG_TMP"
@@ -351,6 +405,41 @@ fi
 WORKTREE_BASE="$(dirname "$ORIG_REPO_ROOT")/.epic-worktrees/$(basename "$ORIG_REPO_ROOT")"
 TRUNK_WORKTREE_DIR=""
 
+# Clean up stale session worktrees from previous runs
+if [[ -d "$WORKTREE_BASE" ]]; then
+  log "Scanning for stale session worktrees..."
+  
+  # Get list of current session IDs from DAG
+  current_session_ids=""
+  while IFS= read -r line; do
+    set -- $line
+    case "$1" in
+      SESSION) current_session_ids="$current_session_ids $3" ;;
+    esac
+  done < "$DAG_TMP"
+  
+  cleaned_count=0
+  for stale_wt in "$WORKTREE_BASE"/*--s[0-9][0-9]-*; do
+    [[ ! -d "$stale_wt" ]] && continue
+    
+    # Extract session ID from worktree name
+    if [[ "$(basename "$stale_wt")" =~ --s([0-9][0-9])- ]]; then
+      stale_id="${BASH_REMATCH[1]}"
+      # Remove leading zero for comparison
+      stale_id="$((10#$stale_id))"
+      
+      # Check if this session ID is in current DAG
+      if [[ ! " $current_session_ids " =~ " $stale_id " ]]; then
+        log "  ↻ removing stale worktree for session $stale_id: $(basename "$stale_wt")"
+        git worktree remove "$stale_wt" --force 2>/dev/null || rm -rf "$stale_wt"
+        cleaned_count=$((cleaned_count + 1))
+      fi
+    fi
+  done
+  
+  [[ $cleaned_count -gt 0 ]] && log "Cleaned $cleaned_count stale session worktrees"
+fi
+
 if $USE_WORKTREE; then
   if [[ -z "$BASE_BRANCH" ]]; then
     BASE_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || true
@@ -425,6 +514,8 @@ log "Range        : $START_FROM → $END_AT"
 log "Model        : $MODEL"
 log "Mode         : $EXEC_MODE"
 log "Max parallel : $MAX_PARALLEL"
+[[ "$TIMEOUT" -gt 0 ]] && log "Timeout      : ${TIMEOUT}m per session"
+[[ "$RETRY" -gt 0 ]] && log "Retry        : up to $RETRY attempts per session"
 log "Frontmatter  : $ANY_FRONTMATTER"
 log "Branch       : $BRANCH (trunk)"
 [[ -n "$TRUNK_WORKTREE_DIR" && "$TRUNK_WORKTREE_DIR" != "$ORIG_REPO_ROOT" ]] \
@@ -526,27 +617,47 @@ DISALLOWED_TOOLS="EnterPlanMode,ExitPlanMode,AskUserQuestion,EnterWorktree"
 run_cli() {
   local prompt_file="$1" log_file="$2" phase_label="$3" quiet="${4:-false}" sid="${5:-0}"
 
+  # Check for session-specific overrides
+  local session_model="$MODEL"
+  local session_cli="$CLI_CMD"
+  if [[ "$sid" -gt 0 && -n "${SESSION_MODEL_BY_ID[$sid]:-}" ]]; then
+    session_model="${SESSION_MODEL_BY_ID[$sid]}"
+  fi
+  if [[ "$sid" -gt 0 && -n "${SESSION_CLI_BY_ID[$sid]:-}" ]]; then
+    session_cli="${SESSION_CLI_BY_ID[$sid]}"
+  fi
+
   # Build progress args (status file updates work even in quiet/parallel mode)
   local progress_args=(--log "$log_file" --phase "$phase_label")
   if [[ -n "${STATUS_FILE:-}" && -f "${STATUS_FILE:-}" && "$sid" -gt 0 ]]; then
     progress_args+=(--session-id "$sid" --status-file "$STATUS_FILE")
   fi
 
-  # Build the model flag — Claude accepts --model, OpenCode uses -m
+  # Build timeout wrapper if enabled  
+  local timeout_cmd=()
+  if [[ "$TIMEOUT" -gt 0 ]]; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout_cmd=(timeout $((TIMEOUT * 60)))
+    else
+      warn "timeout command not available, ignoring --timeout setting"
+    fi
+  fi
+
+  # Build the model flag using session-specific model
   local model_flag=()
-  if [[ "$CLI_CMD" == "opencode" ]]; then
-    if [[ -n "$MODEL" ]]; then model_flag=(-m "$MODEL"); fi
+  if [[ "$session_cli" == "opencode" ]]; then
+    if [[ -n "$session_model" ]]; then model_flag=(-m "$session_model"); fi
   else
-    model_flag=(--model "$MODEL")
+    model_flag=(--model "$session_model")
   fi
 
   set +e
   if [[ -f "$PROGRESS_SCRIPT" ]]; then
     local stderr_tmp="${log_file%.log}-stderr.tmp"
-    if [[ "$CLI_CMD" == "claude" ]]; then
-      # Claude Code: stream-json → progress renderer
+    if [[ "$session_cli" == "claude" ]]; then
+      # Claude Code with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
-        env -u CLAUDECODE claude -p \
+        "${timeout_cmd[@]}" env -u CLAUDECODE claude -p \
           "${model_flag[@]}" \
           --dangerously-skip-permissions \
           --disallowedTools "$DISALLOWED_TOOLS" \
@@ -556,7 +667,7 @@ run_cli() {
           2>"$stderr_tmp" \
           | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
       else
-        env -u CLAUDECODE claude -p \
+        "${timeout_cmd[@]}" env -u CLAUDECODE claude -p \
           "${model_flag[@]}" \
           --dangerously-skip-permissions \
           --disallowedTools "$DISALLOWED_TOOLS" \
@@ -570,16 +681,16 @@ run_cli() {
       cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
       rm -f "$stderr_tmp"
     else
-      # OpenCode: --format json → progress renderer (same as Claude stream-json)
+      # OpenCode with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
-        opencode run "${model_flag[@]}" \
+        "${timeout_cmd[@]}" opencode run "${model_flag[@]}" \
           --format json \
           --dangerously-skip-permissions \
           < "$prompt_file" \
           2>"$stderr_tmp" \
           | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
       else
-        opencode run "${model_flag[@]}" \
+        "${timeout_cmd[@]}" opencode run "${model_flag[@]}" \
           --format json \
           --dangerously-skip-permissions \
           < "$prompt_file" \
@@ -591,22 +702,28 @@ run_cli() {
       rm -f "$stderr_tmp"
     fi
   else
-    # No stream-json progress script available
-    if [[ "$CLI_CMD" == "claude" ]]; then
-      env -u CLAUDECODE claude -p \
+    # No progress script available
+    if [[ "$session_cli" == "claude" ]]; then
+      "${timeout_cmd[@]}" env -u CLAUDECODE claude -p \
         "${model_flag[@]}" \
         --dangerously-skip-permissions \
         --disallowedTools "$DISALLOWED_TOOLS" \
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
     else
-      opencode run "${model_flag[@]}" \
+      "${timeout_cmd[@]}" opencode run "${model_flag[@]}" \
         --format json \
         --dangerously-skip-permissions \
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
     fi
   fi
+  
+  # Check for timeout
+  if [[ $exit_code -eq 124 ]]; then
+    echo "ERROR: Session timed out after ${TIMEOUT}m" >> "$log_file"
+  fi
+  
   set -e
   return $exit_code
 }
@@ -680,8 +797,16 @@ run_one_session() {
   cd "$wt_dir"
 
   local rc=0
-  if $SKIP_PLAN; then
-    local prompt; prompt="$(cat <<SINGLE_EOF
+  local attempt=1
+  local max_attempts=$((RETRY + 1))
+  
+  while [[ $attempt -le $max_attempts ]]; do
+    if [[ $attempt -gt 1 ]]; then
+      echo "Retry attempt $attempt of $max_attempts" >> "$exec_log"
+    fi
+    
+    if $SKIP_PLAN; then
+      local prompt; prompt="$(cat <<SINGLE_EOF
 You are executing Session ${sid} of an automated multi-session epic.
 Each session runs in a FRESH context — you have no memory of previous sessions.
 
@@ -717,13 +842,13 @@ PHASE 3: EXECUTION PROTOCOL
 5. Print a brief completion summary.
 SINGLE_EOF
 )"
-    local prompt_file; prompt_file="$(mktemp)"
-    echo "$prompt" > "$prompt_file"
-    run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
-    rm -f "$prompt_file"
-  else
-    # PLAN pass
-    local plan_prompt; plan_prompt="$(cat <<PLAN_EOF
+       local prompt_file; prompt_file="$(mktemp)"
+       echo "$prompt" > "$prompt_file"
+       run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
+       rm -f "$prompt_file"
+     else
+       # PLAN pass
+       local plan_prompt; plan_prompt="$(cat <<PLAN_EOF
 You are planning Session ${sid} of an automated multi-session epic.
 Read-only exploration: do NOT modify any source code, tests, or docs.
 
@@ -757,24 +882,21 @@ The plan MUST include:
 Do NOT modify source. Do NOT wait for approval. Just write the plan and finish.
 PLAN_EOF
 )"
-    local prompt_file; prompt_file="$(mktemp)"
-    echo "$plan_prompt" > "$prompt_file"
-    if ! run_claude "$prompt_file" "$plan_log" "S${sid}-PLAN" "$quiet" "$sid"; then
-      rm -f "$prompt_file"
-      cd "$prev_cwd"
-      return 1
-    fi
-    rm -f "$prompt_file"
+       local prompt_file; prompt_file="$(mktemp)"
+       echo "$plan_prompt" > "$prompt_file"
+       if ! run_claude "$prompt_file" "$plan_log" "S${sid}-PLAN" "$quiet" "$sid"; then
+         rc=1
+       else
+         rm -f "$prompt_file"
 
-    if [[ ! -f "$plan_file" ]]; then
-      echo "ERROR: plan phase finished but plan file was not created: $plan_file" >> "$exec_log"
-      cd "$prev_cwd"
-      return 1
-    fi
-    local plan_contents; plan_contents="$(cat "$plan_file")"
+         if [[ ! -f "$plan_file" ]]; then
+           echo "ERROR: plan phase finished but plan file was not created: $plan_file" >> "$exec_log"
+           rc=1
+         else
+           local plan_contents; plan_contents="$(cat "$plan_file")"
 
-    # EXECUTE pass
-    local exec_prompt; exec_prompt="$(cat <<EXEC_EOF
+           # EXECUTE pass
+           local exec_prompt; exec_prompt="$(cat <<EXEC_EOF
 You are executing Session ${sid} of an automated multi-session epic.
 A planning phase has produced the implementation plan below. Implement it
 fully — do not re-explore or second-guess.
@@ -817,11 +939,24 @@ EXECUTION INSTRUCTIONS
 Do NOT wait for approval. Execute immediately.
 EXEC_EOF
 )"
-    prompt_file="$(mktemp)"
-    echo "$exec_prompt" > "$prompt_file"
-    run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
-    rm -f "$prompt_file"
-  fi
+           prompt_file="$(mktemp)"
+           echo "$exec_prompt" > "$prompt_file"
+           run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
+           rm -f "$prompt_file"
+         fi
+       fi
+       rm -f "$prompt_file"
+     fi
+    
+     # Break on success or final attempt
+     if [[ $rc -eq 0 || $attempt -eq $max_attempts ]]; then
+       break
+     fi
+     
+     attempt=$((attempt + 1))
+     echo "Session failed, retrying in 5 seconds..." >> "$exec_log"
+     sleep 5
+   done
 
   # Auto-commit fallback inside the session worktree
   if [[ $rc -eq 0 ]] && $AUTO_COMMIT; then
@@ -1075,6 +1210,12 @@ if ! $EPIC_FAILED; then
   ok ""
   ok "Logs:  ${TRUNK_SESSIONS_DIR/#$HOME/~}/.session-*-{plan,exec}.log"
   ok "Plans: ${TRUNK_SESSIONS_DIR/#$HOME/~}/.session-*-plan.md"
+  if [[ "$TIMEOUT" -gt 0 || "$RETRY" -gt 0 ]]; then
+    ok ""
+    ok "Runtime settings:"
+    [[ "$TIMEOUT" -gt 0 ]] && ok "  Timeout: ${TIMEOUT}m per session"  
+    [[ "$RETRY" -gt 0 ]] && ok "  Retry: up to $RETRY attempts per session"
+  fi
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # --- Cleanup orchestrator artifacts before PR ---
