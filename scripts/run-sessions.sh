@@ -938,18 +938,31 @@ EXEC_EOF
      sleep 5
    done
 
-  # Auto-commit fallback inside the session worktree with timeout
-  if [[ $rc -eq 0 ]] && $AUTO_COMMIT; then
+  # Auto-commit fallback inside the session worktree with timeout.
+  # Runs regardless of rc — if Claude created files but didn't commit
+  # (timeout, error, or model just forgot the final step), we capture
+  # the work rather than lose it. The merge step later validates via
+  # build/test gates.
+  if $AUTO_COMMIT; then
     if ! git diff --quiet HEAD 2>/dev/null \
        || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
       git add -A
+      # Distinguish auto-recovered work from successful sessions
+      local commit_subject="feat: Session ${sid} — ${friendly}"
+      local commit_note="Automated execution of $fname."
+      if [[ $rc -ne 0 ]]; then
+        commit_subject="feat(partial): Session ${sid} — ${friendly}"
+        commit_note="Auto-recovered after session exited rc=$rc. Files were created but session did not commit them. Verify before merging."
+      fi
       # Use timeout to prevent git commit hanging on index.lock
-      if timeout 60 git commit -q -m "feat: Session ${sid} — ${friendly}
+      if timeout 60 git commit -q -m "$commit_subject
 
-Automated execution of $fname.
+$commit_note
 
 Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
-        : # commit succeeded
+        if [[ $rc -ne 0 ]]; then
+          warn "  ⚠ session $sid auto-recovered uncommitted work (rc=$rc)"
+        fi
       else
         warn "git commit timed out or failed (index.lock contention); continuing"
       fi
@@ -1273,8 +1286,30 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 
     if $USE_WORKTREE; then
       sess_wt="$WORKTREE_BASE/$sess_wt_dir_name"
-      # Wipe stale worktree from a prior failed run
+      # Wipe stale worktree from a prior failed run, but only if safe:
+      # 1. No process has a CWD inside it (concurrent runner)
+      # 2. No unmerged commits beyond the trunk branch (uncaptured work)
       if [[ -d "$sess_wt" ]]; then
+        wt_in_use=false
+        if command -v lsof >/dev/null 2>&1 && lsof +D "$sess_wt" 2>/dev/null | grep -q .; then
+          wt_in_use=true
+        fi
+        has_unmerged=false
+        if git show-ref --verify --quiet "refs/heads/$sess_branch"; then
+          ahead="$(git rev-list --count "$BRANCH..$sess_branch" 2>/dev/null || echo 0)"
+          [[ "$ahead" -gt 0 ]] && has_unmerged=true
+        fi
+        if $wt_in_use; then
+          err "  ✗ worktree for session $sid is in use by another process: $sess_wt"
+          err "    refusing to delete; aborting. Stop the other runner or remove manually."
+          exit 1
+        fi
+        if $has_unmerged; then
+          err "  ✗ session $sid branch '$sess_branch' has unmerged commits ahead of $BRANCH"
+          err "    refusing to delete; aborting. Inspect, merge, or remove the branch manually:"
+          err "    git -C $TRUNK_WORKTREE_DIR log $BRANCH..$sess_branch --oneline"
+          exit 1
+        fi
         log "  ↻ removing stale worktree for session $sid: $sess_wt"
         git worktree remove "$sess_wt" --force 2>/dev/null || rm -rf "$sess_wt"
       fi
