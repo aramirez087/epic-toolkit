@@ -7,3 +7,4 @@ node_modules/
 
 # Local Claude Code settings (machine-specific)
 .claude/settings.json
+.opencode/plans/
