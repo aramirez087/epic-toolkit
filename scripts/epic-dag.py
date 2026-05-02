@@ -63,9 +63,23 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     fm_text = text[4:end]
     body = text[body_start:]
 
+    def _strip_inline_comment(line: str) -> str:
+        """Remove YAML inline comments ( # ...) while preserving # inside quotes."""
+        in_quote: str | None = None
+        for i, ch in enumerate(line):
+            if ch in ('"', "'") and (i == 0 or line[i - 1] != "\\"):
+                if in_quote == ch:
+                    in_quote = None
+                elif in_quote is None:
+                    in_quote = ch
+            elif ch == "#" and in_quote is None and i > 0 and line[i - 1] == " ":
+                return line[:i].rstrip()
+        return line
+
     result: dict[str, Any] = {}
     current_key: str | None = None
     for raw in fm_text.splitlines():
+        raw = _strip_inline_comment(raw)
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         if raw.startswith(("  - ", "- ", "    - ")):

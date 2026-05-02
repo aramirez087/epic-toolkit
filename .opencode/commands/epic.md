@@ -16,9 +16,15 @@ session: 02
 title: "Analysis task"
 depends_on: [01]
 model: "opus"
-cli: "claude"
+cli: "opencode"
 touches: ["analysis/**"]
 parallel_safe: true
+```
+
+**Multi-epic:** For problems spanning multiple independent subsystems, use `/epic.generate` to split into separate epic directories under `docs/claude-sessions/`. Run each epic sequentially — each must complete and merge to trunk before the next starts:
+```bash
+/epic epic-1-name
+/epic epic-2-name
 ```
 
 Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base main`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`.

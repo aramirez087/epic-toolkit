@@ -96,12 +96,14 @@ Example mixed-tool epic:
 session: 02
 title: "Complex analysis"
 depends_on: [01]
-model: "opus"           # Use Opus for heavy reasoning
-cli: "claude"           # Force Claude for this session
+model: "opus"
+cli: "claude"
 touches: ["analysis/**"]
 parallel_safe: true
 ---
 ```
+
+Use `model: "opus"` for sessions requiring complex reasoning or risky architecture work. Use `"sonnet"` for balanced work and `"haiku"` for straightforward, repetitive tasks.
 
 ## How execution works
 
@@ -124,6 +126,73 @@ parallel_safe: true
    iteratively with `--no-ff`. Conflicts halt the run (you fix and resume).
 5. **Cleanup** — successful per-session worktrees are removed; failed ones are
    preserved for inspection.
+
+## Multi-Epic Workflows
+
+When a problem is too large for a single epic, split it into multiple epics that
+run sequentially. Each epic is an independent `docs/claude-sessions/` directory
+with its own charter, feature sessions, and CI gate.
+
+### When to split
+
+Split into multiple epics when **two or more** of these apply:
+
+- The problem spans **3+ independent subsystems** with no shared state
+- The total session count would exceed **10–12** for a single epic
+- Different subsystems need **different models** (e.g., opus for complex logic, haiku for CRUD)
+- A subsystem is **risky or experimental** — splitting lets you retry just that epic
+- The work touches **3+ non-overlapping directory trees** that could be owned by independent teams
+
+Keep as one epic when sessions share significant state, or a single charter must
+define architecture consumed by all downstream sessions.
+
+### Directory structure
+
+```
+docs/claude-sessions/
+  epic-1-subsystem-name/
+    session-00-operator-rules.md
+    session-01-charter.md
+    session-02-feature.md
+    ...
+  epic-2-another-subsystem/
+    session-00-operator-rules.md   (same content or inherit from epic-1)
+    session-01-charter.md           (Continuity references epic-1 handoff paths)
+    ...
+```
+
+### Execution order
+
+Run epics sequentially. Each epic must merge to trunk before the next starts:
+
+```bash
+/epic epic-1-subsystem-name
+# wait for completion, then:
+/epic epic-2-another-subsystem
+```
+
+### Cross-epic handoffs
+
+Later epics reference prior epic handoffs in their session Continuity sections:
+
+```
+Continue from Session 01 artifacts at docs/roadmap/epic-1-subsystem-name/session-01-handoff.md.
+```
+
+The `session-00-operator-rules.md` can be copied verbatim across epics, or later
+epics can include a note pointing to the original epic's operator rules.
+
+### Per-epic model selection
+
+Use `--model` per epic invocation to set the default model:
+
+```bash
+/epic epic-1-subsystem-name --model opus
+/epic epic-2-another-subsystem --model sonnet
+```
+
+Within each epic, individual sessions can override via frontmatter `model:` field
+(see Per-Session Overrides above).
 
 ## Options
 

@@ -6,6 +6,47 @@ Copy everything below the `---`, paste it after your context/review, and send to
 
 Generate a sequence of session `.md` files that will be executed autonomously by the `/epic` command. Each session runs as a FRESH Claude Code process with zero memory of prior sessions. **Sessions form a directed acyclic graph and parallel siblings run concurrently in per-session worktrees** — design for that.
 
+## Complexity Assessment — Single Epic or Multi-Epic?
+
+Before designing sessions, assess the problem to decide: **one epic** or **multiple epics**?
+
+**Default to one epic** unless complexity justifies splitting. Use this heuristic:
+
+- **Split into multiple epics when TWO or more of these apply:**
+  - The problem spans **3+ independent subsystems** with no shared state
+  - The total session count would exceed **10–12 sessions** for a single epic
+  - Different subsystems need **different models** (e.g., opus for complex logic, haiku for CRUD)
+  - A subsystem is **risky or experimental** — splitting lets you retry just that epic
+  - The work touches **3+ non-overlapping directory trees**
+
+- **Keep as one epic when:**
+  - Sessions share significant state or files
+  - The charter needs to define architecture consumed by all feature sessions
+  - Sessions feed into a final integration/CI gate that depends on everything
+
+**User hints override this assessment.** If the user says "make 3 epics" or "epic-count: 2", follow their directive.
+
+## Multi-epic structure
+
+Each epic is a directory under `docs/claude-sessions/`:
+
+```
+docs/claude-sessions/
+  epic-1-subsystem-name/
+    session-00-operator-rules.md
+    session-01-charter.md
+    session-02-feature.md
+    ...
+  epic-2-another-subsystem/
+    session-00-operator-rules.md   (same content or inherit from epic-1)
+    session-01-charter.md           (Continuity references epic-1 handoff paths)
+    ...
+```
+
+**Cross-epic dependencies:** Later epics reference prior epic handoffs in their `Continuity` section using paths like `docs/roadmap/epic-1-subsystem-name/session-NN-handoff.md`. Each epic runs sequentially — epic-N starts after epic-(N-1) completes and merges to trunk.
+
+**Per-epic model selection:** Set the default model per epic via `--model` when running `run-sessions.sh`. Individual sessions can override via frontmatter `model:`.
+
 ## File structure
 
 Directory: `docs/claude-sessions/<epic-name>/` (kebab-case name).
@@ -23,6 +64,13 @@ Numbers zero-padded to two digits. Session 00 is always operator rules.
 
 Sessions 01+ MUST start with YAML frontmatter, then a markdown body, then a fenced ` ```md ``` ` prompt. Session 00 has no frontmatter.
 
+Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Two optional overrides:
+
+- `model` — overrides the `--model` CLI arg for this session. Common values: `"opus"`, `"sonnet"`, `"haiku"`, or provider-prefixed IDs like `"gpt5"`, `"gemini"`, `"glm"`.
+- `cli` — overrides the CLI for this session. Use `"claude"` or `"opencode"`. Omit to auto-detect.
+
+Example with all fields:
+
     ---
     session: NN
     title: "Short title"
@@ -30,6 +78,8 @@ Sessions 01+ MUST start with YAML frontmatter, then a markdown body, then a fenc
     touches:
       - <glob this session may modify>
     parallel_safe: true
+    model: "opus"
+    cli: "claude"
     ---
 
     # Session NN: Title
@@ -50,6 +100,14 @@ The script extracts ONLY content between the ` ```md ` and closing ` ``` `. Ever
 - **CI gate (final session)**: `depends_on: [<all prior session ids>]`, `parallel_safe: false`. Runs alone after every other session is merged.
 
 If two slices touch the same files, do NOT make them parallel siblings. Either sequence them (declare a dependency edge) or merge them into one session.
+
+### Multi-epic mode
+
+When splitting into multiple epics, treat each epic as an independent unit with its own charter, feature sessions, and CI gate. Design each epic's DAG using the same rules above, then:
+
+- **Epic ordering:** If epic-2 depends on epic-1 output, epic-2's charter references epic-1's handoff docs in its `Continuity` section using explicit file paths like `docs/roadmap/epic-1-name/session-NN-handoff.md`.
+- **Shared operator rules:** Copy `session-00-operator-rules.md` to each epic directory verbatim, or have later epics' session-00 include a note pointing to the original epic's operator rules.
+- **Model strategy:** Assign `model: "opus"` to sessions doing complex architecture or risky work; `"sonnet"` or `"haiku"` for straightforward work. You can also set a default model per epic via `--model` when running.
 
 ## Session 00 — Operator Rules
 
@@ -85,6 +143,7 @@ Each prompt inside the fence must have:
 - Never reference other sessions as if Claude remembers them — use file paths.
 - Keep prompts under 60 lines.
 - Frontmatter is mandatory on every session 01+ (`session`, `title`, `depends_on`, `touches`, `parallel_safe`).
+- Optional frontmatter fields: `model`, `cli`.
 
 ## Validate
 
@@ -93,3 +152,5 @@ After writing the files, run:
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/epic-dag.py" docs/claude-sessions/<epic-name> --show
 
 Inspect the wave layout. If most waves have a single session, the DAG is too sequential — re-examine dependencies and split file ownership to widen waves.
+
+For multi-epic, run the validation for each epic directory separately and report all wave layouts.

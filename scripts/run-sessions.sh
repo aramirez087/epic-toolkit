@@ -205,19 +205,27 @@ log "Using CLI: $CLI_CMD"
 # qualified IDs in provider/model format (opencode/claude-sonnet-4).
 # If the user passed a slash-containing ID (e.g. opencode/glm-5.1) we
 # leave it untouched — it's already a full ID.
-if [[ "$CLI_CMD" == "opencode" && "$MODEL" != */* ]]; then
-  case "$MODEL" in
-    sonnet)   MODEL="opencode/claude-sonnet-4" ;;
-    sonnet4)  MODEL="opencode/claude-sonnet-4" ;;
-    opus)     MODEL="opencode/claude-opus-4-7" ;;
-    haiku)    MODEL="opencode/claude-haiku-4-5" ;;
-    gpt5)     MODEL="opencode/gpt-5" ;;
-    gpt5nano) MODEL="opencode/gpt-5-nano" ;;
-    gemini)   MODEL="opencode/gemini-3-flash" ;;
-    glm)      MODEL="opencode/glm-5.1" ;;
-    *)        log "Model '$MODEL' is not a known OpenCode shorthand — using as-is" ;;
-  esac
-fi
+map_model_shorthand() {
+  local model="$1"
+  local cli="$2"
+  if [[ "$cli" == "opencode" && "$model" != */* ]]; then
+    case "$model" in
+      sonnet)   echo "opencode/claude-sonnet-4" ;;
+      sonnet4)  echo "opencode/claude-sonnet-4" ;;
+      opus)     echo "opencode/claude-opus-4-7" ;;
+      haiku)    echo "opencode/claude-haiku-4-5" ;;
+      gpt5)     echo "opencode/gpt-5" ;;
+      gpt5nano) echo "opencode/gpt-5-nano" ;;
+      gemini)   echo "opencode/gemini-3-flash" ;;
+      glm)      echo "opencode/glm-5.1" ;;
+      *)        log "Model '$model' is not a known OpenCode shorthand — using as-is"; echo "$model" ;;
+    esac
+  else
+    echo "$model"
+  fi
+}
+
+MODEL="$(map_model_shorthand "$MODEL" "$CLI_CMD")"
 
 # Resolve python interpreter. On Windows, `python3` is often a Microsoft Store
 # stub that satisfies `command -v` but errors on actual invocation, so we
@@ -575,9 +583,14 @@ format_elapsed() {
 }
 
 # Look up a session id's handoff file under docs/roadmap/<epic>/
+# Search the current epic's roadmap dir first (intra-epic dependency),
+# then fall back to all epic dirs (cross-epic handoff).
 find_handoff_for() {
   local pid="$1" padded
   padded="$(printf "%02d" "$pid")"
+  for cand in "$REPO_ROOT/docs/roadmap/$EPIC_NAME_SLUG/session-${padded}-handoff.md"; do
+    [[ -f "$cand" ]] && { echo "$cand"; return; }
+  done
   for cand in "$REPO_ROOT/docs/roadmap/"*"/session-${padded}-handoff.md"; do
     [[ -f "$cand" ]] && { echo "$cand"; return; }
   done
@@ -621,10 +634,17 @@ run_cli() {
   local session_model="$MODEL"
   local session_cli="$CLI_CMD"
   if [[ "$sid" -gt 0 && -n "${SESSION_MODEL_BY_ID[$sid]:-}" ]]; then
-    session_model="${SESSION_MODEL_BY_ID[$sid]}"
+    local raw_model="${SESSION_MODEL_BY_ID[$sid]}"
+    session_model="$(map_model_shorthand "$raw_model" "$session_cli")"
   fi
   if [[ "$sid" -gt 0 && -n "${SESSION_CLI_BY_ID[$sid]:-}" ]]; then
     session_cli="${SESSION_CLI_BY_ID[$sid]}"
+    # Re-map model if CLI changed (e.g. session overrides cli from opencode to claude
+    # or vice versa — model shorthand depends on which CLI is in use)
+    if [[ "$sid" -gt 0 && -n "${SESSION_MODEL_BY_ID[$sid]:-}" ]]; then
+      local raw_model2="${SESSION_MODEL_BY_ID[$sid]}"
+      session_model="$(map_model_shorthand "$raw_model2" "$session_cli")"
+    fi
   fi
 
   # Build progress args (status file updates work even in quiet/parallel mode)

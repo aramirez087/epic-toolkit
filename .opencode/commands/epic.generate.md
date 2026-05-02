@@ -18,6 +18,47 @@ The problem statement is the user input above. Treat it as required input. If it
 
 Generate a sequence of session `.md` files that will be executed by `/epic`. Each session runs as a fresh AI agent process with zero memory of prior sessions. **Sessions are scheduled as a DAG and run in parallel waves where the dependency graph allows.** Follow these rules exactly.
 
+## Complexity Assessment — Single Epic or Multi-Epic?
+
+Before designing sessions, assess the problem to decide: **one epic** or **multiple epics**?
+
+**Default to one epic** unless complexity justifies splitting. Use this heuristic:
+
+- **Split into multiple epics when TWO or more of these apply:**
+  - The problem spans **3+ independent subsystems** with no shared state (e.g., auth + billing + email as separate features)
+  - The total session count would exceed **10-12 sessions** for a single epic
+  - Different subsystems need **different models** (e.g., opus for complex logic, haiku for straightforward CRUD)
+  - A subsystem is **risky or experimental** — splitting lets you retry just that epic if it fails
+  - The work touches **3+ non-overlapping directory trees** that could be owned by independent teams
+
+- **Keep as one epic when:**
+  - Sessions share significant state or files
+  - The charter needs to define architecture consumed by all feature sessions
+  - Sessions feed into a final integration/CI gate that depends on everything
+
+**User hints override this assessment.** If the user says "make 3 epics" or "epic-count: 2", follow their directive.
+
+### Multi-epic structure
+
+Each epic is a directory under `docs/claude-sessions/`:
+
+```
+docs/claude-sessions/
+  epic-1-subsystem-name/
+    session-00-operator-rules.md   (shared operator rules — reuse across epics)
+    session-01-charter.md
+    session-02-feature.md
+    ...
+  epic-2-another-subsystem/
+    session-00-operator-rules.md   (same content or inherit from epic-1)
+    session-01-charter.md          (Continuity references epic-1 handoff paths)
+    ...
+```
+
+**Cross-epic dependencies:** Later epics reference prior epic handoffs in their `Continuity` section using paths like `docs/roadmap/epic-1-subsystem-name/session-NN-handoff.md`. Each epic runs sequentially — epic-N starts after epic-(N-1) completes and merges to trunk.
+
+**Per-epic model selection:** Set the default model per epic via `--model` when running `run-sessions.sh`. Individual sessions can override via frontmatter `model:`.
+
 ## File structure
 
 Directory: `docs/claude-sessions/<epic-name>/` where `<epic-name>` is a kebab-case slug.
@@ -34,6 +75,13 @@ Use zero-padded two-digit numbers. Session 00 is always operator rules.
 
 Sessions 01+ MUST start with YAML frontmatter declaring DAG metadata, then the markdown body, then a fenced ` ```md ... ``` ` block containing the prompt. Session 00 has no frontmatter.
 
+Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Two optional overrides can also appear in the frontmatter:
+
+- `model` — overrides the `--model` CLI arg for this session. Common values: `"opus"` (complex reasoning), `"sonnet"` (balanced), `"haiku"` (fast/simple). Also supports provider-prefixed IDs like `"gpt5"`, `"gemini"`, `"glm"`.
+- `cli` — overrides the CLI for this session. Use `"claude"` or `"opencode"`. Omit to auto-detect.
+
+Example with all fields:
+
     ---
     session: NN
     title: "Short title"
@@ -42,6 +90,8 @@ Sessions 01+ MUST start with YAML frontmatter declaring DAG metadata, then the m
       - <glob this session may modify>
       - <another glob>
     parallel_safe: true
+    model: "opus"
+    cli: "opencode"
     ---
 
     # Session NN: Title
@@ -67,6 +117,14 @@ You are not writing a linear list. You are designing a **directed acyclic graph*
 
 If two slices would touch the same files, **don't make them parallel siblings** — sequence them, or merge them into one session, or have the charter create a clean boundary first.
 
+### Multi-epic mode
+
+When splitting into multiple epics (per the Complexity Assessment above), treat each epic as an independent unit with its own charter, feature sessions, and CI gate. Design each epic's DAG using the same rules above, then:
+
+- **Epic ordering:** If epic-2 depends on epic-1 output, epic-2's charter session references epic-1's handoff docs in its `Continuity` section using explicit file paths like `docs/roadmap/epic-1-name/session-NN-handoff.md`.
+- **Shared operator rules:** Copy `session-00-operator-rules.md` to each epic directory verbatim, or have later epics' session-00 include a note pointing to the original epic's operator rules.
+- **Model strategy:** Assign `model: "opus"` to sessions doing complex architecture or risky work; `model: "sonnet"` or `model: "haiku"` for straightforward feature work. You can also set a default model per epic via `--model` when running `run-sessions.sh`.
+
 ### Frontmatter fields
 
 - `session` — integer, must match the filename's NN. Required.
@@ -74,6 +132,8 @@ If two slices would touch the same files, **don't make them parallel siblings** 
 - `depends_on` — list of prior session numbers (empty for session 01). Required. Omitting it implicitly chains the session linearly to the prior number, which defeats parallelism — always declare it explicitly.
 - `touches` — list of file globs this session may modify. The runner uses these to detect overlaps between siblings in the same wave. Required for any session that writes code; empty list `[]` is fine for pure-validation sessions.
 - `parallel_safe` — boolean. `false` forces solo-wave (charter, CI gate, anything with side effects on shared state). Default `true` for feature work.
+- `model` — optional. Overrides the `--model` argument passed to `run-sessions.sh`. Use to assign different models to different sessions within the same epic. Common values: `opus` (complex reasoning), `sonnet` (balanced), `haiku` (fast/simple tasks). Also supports provider prefixes like `gpt5`, `gemini`, `glm`.
+- `cli` — optional. Overrides the `--cli` argument. Use `opencode` or `claude` to force a specific CLI for this session.
 
 ## Session 00 requirements
 
@@ -132,10 +192,10 @@ Inside each fenced prompt for sessions 01 and above, include:
 
 1. Inspect the repository before deciding session boundaries. Identify the language(s), package manager(s), test framework(s), and any monorepo structure so quality gates and anchors are accurate.
 2. For a greenfield repo, infer the stack from the problem statement and pin the chosen tools (with versions where reasonable) in Session 00 and/or Session 01.
-3. Decompose the work into a DAG that **maximizes the size of parallel waves** without creating `touches` overlaps between siblings.
-4. Choose the minimal number of sessions that still de-risks the work.
-5. Create the directory `docs/claude-sessions/<epic-name>/` if it does not exist.
-6. Write every required session file into that directory.
+3. Assess complexity (per the Complexity Assessment section above) to decide: **single epic** or **multiple epics**? If multiple, determine the split points and naming.
+4. Decompose the work into a DAG that **maximizes the size of parallel waves** without creating `touches` overlaps between siblings. For multi-epic, design each epic's DAG independently, then ensure cross-epic dependencies are handled via handoff file references in Continuity sections.
+5. Create the directory `docs/claude-sessions/<epic-name>/` for each epic (or `docs/claude-sessions/<epic-1>/`, `docs/claude-sessions/<epic-2>/`, etc.).
+6. Write every required session file into the appropriate directory. For multiple epics, write all session files for epic-1 first, then epic-2, etc. — each epic's session numbering restarts at 01.
 7. Ensure each file matches the required outer markdown structure exactly, including frontmatter on sessions 01+.
-8. After writing the files, run `python3 scripts/epic-dag.py docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
-9. In your response, report: the created directory, the session files written, the wave layout (paste the `epic-dag.py --show` output), and the stack/quality-gate set you selected.
+8. After writing the files for each epic, run `python3 scripts/epic-dag.py docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
+9. In your response, report: **for each epic** — the created directory, the session files written, the wave layout (paste the `epic-dag.py --show` output), and the stack/quality-gate set selected. If multi-epic, also describe the cross-epic dependency order and which epic each session belongs to.
