@@ -24,6 +24,8 @@
 #   --start N            Resume from session N (default: 1)
 #   --end N              Stop after session N (default: run all)
 #   --max-parallel N     Max concurrent sessions per wave (default: 4)
+#   --timeout MINS       Session timeout in minutes (default: 0 = disabled)
+#   --retry N            Retry attempts per failed session (default: 0 = disabled)
 #   --strict             Fail when sibling sessions declare overlapping `touches` globs
 #   --sequential         Force one-session-per-wave (treats DAG as a linear chain)
 #   --show-dag           Print the planned waves and exit
