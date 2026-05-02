@@ -657,7 +657,7 @@ run_cli() {
     if [[ "$session_cli" == "claude" ]]; then
       # Claude Code with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
-        "${timeout_cmd[@]}" env -u CLAUDECODE claude -p \
+        ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u CLAUDECODE claude -p \
           "${model_flag[@]}" \
           --dangerously-skip-permissions \
           --disallowedTools "$DISALLOWED_TOOLS" \
@@ -667,7 +667,7 @@ run_cli() {
           2>"$stderr_tmp" \
           | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
       else
-        "${timeout_cmd[@]}" env -u CLAUDECODE claude -p \
+        ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u CLAUDECODE claude -p \
           "${model_flag[@]}" \
           --dangerously-skip-permissions \
           --disallowedTools "$DISALLOWED_TOOLS" \
@@ -683,14 +683,14 @@ run_cli() {
     else
       # OpenCode with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
-        "${timeout_cmd[@]}" opencode run "${model_flag[@]}" \
+        ${timeout_cmd[@]+"${timeout_cmd[@]}"} opencode run "${model_flag[@]}" \
           --format json \
           --dangerously-skip-permissions \
           < "$prompt_file" \
           2>"$stderr_tmp" \
           | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
       else
-        "${timeout_cmd[@]}" opencode run "${model_flag[@]}" \
+        ${timeout_cmd[@]+"${timeout_cmd[@]}"} opencode run "${model_flag[@]}" \
           --format json \
           --dangerously-skip-permissions \
           < "$prompt_file" \
@@ -704,14 +704,14 @@ run_cli() {
   else
     # No progress script available
     if [[ "$session_cli" == "claude" ]]; then
-      "${timeout_cmd[@]}" env -u CLAUDECODE claude -p \
+      ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u CLAUDECODE claude -p \
         "${model_flag[@]}" \
         --dangerously-skip-permissions \
         --disallowedTools "$DISALLOWED_TOOLS" \
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
     else
-      "${timeout_cmd[@]}" opencode run "${model_flag[@]}" \
+      ${timeout_cmd[@]+"${timeout_cmd[@]}"} opencode run "${model_flag[@]}" \
         --format json \
         --dangerously-skip-permissions \
         < "$prompt_file" > "$log_file" 2>&1
