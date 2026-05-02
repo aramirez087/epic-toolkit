@@ -1308,10 +1308,10 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   done
 
   # Wait for all jobs in this wave with timeout protection
-  local wave_start=$(date +%s)
-  local wave_timeout=$((WAVE_TIMEOUT_MINUTES * 60))  # Default 240 min per wave
+  wave_start=$(date +%s)
+  wave_timeout=$((WAVE_TIMEOUT_MINUTES * 60))  # Default 240 min per wave
   while [[ ${#JOB_PIDS[@]} -gt 0 ]]; do
-    local wave_elapsed=$(($(date +%s) - wave_start))
+    wave_elapsed=$(($(date +%s) - wave_start))
     if [[ $wave_elapsed -gt $wave_timeout ]]; then
       err "Wave timeout after $((wave_elapsed / 60)) minutes; killing hung jobs"
       for pid in "${JOB_PIDS[@]}"; do
