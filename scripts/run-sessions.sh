@@ -86,6 +86,7 @@ KEEP_SESSION_WORKTREES=false
 CLI_OVERRIDE=""
 TIMEOUT=0
 RETRY=0
+WAVE_TIMEOUT_MINUTES=240  # Max 4 hours per wave before killing hung jobs
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -937,16 +938,21 @@ EXEC_EOF
      sleep 5
    done
 
-  # Auto-commit fallback inside the session worktree
+  # Auto-commit fallback inside the session worktree with timeout
   if [[ $rc -eq 0 ]] && $AUTO_COMMIT; then
     if ! git diff --quiet HEAD 2>/dev/null \
        || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
       git add -A
-      git commit -q -m "feat: Session ${sid} — ${friendly}
+      # Use timeout to prevent git commit hanging on index.lock
+      if timeout 60 git commit -q -m "feat: Session ${sid} — ${friendly}
 
 Automated execution of $fname.
 
-Co-Authored-By: AI <noreply@ai>" || true
+Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
+        : # commit succeeded
+      else
+        warn "git commit timed out or failed (index.lock contention); continuing"
+      fi
     fi
   fi
 
@@ -1165,9 +1171,11 @@ EPIC_START_TS="$(date +%s)"
 reap_finished_jobs() {
   local i new_pids=() new_sids=()
   for i in "${!JOB_PIDS[@]}"; do
-    if ! kill -0 "${JOB_PIDS[$i]}" 2>/dev/null; then
+    local pid="${JOB_PIDS[$i]}"
+    # Use ps instead of kill -0 to detect zombies and actual process state
+    if ! ps -p "$pid" > /dev/null 2>&1; then
       local rc=0
-      wait "${JOB_PIDS[$i]}" || rc=$?
+      wait "$pid" || rc=$?
       local sid="${JOB_SIDS[$i]}"
       local elapsed=$(( $(date +%s) - ${SESSION_START_TS[$sid]:-0} ))
       SESSION_ELAPSED_BY_ID[$sid]=$elapsed
@@ -1182,7 +1190,7 @@ reap_finished_jobs() {
         ! $LIVE_UI && err "  ✗ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) FAILED in $(format_elapsed "$elapsed") (exit $rc)"
       fi
     else
-      new_pids+=("${JOB_PIDS[$i]}")
+      new_pids+=("$pid")
       new_sids+=("${JOB_SIDS[$i]}")
     fi
   done
@@ -1299,8 +1307,18 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     JOB_SIDS+=("$sid")
   done
 
-  # Wait for all jobs in this wave
+  # Wait for all jobs in this wave with timeout protection
+  local wave_start=$(date +%s)
+  local wave_timeout=$((WAVE_TIMEOUT_MINUTES * 60))  # Default 240 min per wave
   while [[ ${#JOB_PIDS[@]} -gt 0 ]]; do
+    local wave_elapsed=$(($(date +%s) - wave_start))
+    if [[ $wave_elapsed -gt $wave_timeout ]]; then
+      err "Wave timeout after $((wave_elapsed / 60)) minutes; killing hung jobs"
+      for pid in "${JOB_PIDS[@]}"; do
+        kill -9 "$pid" 2>/dev/null || true
+      done
+      break
+    fi
     reap_finished_jobs
     [[ ${#JOB_PIDS[@]} -gt 0 ]] && sleep 2
   done
