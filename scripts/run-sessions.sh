@@ -116,6 +116,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Validate numeric arguments
+for _arg_name in "START_FROM" "END_AT" "MAX_PARALLEL" "TIMEOUT" "RETRY"; do
+  _val="${!_arg_name}"
+  if ! [[ "$_val" =~ ^[0-9]+$ ]]; then
+    err "$_arg_name must be a non-negative integer (got '$_val')"
+    exit 1
+  fi
+done
+
 if [[ -z "$SESSIONS_DIR" ]]; then
   err "Missing required argument: <sessions-dir>"
   usage
@@ -703,14 +712,14 @@ run_cli() {
     else
       # OpenCode with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
-        ${timeout_cmd[@]+"${timeout_cmd[@]}"} opencode run "${model_flag[@]}" \
+        ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u OPENCODE_SESSION_ID opencode run "${model_flag[@]}" \
           --format json \
           --dangerously-skip-permissions \
           < "$prompt_file" \
           2>"$stderr_tmp" \
           | "$PYTHON_CMD" "$PROGRESS_SCRIPT" "${progress_args[@]}"
       else
-        ${timeout_cmd[@]+"${timeout_cmd[@]}"} opencode run "${model_flag[@]}" \
+        ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u OPENCODE_SESSION_ID opencode run "${model_flag[@]}" \
           --format json \
           --dangerously-skip-permissions \
           < "$prompt_file" \
@@ -731,7 +740,7 @@ run_cli() {
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
     else
-      ${timeout_cmd[@]+"${timeout_cmd[@]}"} opencode run "${model_flag[@]}" \
+      ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u OPENCODE_SESSION_ID opencode run "${model_flag[@]}" \
         --format json \
         --dangerously-skip-permissions \
         < "$prompt_file" > "$log_file" 2>&1
@@ -1050,23 +1059,26 @@ write_epic_result() {
   fi
   
   # Write result file using Python for safe JSON generation
-  python3 -c "
-import json, sys, time
+  EPIC_NAME="$EPIC_NAME_SLUG" EPIC_STATUS="$epic_status_lower" \
+  RESULT_WAVE="$result_wave" RUNTIME_SECS="$runtime" \
+  START_TS="$start_ts" END_TS="$end_ts" \
+  FIRST_FAILED="$first_failed" \
+    "$PYTHON_CMD" - "$result_file" "$tmp_data" "$tmp_merged" <<'PYEOF_RESULT'
+import json, os, sys
 
 data = {
-    'epic': '${EPIC_NAME_SLUG}',
-    'status': '${epic_status_lower}',
-    'first_failed_id': ${first_failed},
-    'sessions': {},
-    'merged_sessions': [l.strip() for l in open('${tmp_merged}') if l.strip()],
-    'wave': ${result_wave},
-    'runtime_seconds': ${runtime},
-    'started_at': ${start_ts},
-    'ended_at': ${end_ts},
+    'epic':           os.environ['EPIC_NAME'],
+    'status':         os.environ['EPIC_STATUS'],
+    'first_failed_id': json.loads(os.environ['FIRST_FAILED']),
+    'sessions':       {},
+    'merged_sessions': [l.strip() for l in open(sys.argv[3]) if l.strip()],
+    'wave':           int(os.environ['RESULT_WAVE']),
+    'runtime_seconds': int(os.environ['RUNTIME_SECS']),
+    'started_at':     int(os.environ['START_TS']),
+    'ended_at':       int(os.environ['END_TS']),
 }
 
-# Read per-session data from temp file
-with open('${tmp_data}') as f:
+with open(sys.argv[2], encoding='utf-8') as f:
     for line in f:
         line = line.strip()
         if not line:
@@ -1081,19 +1093,18 @@ with open('${tmp_data}') as f:
             entry['exit_code'] = int(parts[4]) if len(parts) > 4 else 1
             entry['error_type'] = parts[5] if len(parts) > 5 else 'unknown'
             entry['log_path'] = parts[6] if len(parts) > 6 else ''
-            # Read error detail from .errtype file if present
             stderr_path = parts[7] if len(parts) > 7 else ''
             if stderr_path:
                 try:
-                    with open(stderr_path) as ef:
+                    with open(stderr_path, encoding='utf-8') as ef:
                         entry['error_detail'] = ef.read().strip()
                 except Exception:
                     pass
         data['sessions'][sid] = entry
 
-with open('${result_file}', 'w') as f:
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
     json.dump(data, f, indent=2)
-" 2>/dev/null || true
+PYEOF_RESULT
   
   rm -f "$tmp_data" "$tmp_merged"
   
@@ -1106,9 +1117,9 @@ with open('${result_file}', 'w') as f:
   # Print structured output block for orchestrator consumption
   echo ""
   echo "[EPIC_RESULT_START]"
-  python3 -c "
+  "$PYTHON_CMD" - "$result_file" <<'PYEOF_PRINT'
 import json, sys
-data = json.load(open('${result_file}'))
+data = json.load(open(sys.argv[1]))
 if data['status'] == 'failed':
     print('STATUS=failed')
     print('FIRST_FAILED=' + str(data['first_failed_id']))
@@ -1123,7 +1134,7 @@ else:
     print('STATUS=success')
     print('SESSIONS_COMPLETED=' + str(len(data['sessions'])))
     print('RUNTIME=' + str(data['runtime_seconds']) + 's')
-" 2>/dev/null || true
+PYEOF_PRINT
   echo "[EPIC_RESULT_END]"
   echo ""
   
@@ -1147,6 +1158,42 @@ declare -a MERGED_SESSIONS        # ids merged into trunk
 EPIC_FAILED=false
 FIRST_FAILED_ID=""
 EPIC_START_TS="$(date +%s)"
+
+# reap_finished_jobs — defined once, called each wave iteration.
+# Uses JOB_PIDS[], JOB_SIDS[] (re-initialized per wave) and
+# SESSION_STATUS[], SESSION_ELAPSED_BY_ID[], SESSION_EXIT_BY_ID[] (global).
+reap_finished_jobs() {
+  local i new_pids=() new_sids=()
+  for i in "${!JOB_PIDS[@]}"; do
+    if ! kill -0 "${JOB_PIDS[$i]}" 2>/dev/null; then
+      local rc=0
+      wait "${JOB_PIDS[$i]}" || rc=$?
+      local sid="${JOB_SIDS[$i]}"
+      local elapsed=$(( $(date +%s) - ${SESSION_START_TS[$sid]:-0} ))
+      SESSION_ELAPSED_BY_ID[$sid]=$elapsed
+      SESSION_EXIT_BY_ID[$sid]=$rc
+      if [[ $rc -eq 0 ]]; then
+        SESSION_STATUS[$sid]="done"
+        mark_session "${STATUS_FILE:-}" "$sid" "done" "$elapsed"
+        ! $LIVE_UI && ok "  ✓ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) finished in $(format_elapsed "$elapsed")"
+      else
+        SESSION_STATUS[$sid]="failed"
+        mark_session "${STATUS_FILE:-}" "$sid" "failed" "$elapsed"
+        ! $LIVE_UI && err "  ✗ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) FAILED in $(format_elapsed "$elapsed") (exit $rc)"
+      fi
+    else
+      new_pids+=("${JOB_PIDS[$i]}")
+      new_sids+=("${JOB_SIDS[$i]}")
+    fi
+  done
+  if [[ ${#new_pids[@]} -gt 0 ]]; then
+    JOB_PIDS=("${new_pids[@]}")
+    JOB_SIDS=("${new_sids[@]}")
+  else
+    JOB_PIDS=()
+    JOB_SIDS=()
+  fi
+}
 
 for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   ids="${WAVE_IDS[$wn]:-}"
@@ -1198,39 +1245,6 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   # --- Spawn wave sessions ---
   declare -a JOB_PIDS=()
   declare -a JOB_SIDS=()
-
-  reap_finished_jobs() {
-    local i new_pids=() new_sids=()
-    for i in "${!JOB_PIDS[@]}"; do
-      if ! kill -0 "${JOB_PIDS[$i]}" 2>/dev/null; then
-        local rc=0
-        wait "${JOB_PIDS[$i]}" || rc=$?
-        local sid="${JOB_SIDS[$i]}"
-        local elapsed=$(( $(date +%s) - ${SESSION_START_TS[$sid]:-0} ))
-        SESSION_ELAPSED_BY_ID[$sid]=$elapsed
-        SESSION_EXIT_BY_ID[$sid]=$rc
-        if [[ $rc -eq 0 ]]; then
-          SESSION_STATUS[$sid]="done"
-          mark_session "${STATUS_FILE:-}" "$sid" "done" "$elapsed"
-          ! $LIVE_UI && ok "  ✓ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) finished in $(format_elapsed "$elapsed")"
-        else
-          SESSION_STATUS[$sid]="failed"
-          mark_session "${STATUS_FILE:-}" "$sid" "failed" "$elapsed"
-          ! $LIVE_UI && err "  ✗ session $(printf '%02d' "$sid") (${SESSION_SLUG_BY_ID[$sid]}) FAILED in $(format_elapsed "$elapsed") (exit $rc)"
-        fi
-      else
-        new_pids+=("${JOB_PIDS[$i]}")
-        new_sids+=("${JOB_SIDS[$i]}")
-      fi
-    done
-    if [[ ${#new_pids[@]} -gt 0 ]]; then
-      JOB_PIDS=("${new_pids[@]}")
-      JOB_SIDS=("${new_sids[@]}")
-    else
-      JOB_PIDS=()
-      JOB_SIDS=()
-    fi
-  }
 
   for sid in "${IN_RANGE[@]}"; do
     # Throttle to MAX_PARALLEL

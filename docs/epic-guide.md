@@ -287,10 +287,11 @@ Progress display adapts to the detected CLI:
 
 - **Claude Code** streams `--output-format stream-json` through
   `epic-progress.py` for real-time step/tool/target tracking with a spinner.
-- **OpenCode** uses `epic-poll-progress.py`, which tails the session log
-  file, parses tool-use markers (`Read`, `Edit`, `Write`, `Bash`, etc.),
-  and renders a spinner with step count. It also updates the shared status
-  JSON so the TUI dashboard (`epic-ui.py`) shows live progress.
+- **OpenCode** pipes `--format json` through the same `epic-progress.py`,
+  which handles both Claude's `stream-json` events and OpenCode's JSON format
+  (`step_start`/`tool_use`/`text`/`step_finish`).
+- `epic-progress.py` also updates the shared status JSON so the TUI dashboard
+  (`epic-ui.py`) reflects live progress.
 - If neither progress script is available, the session runs with simple
   log output (no spinner).
 

@@ -115,7 +115,10 @@ def main() -> None:
     # Open log file for appending raw cli output
     log_file = open(args.log, "a", encoding="utf-8")
 
-    # Wait for log file to exist and start polling
+    # Wait for log file to exist and start polling.
+    # Exit after IDLE_TIMEOUT seconds with no new log content (session is done).
+    IDLE_TIMEOUT = 60
+    idle_start = time.time()
     try:
         while True:
             time.sleep(REFRESH)
@@ -129,6 +132,7 @@ def main() -> None:
                 file_size = 0
 
             if file_size > last_size:
+                idle_start = time.time()  # reset idle timer on new content
                 try:
                     with open(args.log, "r", encoding="utf-8", errors="replace") as f:
                         f.seek(last_size)
@@ -166,6 +170,10 @@ def main() -> None:
                     'target': current_target, 'elapsed': elapsed,
                 })
                 last_status_ts = now
+
+            # Idle timeout: exit if no new log content for IDLE_TIMEOUT seconds
+            if now - idle_start >= IDLE_TIMEOUT:
+                break
 
     except KeyboardInterrupt:
         pass
