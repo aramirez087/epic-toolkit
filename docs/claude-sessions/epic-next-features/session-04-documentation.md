@@ -12,53 +12,31 @@ parallel_safe: true
 
 # Session 04: Documentation and Command Reference
 
-Paste this into a new agent session:
-
 ```md
-Continue from Session 01 artifacts.
+Continue from Session 01.
 
-Mission: Update all user-facing documentation to cover the new timeout, retry, per-session frontmatter overrides, and `.epic-config.json` features.
+Mission: Update all docs for timeout, retry, per-session frontmatter overrides, `.epic-config.json`.
 
-Repository anchors:
-- README.md
-- docs/epic-guide.md
-- commands/epic.md
-- .opencode/commands/epic.md
+Anchors:
+- README.md, docs/epic-guide.md
+- commands/epic.md, .opencode/commands/epic.md
 - docs/roadmap/epic-next-features/session-01-handoff.md
 
 Tasks:
-1. Read all repository anchors listed above and the Session 01 handoff.
-2. Update README.md:
-   - Add `--timeout` and `--retry` to the Common flags table.
-   - Add a `.epic-config.json` section with a minimal example.
-   - Add frontmatter example showing `model` and `cli` keys.
-3. Update docs/epic-guide.md:
-   - Expand the Options table with `--timeout`, `--retry`.
-   - Add a `.epic-config.json` reference section listing every key, type, and default.
-   - Add a frontmatter reference subsection for `model` and `cli`.
-   - Update examples to show mixed-tool epics (some sessions on `claude`, others on `opencode`).
-4. Update commands/epic.md and .opencode/commands/epic.md:
-   - Add `--timeout M` and `--retry N` to the flag list in the description header.
-   - Add the new flags to the defaults block and the bash execution example.
-5. Ensure all four docs are consistent: same flag names, same defaults, same examples.
+1. Read all anchors.
+2. README.md: add `--timeout`/`--retry` to flags table, `.epic-config.json` section + example, frontmatter `model`/`cli` example.
+3. docs/epic-guide.md: expand Options table, `.epic-config.json` reference (all keys/types/defaults), frontmatter `model`/`cli` subsection, mixed-tool epic example.
+4. commands/epic.md + .opencode/commands/epic.md: add `--timeout M`/`--retry N` to description header, defaults block, bash example.
+5. Ensure all four docs are consistent.
 
-Deliverables:
-1. Updated README.md
-2. Updated docs/epic-guide.md
-3. Updated commands/epic.md
-4. Updated .opencode/commands/epic.md
-5. docs/roadmap/epic-next-features/session-04-handoff.md
+Deliverables: Updated README.md, docs/epic-guide.md, commands/epic.md, .opencode/commands/epic.md, session-04-handoff.md
 
 Quality gates:
-- grep -c "timeout" README.md docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (verify all 4 mention it)
-- grep -c "retry" README.md docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (verify all 4 mention it)
-- grep -c "epic-config" README.md docs/epic-guide.md (verify both mention it)
-- grep -c "model:" docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (verify frontmatter example present)
-- grep -c "cli:" docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (verify frontmatter example present)
+- grep -c "timeout" README.md docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (all 4)
+- grep -c "retry" README.md docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (all 4)
+- grep -c "epic-config" README.md docs/epic-guide.md (both)
+- grep -c "model:" docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (all 3)
+- grep -c "cli:" docs/epic-guide.md commands/epic.md .opencode/commands/epic.md (all 3)
 
-Exit criteria:
-- All four documentation files are updated and mutually consistent.
-- New flags, config file, and frontmatter keys are documented with correct defaults.
-- No broken markdown links or formatting.
-- Quality gate counts are all >= 1.
+Exit: All four docs updated and consistent. Correct defaults. No broken formatting. Gate counts >= 1.
 ```

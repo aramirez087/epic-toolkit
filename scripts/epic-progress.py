@@ -331,6 +331,11 @@ def main():
                         if err_msg:
                             log_file.write(f"\n[ERROR] {err_msg}\n")
                             log_file.flush()
+                            if session_id > 0 and status_file:
+                                update_status_file(status_file, session_id, {
+                                    'error_type': 'cli_error',
+                                    'error_detail': err_msg,
+                                })
 
             if eof and not line_buf.strip():
                 break

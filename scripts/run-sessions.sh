@@ -807,39 +807,22 @@ run_one_session() {
     
     if $SKIP_PLAN; then
       local prompt; prompt="$(cat <<SINGLE_EOF
-You are executing Session ${sid} of an automated multi-session epic.
-Each session runs in a FRESH context — you have no memory of previous sessions.
+Execute Session ${sid}. Read referenced files and handoff docs, implement, commit.
 
-=============================================
-PHASE 1: OPERATOR RULES (always in effect)
-=============================================
-
+OPERATOR RULES:
 $OPERATOR_PROMPT
 
-=============================================
-PHASE 2: SESSION INSTRUCTIONS
-=============================================
-
+SESSION INSTRUCTIONS:
 $session_prompt
 $handoff_text
-=============================================
-PHASE 3: EXECUTION PROTOCOL
-=============================================
 
-1. PLAN: Read the referenced files and any handoff docs. Print a concise plan,
-   then proceed immediately — do NOT wait for approval.
-2. EXECUTE: Implement everything. No TBDs, no TODOs.
-3. FINALIZE: Run any required CI commands. Create the handoff doc.
+DO:
+1. Read all referenced files and handoff docs.
+2. Implement everything — no TBDs/TODOs.
+3. Run all CI checks. Create the handoff doc if required.
 4. Stage and commit ALL changes:
-
    git add -A
-   git commit -m "feat: Session ${sid} — ${friendly}
-
-   <2-3 sentences>
-
-   Co-Authored-By: AI <noreply@ai>"
-
-5. Print a brief completion summary.
+   git commit -m "feat: Session ${sid} — ${friendly}"
 SINGLE_EOF
 )"
        local prompt_file; prompt_file="$(mktemp)"
@@ -847,39 +830,25 @@ SINGLE_EOF
        run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
        rm -f "$prompt_file"
      else
-       # PLAN pass
-       local plan_prompt; plan_prompt="$(cat <<PLAN_EOF
-You are planning Session ${sid} of an automated multi-session epic.
-Read-only exploration: do NOT modify any source code, tests, or docs.
+        # PLAN pass
+        local plan_prompt; plan_prompt="$(cat <<PLAN_EOF
+Read-only planning for Session ${sid}. Do NOT modify source, tests, or docs.
 
-=============================================
-OPERATOR RULES (always in effect)
-=============================================
-
+OPERATOR RULES:
 $OPERATOR_PROMPT
 
-=============================================
-SESSION INSTRUCTIONS
-=============================================
-
+SESSION INSTRUCTIONS:
 $session_prompt
 $handoff_text
-=============================================
-PLANNING INSTRUCTIONS
-=============================================
 
-1. Read all files referenced in the session instructions above.
-2. Inspect any handoff docs from DAG parents (file paths included above).
-3. Write a detailed implementation plan to this EXACT path: ${plan_file}
-
-The plan MUST include:
+TASK: Write an implementation plan to ${plan_file} containing:
 - Files to create/modify (full paths)
-- Key design decisions and rationale
+- Design decisions and rationale
 - Risks and mitigations
 - Verification steps (tests, CI commands)
 - Exact order of operations
 
-Do NOT modify source. Do NOT wait for approval. Just write the plan and finish.
+Write the plan and finish. Do not wait for approval.
 PLAN_EOF
 )"
        local prompt_file; prompt_file="$(mktemp)"
@@ -896,47 +865,28 @@ PLAN_EOF
            local plan_contents; plan_contents="$(cat "$plan_file")"
 
            # EXECUTE pass
-           local exec_prompt; exec_prompt="$(cat <<EXEC_EOF
-You are executing Session ${sid} of an automated multi-session epic.
-A planning phase has produced the implementation plan below. Implement it
-fully — do not re-explore or second-guess.
+            local exec_prompt; exec_prompt="$(cat <<EXEC_EOF
+Execute Session ${sid} using the plan below. Implement fully — no TBDs/TODOs, no re-exploration.
 
-=============================================
-OPERATOR RULES (always in effect)
-=============================================
-
+OPERATOR RULES:
 $OPERATOR_PROMPT
 
-=============================================
-SESSION INSTRUCTIONS
-=============================================
-
+SESSION INSTRUCTIONS:
 $session_prompt
 $handoff_text
-=============================================
-IMPLEMENTATION PLAN
-=============================================
 
+PLAN:
 $plan_contents
 
-=============================================
-EXECUTION INSTRUCTIONS
-=============================================
-
+DO:
 1. Implement everything in the plan.
-2. Run any CI checks the plan or session calls for.
-3. Resolve all ambiguities — no TBDs, no TODOs.
-4. Create the handoff doc if required by the session.
-5. Stage and commit ALL changes:
-
+2. Run all CI checks the plan calls for.
+3. Create the handoff doc if required.
+4. Stage and commit ALL changes:
    git add -A
-   git commit -m "feat: Session ${sid} — ${friendly}
+   git commit -m "feat: Session ${sid} — ${friendly}"
 
-   <2-3 sentences>
-
-   Co-Authored-By: AI <noreply@ai>"
-
-Do NOT wait for approval. Execute immediately.
+Commit with descriptive message. Execute immediately.
 EXEC_EOF
 )"
            prompt_file="$(mktemp)"
@@ -976,6 +926,194 @@ Co-Authored-By: AI <noreply@ai>" || true
 }
 
 # ---------------------------------------------------------------------------
+# Error classification — determine why a session failed
+# ---------------------------------------------------------------------------
+classify_error() {
+  local log_file="$1" exit_code="$2"
+  
+  if [[ "$exit_code" -eq 124 ]]; then
+    echo "timeout"
+    return
+  fi
+  
+  if grep -q "ERROR: could not extract prompt" "$log_file" 2>/dev/null; then
+    echo "prompt_error"
+    return
+  fi
+  
+  if grep -q "ERROR: plan phase finished but plan file was not created" "$log_file" 2>/dev/null; then
+    echo "plan_failure"
+    return
+  fi
+  
+  if grep -qi "merge conflict" "$log_file" 2>/dev/null; then
+    echo "merge_conflict"
+    return
+  fi
+  
+  # Check for error markers in the log
+  if grep -qE '^\[ERROR\]' "$log_file" 2>/dev/null; then
+    local err_msg
+    err_msg="$(grep -oE '^\[ERROR\] .+' "$log_file" | head -1 | sed 's/^\[ERROR\] //')"
+    err_msg="$(echo "$err_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')"
+    echo "cli_error"
+    echo "$err_msg" > "${log_file}.errtype"
+    return
+  fi
+  
+  # Check for CLI-specific error patterns
+  if grep -qE '(exit code|returned|fatal|Segmentation|Killed|out of memory|OOM)' "$log_file" 2>/dev/null; then
+    echo "cli_crash"
+    return
+  fi
+  
+  echo "unknown"
+}
+
+# ---------------------------------------------------------------------------
+# Generate epic result file and structured output block for orchestrator
+# ---------------------------------------------------------------------------
+write_epic_result() {
+  local epic_status="$1"  # "success" or "failed"
+  local result_file="${TRUNK_SESSIONS_DIR}/.epic-result.json"
+  local result_wave
+  if $EPIC_FAILED; then result_wave="$wn"; else result_wave="$WAVE_COUNT"; fi
+  
+  local start_ts="$EPIC_START_TS"
+  local end_ts
+  end_ts="$(date +%s)"
+  local runtime=$(( end_ts - start_ts ))
+  
+  # Write session data to temp file for Python to consume
+  local tmp_data
+  tmp_data="$(mktemp)"
+  for (( sid=1; sid<=999; sid++ )); do
+    [[ -z "${SESSION_STATUS[$sid]:-}" ]] && break
+    local padded
+    padded="$(printf '%02d' "$sid")"
+    local key="session-${padded}"
+    local status="${SESSION_STATUS[$sid]:-unknown}"
+    local slug="${SESSION_SLUG_BY_ID[$sid]:-unknown}"
+    local elapsed="${SESSION_ELAPSED_BY_ID[$sid]:-0}"
+    local exit_code="${SESSION_EXIT_BY_ID[$sid]:-0}"
+    local error_type="none"
+    local log_path="$TRUNK_SESSIONS_DIR/.session-${padded}-exec.log"
+    local stderr_path="$TRUNK_SESSIONS_DIR/.session-${padded}-exec.log.errtype"
+    
+    if [[ "$status" == "failed" ]]; then
+      error_type="$(classify_error "$TRUNK_SESSIONS_DIR/.session-${padded}-exec.log" "$exit_code")"
+    fi
+    
+    echo "${key}|${status}|${slug}|${elapsed}|${exit_code}|${error_type}|${log_path}|${stderr_path}" >> "$tmp_data"
+  done
+  
+  # Build merged sessions list via temp file
+  local tmp_merged
+  tmp_merged="$(mktemp)"
+  for entry in "${MERGED_SESSIONS[@]:-}"; do
+    [[ -z "$entry" ]] && continue
+    echo "$entry" >> "$tmp_merged"
+  done
+  
+  local first_failed="null"
+  if [[ -n "$FIRST_FAILED_ID" ]]; then
+    local padded_ff
+    padded_ff="$(printf '%02d' "$FIRST_FAILED_ID")"
+    first_failed="\"session-${padded_ff}\""
+  fi
+  
+  local epic_status_lower
+  if [[ "$epic_status" == "success" ]]; then
+    epic_status_lower="success"
+  else
+    epic_status_lower="failed"
+  fi
+  
+  # Write result file using Python for safe JSON generation
+  python3 -c "
+import json, sys, time
+
+data = {
+    'epic': '${EPIC_NAME_SLUG}',
+    'status': '${epic_status_lower}',
+    'first_failed_id': ${first_failed},
+    'sessions': {},
+    'merged_sessions': [l.strip() for l in open('${tmp_merged}') if l.strip()],
+    'wave': ${result_wave},
+    'runtime_seconds': ${runtime},
+    'started_at': ${start_ts},
+    'ended_at': ${end_ts},
+}
+
+# Read per-session data from temp file
+with open('${tmp_data}') as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split('|')
+        sid = parts[0]
+        status = parts[1]
+        slug = parts[2]
+        elapsed = int(parts[3]) if len(parts) > 3 else 0
+        entry = {'status': status, 'slug': slug, 'elapsed': elapsed}
+        if status == 'failed':
+            entry['exit_code'] = int(parts[4]) if len(parts) > 4 else 1
+            entry['error_type'] = parts[5] if len(parts) > 5 else 'unknown'
+            entry['log_path'] = parts[6] if len(parts) > 6 else ''
+            # Read error detail from .errtype file if present
+            stderr_path = parts[7] if len(parts) > 7 else ''
+            if stderr_path:
+                try:
+                    with open(stderr_path) as ef:
+                        entry['error_detail'] = ef.read().strip()
+                except Exception:
+                    pass
+        data['sessions'][sid] = entry
+
+with open('${result_file}', 'w') as f:
+    json.dump(data, f, indent=2)
+" 2>/dev/null || true
+  
+  rm -f "$tmp_data" "$tmp_merged"
+  
+  # Clean up .errtype temp files created by classify_error
+  for (( sid=1; sid<=999; sid++ )); do
+    [[ -z "${SESSION_STATUS[$sid]:-}" ]] && break
+    rm -f "$TRUNK_SESSIONS_DIR/.session-$(printf '%02d' "$sid")-exec.log.errtype"
+  done
+  
+  # Print structured output block for orchestrator consumption
+  echo ""
+  echo "[EPIC_RESULT_START]"
+  python3 -c "
+import json, sys
+data = json.load(open('${result_file}'))
+if data['status'] == 'failed':
+    print('STATUS=failed')
+    print('FIRST_FAILED=' + str(data['first_failed_id']))
+    print('WAVE=' + str(data['wave']))
+    print('RUNTIME=' + str(data['runtime_seconds']) + 's')
+    for sid, sdata in data['sessions'].items():
+        if sdata['status'] == 'failed':
+            print('SESSION_FAIL=' + sid + ' error=' + sdata.get('error_type','unknown') + ' exit=' + str(sdata.get('exit_code',0)) + ' log=' + sdata.get('log_path',''))
+            if sdata.get('error_detail'):
+                print('ERROR_DETAIL=' + sdata['error_detail'])
+else:
+    print('STATUS=success')
+    print('SESSIONS_COMPLETED=' + str(len(data['sessions'])))
+    print('RUNTIME=' + str(data['runtime_seconds']) + 's')
+" 2>/dev/null || true
+  echo "[EPIC_RESULT_END]"
+  echo ""
+  
+  # Only retain result file on failure (clean up on success)
+  if [[ "$epic_status" == "success" ]]; then
+    rm -f "$result_file"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Wave loop
 # ---------------------------------------------------------------------------
 declare -a SESSION_STATUS         # by id: pending|done|failed|skipped
@@ -983,10 +1121,12 @@ declare -a SESSION_BRANCH_BY_ID   # by id
 declare -a SESSION_WT_BY_ID       # by id
 declare -a SESSION_START_TS       # by id (epoch seconds)
 declare -a SESSION_ELAPSED_BY_ID  # by id (seconds, populated on reap)
+declare -a SESSION_EXIT_BY_ID     # by id (exit code, populated on reap)
 declare -a MERGED_SESSIONS        # ids merged into trunk
 
 EPIC_FAILED=false
 FIRST_FAILED_ID=""
+EPIC_START_TS="$(date +%s)"
 
 for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   ids="${WAVE_IDS[$wn]:-}"
@@ -1048,6 +1188,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
         local sid="${JOB_SIDS[$i]}"
         local elapsed=$(( $(date +%s) - ${SESSION_START_TS[$sid]:-0} ))
         SESSION_ELAPSED_BY_ID[$sid]=$elapsed
+        SESSION_EXIT_BY_ID[$sid]=$rc
         if [[ $rc -eq 0 ]]; then
           SESSION_STATUS[$sid]="done"
           mark_session "${STATUS_FILE:-}" "$sid" "done" "$elapsed"
@@ -1197,6 +1338,7 @@ if [[ -n "$UI_PID" ]] && kill -0 "$UI_PID" 2>/dev/null; then
 fi
 echo ""
 if ! $EPIC_FAILED; then
+  write_epic_result "success"
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   ok "${BOLD}Epic completed successfully${NC}"
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1309,6 +1451,7 @@ ${DIFF_STATS}
     fi
   fi
 else
+  write_epic_result "failed"
   err "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   err "${BOLD}Epic stopped${NC}"
   err "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1320,5 +1463,6 @@ else
     err "Trunk worktree preserved : $TRUNK_WORKTREE_DIR"
     err "Failed session worktrees : $WORKTREE_BASE/${BRANCH_SANITIZED}--s*-* (inspect, then re-run)"
   fi
+  err "Detailed results: ${TRUNK_SESSIONS_DIR}/.epic-result.json"
   exit 1
 fi

@@ -1,97 +1,48 @@
 ---
-description: Run a multi-session epic autonomously. Sessions run as a DAG with parallel waves where possible. Usage /epic <name> [--start N] [--end N] [--timeout M] [--retry N] [--dry-run] [--show-dag] [--max-parallel N] [--strict] [--sequential] [--model opus|sonnet|haiku] [--branch <name>]
+description: Run a multi-session epic autonomously. DAG mode with parallel waves. /epic <name> [--start N] [--end N] [--timeout M] [--retry N] [--dry-run] [--show-dag] [--max-parallel N] [--strict] [--sequential] [--model opus|sonnet|haiku] [--branch <name>]
 ---
 
-You are the orchestrator for an autonomous multi-session epic. Your job is to invoke
-the `run-sessions.sh` script which spawns a **fresh Claude process per session** so
-each session gets a clean context window, plans its approach, executes, and commits.
+Orchestrator for multi-session epic. Invoke `run-sessions.sh` which spawns a fresh Claude per session (clean context), plans, executes, commits.
 
-**DAG mode:** Sessions can declare YAML frontmatter (`depends_on`, `touches`,
-`parallel_safe`) to form a directed acyclic graph. The runner schedules them into
-Kahn-style waves and fans out independent siblings into per-session worktrees that
-run concurrently, then iteratively merges them into the trunk branch. Sessions
-without frontmatter implicitly form a linear chain (one session per wave).
+**DAG:** Sessions declare YAML frontmatter (`depends_on`, `touches`, `parallel_safe`) for a DAG. Runner schedules Kahn-style waves, fans out per-session worktrees (concurrent), merges to trunk. No frontmatter = linear chain.
 
-**Isolation:** By default, the runner creates a trunk worktree
-`.epic-worktrees/<repo>/epic--<name>/` and per-session sibling worktrees
-`.epic-worktrees/<repo>/epic--<name>--sNN-<slug>/`. Use `--no-worktree` to opt out
-(forces sequential).
+**Isolation:** Trunk worktree `.epic-worktrees/<repo>/epic--<name>/`, per-session siblings `.epic-worktrees/<repo>/epic--<name>--sNN-<slug>/`. `--no-worktree` = sequential.
 
-## Parse arguments
+Sessions dir: `docs/claude-sessions/<name>/`
 
-Raw arguments: `$ARGUMENTS`
-
-Defaults:
-- `name` — first positional arg (required)
-- `--start` — 1
-- `--end` — all
-- `--max-parallel` — 4
-- `--strict` — false (warn on `touches` overlap; with `--strict`, fail)
-- `--sequential` — false (forces one-session-per-wave; equivalent to `--max-parallel 1`)
-- `--show-dag` — false (when set, print the planned waves and exit)
-- `--model` — sonnet
-- `--cli` — auto-detect (forces opencode or claude; useful when running from a terminal outside either tool)
-- `--branch` — auto-derived as `epic/<name>` (the trunk branch)
-- `--base` — repo default branch (usually `main`)
-- `--dry-run` — false (when set, prints the plan and exits with no side effects)
-- `--no-worktree` — false (worktree isolation is ON by default)
-- `--timeout` — 0 (no timeout)
-- `--retry` — 0 (no retry)
-- `--keep-worktree` — false (trunk worktree auto-cleaned after PR creation)
-- `--keep-session-worktrees` — false (per-session worktrees cleaned after each wave)
-
-The sessions directory is: `docs/claude-sessions/<name>/`.
-
-Sessions can include per-session overrides in their frontmatter:
-
+Per-session frontmatter overrides:
 ```yaml
----
 session: 02
 title: "Analysis task"
 depends_on: [01]
-model: "opus"           # Override default model
-cli: "claude"           # Override CLI auto-detection
+model: "opus"
+cli: "claude"
 touches: ["analysis/**"]
 parallel_safe: true
----
 ```
+
+Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base main`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`.
 
 ## Validate
-
-1. Confirm `docs/claude-sessions/<name>/` exists in the current repo.
-2. If it does NOT exist, list what IS available under `docs/claude-sessions/` and ask the user to pick.
+1. Confirm `docs/claude-sessions/<name>/` exists. If not, list available under `docs/claude-sessions/` and ask user to pick.
 
 ## Execute
-
-Run the global script, forwarding all flags:
-
 ```bash
-bash scripts/run-sessions.sh docs/claude-sessions/<name>/ \
-  [--start N] [--end N] [--timeout M] [--retry N] [--max-parallel N] [--strict] [--sequential] \
-  [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] \
-  [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
+bash scripts/run-sessions.sh docs/claude-sessions/<name>/ [--start N] [--end N] [--timeout M] [--retry N] [--max-parallel N] [--strict] [--sequential] [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
 ```
 
-Run this via the Bash tool. This is a **long-running command** — use `run_in_background: true` so the user isn't blocked, and check on it when notified of completion.
-
-If the user only wants to *see* the planned waves (no execution), forward `--show-dag` — that prints the wave layout and exits.
+Run via Bash tool with `run_in_background: true` (long-running). For `--show-dag` only, no background needed.
 
 ## After launch
-
-Immediately after starting the background job, tell the user:
-- The epic branch all sessions will commit to (e.g., `epic/<name>`, or the explicit `--branch` value if provided — **never say "main"**)
-- That you will report back when it completes
+Tell the user:
+- Epic branch (e.g., `epic/<name>`, or explicit `--branch` — **never "main"**)
+- Will report back when complete
 
 Example: "Running epic '<name>' — all sessions will commit to branch `epic/<name>`. I'll report back when it completes."
 
 ## After completion
-
-When the script finishes:
-
-1. Read the final orchestrator output for the wave summary.
-2. Report to the user:
-   - Number of waves and sessions executed
-   - Sessions merged into trunk (with branch names)
-   - Any failures and how to resume (`--start <failed_id>`)
-   - Trunk worktree location (if applicable)
-   - Location of session logs and plans
+1. Parse `[EPIC_RESULT_START]` / `[EPIC_RESULT_END]` block from output.
+2. If `STATUS=failed`: read `.epic-worktrees/<repo>/<epic--name>/.epic-result.json`, report failed session ID(s), error type, exit code, log path, `ERROR_DETAIL` if present. Provide resume command. Note `.epic-result.json` retained only on failure.
+3. If `STATUS=success`: report waves, sessions completed, runtime.
+4. Report trunk worktree location (if applicable).
+5. Report session logs and plans location.

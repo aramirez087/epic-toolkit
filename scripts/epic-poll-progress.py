@@ -172,6 +172,20 @@ def main() -> None:
     finally:
         log_file.close()
 
+    # Scan log for errors before writing final status
+    error_type = None
+    error_detail = ""
+    try:
+        with open(args.log, "r", encoding="utf-8", errors="replace") as lf:
+            log_content = lf.read()
+        import re
+        error_matches = re.findall(r'^\[ERROR\] (.+)$', log_content, re.MULTILINE)
+        if error_matches:
+            error_type = "cli_error"
+            error_detail = error_matches[0]
+    except Exception:
+        pass
+
     # Final summary
     elapsed = time.time() - start
     summary = f"  ✓ {format_elapsed(elapsed)} │ Done    │ {step} tool actions"
@@ -180,10 +194,14 @@ def main() -> None:
 
     # Final status update
     if session_id > 0 and status_file:
-        update_status_file(status_file, session_id, {
+        update_data = {
             'step': step, 'tool': '', 'target': '',
             'elapsed': elapsed, 'status': 'done',
-        })
+        }
+        if error_type:
+            update_data['error_type'] = error_type
+            update_data['error_detail'] = error_detail
+        update_status_file(status_file, session_id, update_data)
 
 
 if __name__ == "__main__":

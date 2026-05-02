@@ -9,50 +9,30 @@ parallel_safe: true
 
 # Session 03: Runner Core Features
 
-Paste this into a new agent session:
-
 ```md
-Continue from Session 01 artifacts.
+Continue from Session 01.
 
-Mission: Add timeout wrapping, retry logic, `.epic-config.json` support, and stale worktree auto-cleanup to run-sessions.sh while preserving all existing defaults and behavior.
+Mission: Add timeout, retry, `.epic-config.json`, and stale worktree cleanup to run-sessions.sh.
 
-Repository anchors:
+Anchors:
 - scripts/run-sessions.sh
 - docs/roadmap/epic-next-features/session-01-handoff.md
 
 Tasks:
-1. Read the current scripts/run-sessions.sh and the Session 01 handoff.
-2. Add CLI argument parsing for `--timeout` (default 0 = no timeout) and `--retry` (default 0 = no retry).
-3. Add `.epic-config.json` loading:
-   - Read from repo root at startup.
-   - Supported keys: `timeout`, `retry`, `cli`, `model`, `maxParallel`, `autoCommit`, `autoPr`, `skipPlan`, `keepWorktree`.
-   - CLI flags override config; config overrides hardcoded defaults.
-   - If file missing or malformed, silently fall back to hardcoded defaults.
-4. Wrap `run_cli` invocations with the `timeout` command when `--timeout > 0`.
-   - On exit code 124, mark the session as failed with message "timed out after Xm".
-   - If `--retry > 0`, re-run the same session up to N times before final failure.
-   - Print timeout/retry usage info in the epic summary.
-5. Add stale worktree cleanup before trunk worktree setup:
-   - Scan `.epic-worktrees/` for directories matching `epic--<name>--sNN-*`.
-   - Remove any worktrees/branches from sessions NOT present in the current DAG plan.
-   - Log what was cleaned up.
-6. Update the summary banner and final report to mention timeout and retry settings when non-default.
-7. Ensure Bash 3.2+ compatibility: no `local -n`, no `mapfile`, no `readarray`.
+1. Read run-sessions.sh and Session 01 handoff.
+2. Add `--timeout MINS` (default 0) and `--retry N` (default 0) CLI flags.
+3. Add `.epic-config.json` loading: keys `timeout`, `retry`, `cli`, `model`, `maxParallel`, `autoCommit`, `autoPr`, `skipPlan`, `keepWorktree`. CLI > config > defaults. Silent on missing/malformed.
+4. Wrap `run_cli` with `timeout` when `--timeout > 0`. Exit 124 → session failed ("timed out after Xm"). If `--retry > 0`, retry up to N times.
+5. Stale worktree cleanup: scan `.epic-worktrees/` for `epic--<name>--sNN-*`, remove worktrees/branches not in current DAG plan. Log removals.
+6. Update banners to show timeout/retry when non-default.
+7. Preserve Bash 3.2+ compatibility.
 
-Deliverables:
-1. Updated scripts/run-sessions.sh
-2. docs/roadmap/epic-next-features/session-03-handoff.md
+Deliverables: Updated scripts/run-sessions.sh, session-03-handoff.md
 
 Quality gates:
 - bash -n scripts/run-sessions.sh
-- bash scripts/run-sessions.sh docs/claude-sessions/epic-next-features --show-dag --timeout 30 --retry 2 (verify it parses and shows DAG)
-- bash scripts/run-sessions.sh docs/claude-sessions/epic-next-features --dry-run --timeout 0 --retry 0 (verify backward-compat defaults)
+- bash scripts/run-sessions.sh docs/claude-sessions/epic-next-features --show-dag --timeout 30 --retry 2
+- bash scripts/run-sessions.sh docs/claude-sessions/epic-next-features --dry-run --timeout 0 --retry 0
 
-Exit criteria:
-- All new CLI flags are accepted and passed through correctly.
-- `.epic-config.json` is read when present and ignored when absent/malformed.
-- Timeout and retry logic is present but defaults remain 0 (no timeout, no retry).
-- Stale cleanup scans and logs without error.
-- Bash 3.2+ compatibility is preserved.
-- All quality gates pass.
+Exit: All flags accepted. Config read when present, ignored when absent. Defaults 0. Cleanup logs cleanly. Bash 3.2+ preserved. Gates pass.
 ```
