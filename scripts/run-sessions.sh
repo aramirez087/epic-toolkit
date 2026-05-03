@@ -1477,7 +1477,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
             # These are append-only tracking files written by every session;
             # taking --theirs (the session's version) is safe because no code
             # lives there and the last-writer value is always acceptable.
-            local _conflicted _non_meta
+            _conflicted=""; _non_meta=""
             _conflicted="$(git -C "$TRUNK_WORKTREE_DIR" diff --name-only --diff-filter=U 2>/dev/null || true)"
             _non_meta="$(printf '%s\n' "$_conflicted" | grep -v '^\.wolf/' | grep -v '^$' || true)"
             if [[ -n "$_conflicted" ]] && [[ -z "$_non_meta" ]]; then
@@ -1526,7 +1526,7 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null
           git -C "$TRUNK_WORKTREE_DIR" worktree remove "$sess_wt" --force 2>/dev/null || true
         fi
         # Delete the per-session branch — it's fully merged into trunk
-        local _sb="${SESSION_BRANCH_BY_ID[$sid]:-}"
+        _sb="${SESSION_BRANCH_BY_ID[$sid]:-}"
         if [[ -n "$_sb" && "$_sb" != "$BRANCH" ]]; then
           git branch -D "$_sb" 2>/dev/null || true
         fi
