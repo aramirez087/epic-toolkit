@@ -268,9 +268,28 @@ fi
 # Mixing styles silently breaks the `${SESSIONS_DIR#$REPO_ROOT/}` prefix strip
 # downstream and yields malformed paths like `//c/foo/...`. Normalize REPO_ROOT
 # through `cd … && pwd` so every path uses the same style.
-REPO_ROOT="$(cd "$(git rev-parse --show-toplevel)" && pwd)"
+#
+# On macOS (case-insensitive APFS/HFS+), `pwd` preserves whatever case the user
+# typed when cd-ing — so REPO_ROOT and SESSIONS_DIR can differ only in case
+# (e.g. `/Code/Stevedore` vs `/Code/stevedore`). The bash prefix-strip below is
+# case-sensitive, so a case mismatch leaves TRUNK_SESSIONS_REL as a full absolute
+# path, causing `$TRUNK_WORKTREE_DIR/$TRUNK_SESSIONS_REL` to contain `//…` and
+# create a malformed nested-absolute directory. Use `realpath` (available on
+# macOS via `brew install coreutils` as `grealpath`) with a fallback to a
+# Python-based canonicalization so both paths are lowercased-resolved before the
+# strip on case-insensitive systems.
+_realpath() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$1" 2>/dev/null || echo "$1"
+  elif command -v grealpath >/dev/null 2>&1; then
+    grealpath "$1" 2>/dev/null || echo "$1"
+  else
+    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1" 2>/dev/null || echo "$1"
+  fi
+}
+REPO_ROOT="$(_realpath "$(cd "$(git rev-parse --show-toplevel)" && pwd)")"
 ORIG_REPO_ROOT="$REPO_ROOT"
-ORIG_SESSIONS_DIR="$SESSIONS_DIR"
+ORIG_SESSIONS_DIR="$(_realpath "$SESSIONS_DIR")"
 EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 
 if [[ -z "$BRANCH" ]]; then
@@ -483,6 +502,17 @@ if $USE_WORKTREE; then
 
   # Mirror sessions dir into trunk if absent (uncommitted-source case).
   TRUNK_SESSIONS_REL="${ORIG_SESSIONS_DIR#$ORIG_REPO_ROOT/}"
+  # Guard: if the strip was a no-op, the paths didn't share a prefix — almost
+  # always a case mismatch on a case-insensitive filesystem (macOS). Fail fast
+  # with a clear message rather than building a malformed //abs/path/inside/dir.
+  if [[ "$TRUNK_SESSIONS_REL" == "$ORIG_SESSIONS_DIR" ]]; then
+    err "Sessions dir is not under repo root after path canonicalization.
+  repo root    : $ORIG_REPO_ROOT
+  sessions dir : $ORIG_SESSIONS_DIR
+Possible cause: case mismatch on a case-insensitive filesystem (macOS APFS/HFS+).
+Install GNU coreutils ('brew install coreutils') to enable reliable realpath resolution,
+or ensure the sessions dir path uses the same case as the repo root."
+  fi
   TRUNK_SESSIONS_DIR="$TRUNK_WORKTREE_DIR/$TRUNK_SESSIONS_REL"
   if [[ ! -d "$TRUNK_SESSIONS_DIR" ]] || [[ -z "$(ls "$TRUNK_SESSIONS_DIR"/session-*.md 2>/dev/null)" ]]; then
     log "Syncing session files into trunk worktree..."
@@ -813,9 +843,12 @@ run_one_session() {
   local sid="$1" wt_dir="$2" friendly="$3" handoff_text="$4" quiet="$5"
   local fname="${SESSION_FILE_BASENAME[$sid]}"
   local session_path="$TRUNK_SESSIONS_DIR/$fname"
-  local plan_file="$TRUNK_SESSIONS_DIR/.session-${sid}-plan.md"
-  local plan_log="$TRUNK_SESSIONS_DIR/.session-${sid}-plan.log"
-  local exec_log="$TRUNK_SESSIONS_DIR/.session-${sid}-exec.log"
+  # Use zero-padded sid for all artifact names so the writer and the
+  # reader (write_epic_result / classify_error) agree on the filename.
+  local padded_sid; padded_sid="$(printf '%02d' "$sid")"
+  local plan_file="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-plan.md"
+  local plan_log="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-plan.log"
+  local exec_log="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-exec.log"
   local session_prompt
   session_prompt="$(extract_prompt "$session_path")"
   if [[ -z "$session_prompt" ]]; then
