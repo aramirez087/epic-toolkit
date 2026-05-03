@@ -1464,12 +1464,31 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
             ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk"
             MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
           else
-            err "  ⇢ MERGE CONFLICT merging session $(printf '%02d' "$sid") into trunk"
-            err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
-            err "      Resolve, commit, and resume with --start $((sid + 1))"
-            git -C "$TRUNK_WORKTREE_DIR" merge --abort 2>/dev/null || true
-            EPIC_FAILED=true
-            [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
+            # Check if ALL conflicts are in metadata-only paths (e.g. .wolf/).
+            # These are append-only tracking files written by every session;
+            # taking --theirs (the session's version) is safe because no code
+            # lives there and the last-writer value is always acceptable.
+            local _conflicted _non_meta
+            _conflicted="$(git -C "$TRUNK_WORKTREE_DIR" diff --name-only --diff-filter=U 2>/dev/null || true)"
+            _non_meta="$(printf '%s\n' "$_conflicted" | grep -v '^\.wolf/' | grep -v '^$' || true)"
+            if [[ -n "$_conflicted" ]] && [[ -z "$_non_meta" ]]; then
+              warn "  ⚠ auto-resolving .wolf/ conflicts for session $(printf '%02d' "$sid") (metadata files only)"
+              git -C "$TRUNK_WORKTREE_DIR" checkout --theirs -- .wolf/ 2>/dev/null || true
+              git -C "$TRUNK_WORKTREE_DIR" add .wolf/ 2>/dev/null || true
+              git -C "$TRUNK_WORKTREE_DIR" commit -q \
+                -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved]
+
+Co-Authored-By: AI <noreply@ai>" 2>/dev/null
+              ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk (wolf conflicts auto-resolved)"
+              MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
+            else
+              err "  ⇢ MERGE CONFLICT merging session $(printf '%02d' "$sid") into trunk"
+              err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
+              err "      Resolve, commit, and resume with --start $((sid + 1))"
+              git -C "$TRUNK_WORKTREE_DIR" merge --abort 2>/dev/null || true
+              EPIC_FAILED=true
+              [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
+            fi
           fi
         else
           # Session committed directly to trunk; no merge required.
