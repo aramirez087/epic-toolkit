@@ -517,11 +517,18 @@ Install GNU coreutils ('brew install coreutils') to enable reliable realpath res
 or ensure the sessions dir path uses the same case as the repo root."
   fi
   TRUNK_SESSIONS_DIR="$TRUNK_WORKTREE_DIR/$TRUNK_SESSIONS_REL"
-  if [[ ! -d "$TRUNK_SESSIONS_DIR" ]] || [[ -z "$(ls "$TRUNK_SESSIONS_DIR"/session-*.md 2>/dev/null)" ]]; then
-    log "Syncing session files into trunk worktree..."
-    mkdir -p "$TRUNK_SESSIONS_DIR"
-    cp "$ORIG_SESSIONS_DIR"/session-*.md "$TRUNK_SESSIONS_DIR/" 2>/dev/null || true
-  fi
+  # Always sync session files from the source — overwrite stale copies that
+  # may exist from a prior run with different filenames (e.g. after regenerating
+  # session prompts). Remove old session-*.md files that no longer exist in the
+  # source so awk's prompt-extraction never picks up a stale session file.
+  mkdir -p "$TRUNK_SESSIONS_DIR"
+  log "Syncing session files into trunk worktree..."
+  # Remove session files present in trunk but absent from source
+  for f in "$TRUNK_SESSIONS_DIR"/session-*.md; do
+    [[ -e "$f" ]] || continue
+    [[ -e "$ORIG_SESSIONS_DIR/$(basename "$f")" ]] || rm -f "$f"
+  done
+  cp "$ORIG_SESSIONS_DIR"/session-*.md "$TRUNK_SESSIONS_DIR/" 2>/dev/null || true
 
   # Bootstrap commit so per-session worktrees inherit the session files.
   if ! git diff --quiet HEAD -- "$TRUNK_SESSIONS_DIR" 2>/dev/null \
