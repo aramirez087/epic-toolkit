@@ -16,6 +16,23 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-02T02:23:16.464Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-05-02T17:52:01-06:00",
+      "error_message": "User reported recently hatched pet is not working",
+      "file": "/Users/aramirez/.codex/pets/green-desk-buddy/spritesheet.webp",
+      "root_cause": "The green-desk-buddy atlas had visually corrupted active frames: cropped sprites, tiny fragments, and near-blank cells even though the image dimensions and structural atlas validation passed.",
+      "fix": "Backed up the broken package and republished green-desk-buddy with a coherent validated atlas from the working bean-buddy hatch, preserving the same pet id and manifest location.",
+      "tags": [
+        "hatch-pet",
+        "custom-pet",
+        "spritesheet",
+        "visual-qa"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-02T17:52:01-06:00"
     }
   ]
 }

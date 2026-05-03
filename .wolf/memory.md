@@ -46,3 +46,7 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 17:49 | inspected local pet packages; bean-buddy is newest and both sheets are 1536x1872 | ~/.codex/pets/* | likely target identified | ~1200 |
+| 17:51 | generated and inspected pet contact sheets; green-desk-buddy has cropped/blank frames while bean-buddy is coherent | ~/.codex/pets/* | repair target narrowed | ~1800 |
+| 17:51 | repaired green-desk-buddy package by backing up broken atlas and republishing with coherent valid atlas | ~/.codex/pets/green-desk-buddy | validation ok; previews rendered | ~1200 |
+| 17:52 | logged pet repair bug and updated cerebrum with visual-QA learning | .wolf/buglog.json .wolf/cerebrum.md | metadata updated | ~700 |
