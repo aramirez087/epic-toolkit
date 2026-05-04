@@ -297,6 +297,14 @@ _realpath() {
 }
 REPO_ROOT="$(_realpath "$(cd "$(git rev-parse --show-toplevel)" && pwd)")"
 ORIG_REPO_ROOT="$REPO_ROOT"
+
+# Register .wolf/ JSON merge driver if the repo uses OpenWolf and the
+# installer exists. Idempotent and ~10ms; ensures `git merge` and
+# `git rebase` auto-resolve .wolf/*.json conflicts during wave merges
+# and pre-PR rebases.
+if [[ -x "$REPO_ROOT/.wolf/scripts/install-merge-driver.sh" ]]; then
+  bash "$REPO_ROOT/.wolf/scripts/install-merge-driver.sh" 2>/dev/null || true
+fi
 ORIG_SESSIONS_DIR="$(_realpath "$SESSIONS_DIR")"
 EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 
