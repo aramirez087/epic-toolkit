@@ -731,6 +731,51 @@ rebase_with_wolf_resolve() {
   return 0
 }
 
+# Sweep stale `epic/*` branches whose PRs have been merged or closed.
+# After a PR is merged on GitHub, the local epic branch lingers forever
+# unless explicitly cleaned. This runs on every successful epic completion
+# (including this very epic, in case the user merged the PR mid-run).
+#
+# Args:
+#   $1 = repo root
+cleanup_merged_epic_branches() {
+  local repo_root="$1"
+  command -v gh &>/dev/null || return 0
+  # Fetch with prune so origin/epic/* refs disappear when the remote branch is gone.
+  git -C "$repo_root" fetch --prune --quiet origin 2>/dev/null || true
+  local default_branch
+  default_branch="$(gh -R "$(git -C "$repo_root" remote get-url origin 2>/dev/null)" repo view --json defaultBranchRef -q '.defaultBranchRef.name' 2>/dev/null || echo main)"
+  local removed=0 br pr_state
+  while IFS= read -r br; do
+    [[ -z "$br" ]] && continue
+    # Skip if branch is currently checked out somewhere
+    if git -C "$repo_root" worktree list --porcelain 2>/dev/null | grep -qF "branch refs/heads/$br"; then
+      continue
+    fi
+    # Query PR state (MERGED or CLOSED is safe to delete; OPEN/DRAFT we keep)
+    pr_state="$(gh -R "$(git -C "$repo_root" remote get-url origin 2>/dev/null)" pr list --head "$br" --state all --json state -q '.[0].state' 2>/dev/null || true)"
+    case "$pr_state" in
+      MERGED|CLOSED)
+        if git -C "$repo_root" branch -D "$br" &>/dev/null; then
+          removed=$((removed + 1))
+          log "  Pruned merged/closed epic branch: $br"
+        fi
+        ;;
+      "")
+        # No PR exists. Only delete if the branch is fully merged into default.
+        if git -C "$repo_root" merge-base --is-ancestor "$br" "$default_branch" 2>/dev/null; then
+          if git -C "$repo_root" branch -d "$br" &>/dev/null; then
+            removed=$((removed + 1))
+            log "  Pruned merged epic branch (no PR): $br"
+          fi
+        fi
+        ;;
+    esac
+  done < <(git -C "$repo_root" branch --format='%(refname:short)' 2>/dev/null | grep -E '^epic/' | grep -v -- '--s[0-9]')
+  [[ $removed -gt 0 ]] && ok "Cleaned up $removed stale epic branch(es)"
+  return 0
+}
+
 # Auto-provision .wolf/ merge auto-resolution for a consuming repo.
 #
 # If the repo has a .wolf/ directory (uses OpenWolf), this function:
@@ -1862,9 +1907,28 @@ ${DIFF_STATS}
       log "Keeping trunk worktree: $TRUNK_WORKTREE_DIR"
     else
       git worktree remove "$TRUNK_WORKTREE_DIR" --force 2>/dev/null || true
+      # Also sweep any empty leftover scaffolding under the worktree base
+      # (handles both this run's parent dir and stale dirs from old runs).
+      _wt_base="$(dirname "$TRUNK_WORKTREE_DIR")"
+      if [[ -d "$_wt_base" ]]; then
+        # Remove empty dirs depth-first (-empty + -delete is safe — won't touch non-empty)
+        find "$_wt_base" -mindepth 1 -depth -type d -empty -delete 2>/dev/null || true
+      fi
+      # Climb upward removing empty parents (e.g. the per-repo or top-level base)
+      _wt_parent="$_wt_base"
+      while [[ -d "$_wt_parent" ]] && rmdir "$_wt_parent" 2>/dev/null; do
+        _wt_parent="$(dirname "$_wt_parent")"
+      done
+      unset _wt_base _wt_parent
     fi
   fi
   git worktree prune 2>/dev/null || true
+
+  # --- Post-merge stale-branch cleanup ---
+  # Sweep merged epic branches whose PRs are closed/merged. This catches
+  # both this epic (if user merged the PR before script exit) and any
+  # leftover branches from previous runs.
+  cleanup_merged_epic_branches "$REPO_ROOT"
 
   ok ""
   ok "Branch ready: $BRANCH"
