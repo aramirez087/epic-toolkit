@@ -298,13 +298,8 @@ _realpath() {
 REPO_ROOT="$(_realpath "$(cd "$(git rev-parse --show-toplevel)" && pwd)")"
 ORIG_REPO_ROOT="$REPO_ROOT"
 
-# Register .wolf/ JSON merge driver if the repo uses OpenWolf and the
-# installer exists. Idempotent and ~10ms; ensures `git merge` and
-# `git rebase` auto-resolve .wolf/*.json conflicts during wave merges
-# and pre-PR rebases.
-if [[ -x "$REPO_ROOT/.wolf/scripts/install-merge-driver.sh" ]]; then
-  bash "$REPO_ROOT/.wolf/scripts/install-merge-driver.sh" 2>/dev/null || true
-fi
+# Auto-provision .wolf/ merge auto-resolution if the repo uses OpenWolf.
+provision_wolf_merge "$REPO_ROOT"
 ORIG_SESSIONS_DIR="$(_realpath "$SESSIONS_DIR")"
 EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 
@@ -734,6 +729,74 @@ rebase_with_wolf_resolve() {
     esac
   done
   return 0
+}
+
+# Auto-provision .wolf/ merge auto-resolution for a consuming repo.
+#
+# If the repo has a .wolf/ directory (uses OpenWolf), this function:
+#   1. Syncs bundled scripts from the toolkit into .wolf/scripts/ and scripts/
+#   2. Idempotently appends merge directives to .gitattributes
+#   3. Registers the wolf-json merge driver in local git config
+#
+# All operations are idempotent and silent on no-change. Logs only when
+# new files are written or .gitattributes is updated. Drift is corrected
+# automatically on every epic run (toolkit is the source of truth).
+#
+# Args:
+#   $1 = repo root
+provision_wolf_merge() {
+  local repo_root="$1"
+  local wolf_dir="$repo_root/.wolf"
+  [[ -d "$wolf_dir" ]] || return 0  # not an OpenWolf repo, no-op
+
+  local toolkit_assets="$CLAUDE_PLUGIN_ROOT/scripts/wolf-merge"
+  [[ -d "$toolkit_assets" ]] || return 0  # toolkit not bundled correctly, skip
+
+  local provisioned=0
+  mkdir -p "$wolf_dir/scripts" "$repo_root/scripts"
+
+  # Sync each bundled asset; only log when contents actually change.
+  _wolf_sync_file() {
+    local src="$1" dst="$2"
+    if [[ ! -f "$dst" ]] || ! cmp -s "$src" "$dst"; then
+      cp "$src" "$dst"
+      chmod +x "$dst"
+      provisioned=$((provisioned + 1))
+      return 0
+    fi
+    return 1
+  }
+
+  _wolf_sync_file "$toolkit_assets/merge-wolf-json.py" "$wolf_dir/scripts/merge-wolf-json.py" || true
+  _wolf_sync_file "$toolkit_assets/install-merge-driver.sh" "$wolf_dir/scripts/install-merge-driver.sh" || true
+  _wolf_sync_file "$toolkit_assets/resolve-wolf.sh" "$repo_root/scripts/resolve-wolf.sh" || true
+
+  # Idempotently merge .gitattributes. Skip if any wolf-json driver
+  # directive is already present (managed-block marker OR manual entry).
+  local gitattrs="$repo_root/.gitattributes"
+  local snippet="$toolkit_assets/gitattributes-snippet"
+  if [[ -f "$snippet" ]]; then
+    local has_managed_block=false has_manual_entry=false
+    if [[ -f "$gitattrs" ]]; then
+      grep -q "BEGIN openwolf merge drivers" "$gitattrs" 2>/dev/null && has_managed_block=true
+      grep -qE '^\.wolf/.*merge=(wolf-json|union)' "$gitattrs" 2>/dev/null && has_manual_entry=true
+    fi
+    if ! $has_managed_block && ! $has_manual_entry; then
+      [[ -f "$gitattrs" ]] && [[ -s "$gitattrs" ]] && echo "" >> "$gitattrs"
+      cat "$snippet" >> "$gitattrs"
+      provisioned=$((provisioned + 1))
+    fi
+  fi
+
+  # Register the wolf-json driver in local git config (idempotent, fast).
+  if [[ -x "$wolf_dir/scripts/install-merge-driver.sh" ]]; then
+    bash "$wolf_dir/scripts/install-merge-driver.sh" 2>/dev/null || true
+  fi
+
+  if [[ $provisioned -gt 0 ]]; then
+    log "Provisioned OpenWolf merge auto-resolution ($provisioned file(s) updated)"
+  fi
+  unset -f _wolf_sync_file
 }
 
 # Look up a session id's handoff file under docs/roadmap/<epic>/
