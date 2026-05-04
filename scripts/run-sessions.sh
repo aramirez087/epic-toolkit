@@ -36,6 +36,7 @@
 #   --cli CMD            Force CLI: opencode or claude (default: auto-detect)
 #   --no-commit          Skip auto-commit fallback
 #   --no-pr              Skip auto-PR creation
+#   --no-rebase          Skip pre-PR rebase onto origin/<default> (default: rebase + auto-resolve .wolf/)
 #   --skip-plan          Single-pass mode (no separate plan phase)
 #   --no-worktree        Run trunk in CWD (forces --max-parallel 1)
 #   --keep-worktree      Retain trunk worktree on success
@@ -80,6 +81,7 @@ BASE_BRANCH=""
 MODEL="sonnet"
 AUTO_COMMIT=true
 AUTO_PR=true
+AUTO_REBASE=true              # Rebase epic onto origin/<default> before PR (auto-resolves .wolf/ conflicts)
 SKIP_PLAN=false
 USE_WORKTREE=true
 KEEP_WORKTREE=false
@@ -108,6 +110,7 @@ while [[ $# -gt 0 ]]; do
     --retry)                    RETRY="$2"; shift 2 ;;
     --no-commit)                AUTO_COMMIT=false; shift ;;
     --no-pr)                    AUTO_PR=false; shift ;;
+    --no-rebase)                AUTO_REBASE=false; shift ;;
     --skip-plan)                SKIP_PLAN=true; shift ;;
     --no-worktree)              USE_WORKTREE=false; shift ;;
     --keep-worktree)            KEEP_WORKTREE=true; shift ;;
@@ -632,6 +635,97 @@ fi
 format_elapsed() {
   local s=$1
   printf "%dm%02ds" $((s / 60)) $((s % 60))
+}
+
+# Auto-resolve OpenWolf metadata conflicts in the current working dir.
+# .wolf/ files are append-mostly logs (anatomy.md, memory.md, buglog.json)
+# and per-session state (token-ledger.json, hooks/_session.json) — safe to
+# resolve to whichever side the caller prefers.
+#
+# Args:
+#   $1 = working directory (git checkout root)
+#   $2 = preferred side: "ours" or "theirs"
+# Returns:
+#   0 — all conflicts were .wolf/-only and have been resolved+staged
+#   1 — non-.wolf/ conflicts exist (caller must handle)
+#   2 — no conflicts at all
+auto_resolve_wolf_conflicts() {
+  local workdir="$1" side="$2"
+  local conflicted non_wolf
+  conflicted="$(git -C "$workdir" diff --name-only --diff-filter=U 2>/dev/null || true)"
+  [[ -z "$conflicted" ]] && return 2
+  non_wolf="$(printf '%s\n' "$conflicted" | grep -Ev '^\.wolf/' | grep -v '^$' || true)"
+  [[ -n "$non_wolf" ]] && return 1
+  # All conflicts are .wolf/-only. Resolve each.
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    git -C "$workdir" checkout "--$side" -- "$f" 2>/dev/null || true
+    git -C "$workdir" add -- "$f" 2>/dev/null || true
+  done <<< "$conflicted"
+  return 0
+}
+
+# Rebase the current branch onto a target ref, auto-resolving any
+# conflicts that fall entirely within .wolf/ paths. Aborts cleanly if
+# real code conflicts arise.
+#
+# During `git rebase`:
+#   "ours"   = the rebase base (target ref, e.g. origin/main)
+#   "theirs" = the commit being replayed (the epic's commit)
+# We want the epic's wolf state to win, so we use "theirs" for .wolf/.
+#
+# Args:
+#   $1 = working directory
+#   $2 = target ref (e.g. origin/main)
+# Returns:
+#   0 — rebase succeeded (no-op, fast-forward, or with .wolf/ auto-resolve)
+#   1 — rebase aborted due to non-.wolf/ conflicts (workdir restored)
+#   2 — fetch/setup failure (no rebase attempted)
+rebase_with_wolf_resolve() {
+  local workdir="$1" target="$2"
+  # Already a descendant of target? No-op.
+  if git -C "$workdir" merge-base --is-ancestor "$target" HEAD 2>/dev/null; then
+    return 0
+  fi
+  # Try clean rebase first
+  if git -C "$workdir" -c core.editor=true rebase -q "$target" 2>/dev/null; then
+    return 0
+  fi
+  # Rebase paused on conflict. Iterate, resolving .wolf/ conflicts.
+  local max_iters=50 i=0
+  while git -C "$workdir" rev-parse --git-path rebase-merge 2>/dev/null | xargs -I{} test -d {} \
+       || git -C "$workdir" rev-parse --git-path rebase-apply 2>/dev/null | xargs -I{} test -d {}; do
+    i=$((i + 1))
+    if [[ $i -gt $max_iters ]]; then
+      git -C "$workdir" rebase --abort 2>/dev/null || true
+      return 1
+    fi
+    auto_resolve_wolf_conflicts "$workdir" "theirs"
+    case $? in
+      0) # All-wolf resolved; continue rebase
+        if ! git -C "$workdir" -c core.editor=true rebase --continue 2>/dev/null; then
+          # Continue may have triggered a new conflict — loop will catch it
+          # If there's no new conflict and continue still failed, abort.
+          if ! git -C "$workdir" diff --name-only --diff-filter=U 2>/dev/null | grep -q .; then
+            git -C "$workdir" rebase --abort 2>/dev/null || true
+            return 1
+          fi
+        fi
+        ;;
+      1) # Non-wolf conflicts present; bail
+        git -C "$workdir" rebase --abort 2>/dev/null || true
+        return 1
+        ;;
+      2) # No conflicts but rebase still in progress — empty commit?
+        if ! git -C "$workdir" -c core.editor=true rebase --skip 2>/dev/null \
+            && ! git -C "$workdir" -c core.editor=true rebase --continue 2>/dev/null; then
+          git -C "$workdir" rebase --abort 2>/dev/null || true
+          return 1
+        fi
+        ;;
+    esac
+  done
+  return 0
 }
 
 # Look up a session id's handoff file under docs/roadmap/<epic>/
@@ -1473,17 +1567,10 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
             ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk"
             MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
           else
-            # Check if ALL conflicts are in metadata-only paths (e.g. .wolf/).
-            # These are append-only tracking files written by every session;
-            # taking --theirs (the session's version) is safe because no code
-            # lives there and the last-writer value is always acceptable.
-            _conflicted=""; _non_meta=""
-            _conflicted="$(git -C "$TRUNK_WORKTREE_DIR" diff --name-only --diff-filter=U 2>/dev/null || true)"
-            _non_meta="$(printf '%s\n' "$_conflicted" | grep -v '^\.wolf/' | grep -v '^$' || true)"
-            if [[ -n "$_conflicted" ]] && [[ -z "$_non_meta" ]]; then
+            # Wave merge conflict. Try auto-resolving if conflicts are
+            # .wolf/-only (append-only metadata; theirs = session = winner).
+            if auto_resolve_wolf_conflicts "$TRUNK_WORKTREE_DIR" "theirs"; then
               warn "  ⚠ auto-resolving .wolf/ conflicts for session $(printf '%02d' "$sid") (metadata files only)"
-              git -C "$TRUNK_WORKTREE_DIR" checkout --theirs -- .wolf/ 2>/dev/null || true
-              git -C "$TRUNK_WORKTREE_DIR" add .wolf/ 2>/dev/null || true
               git -C "$TRUNK_WORKTREE_DIR" commit -q \
                 -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved]
 
@@ -1611,6 +1698,30 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
     fi
   fi
 
+  # --- Pre-PR rebase: replay epic onto latest origin/<default> with .wolf/ auto-resolve ---
+  # This makes the GitHub PR fast-forward-mergeable even if main has advanced
+  # while the epic ran. Conflicts in .wolf/ paths are auto-resolved (theirs);
+  # any non-.wolf/ conflict aborts the rebase cleanly and the unrebased branch
+  # is pushed as-is for manual conflict resolution on GitHub.
+  REBASE_RESULT="skipped"
+  if $AUTO_REBASE && command -v gh &>/dev/null; then
+    REBASE_DEFAULT="$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name' 2>/dev/null || echo main)"
+    log "Fetching origin/${REBASE_DEFAULT} for pre-PR rebase..."
+    if git -C "$REPO_ROOT" fetch -q origin "$REBASE_DEFAULT" 2>/dev/null; then
+      log "Rebasing $BRANCH onto origin/${REBASE_DEFAULT} (auto-resolving .wolf/)..."
+      if rebase_with_wolf_resolve "$REPO_ROOT" "origin/${REBASE_DEFAULT}"; then
+        REBASE_RESULT="ok"
+        ok "Rebased onto origin/${REBASE_DEFAULT} — PR will be fast-forward-mergeable"
+      else
+        REBASE_RESULT="conflict"
+        warn "Rebase aborted — non-.wolf/ conflicts require manual resolution on the PR"
+      fi
+    else
+      REBASE_RESULT="fetch-failed"
+      warn "Could not fetch origin/${REBASE_DEFAULT} — skipping rebase, pushing as-is"
+    fi
+  fi
+
   # --- Auto-PR ---
   if $AUTO_PR && command -v gh &>/dev/null; then
     CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
@@ -1619,10 +1730,19 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
       EXISTING_PR="$(gh pr view "$CURRENT_BRANCH" --json url -q '.url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
         ok "PR already exists: $EXISTING_PR"
+        # Even if PR exists, push the rebased history so the PR becomes mergeable
+        if [[ "$REBASE_RESULT" == "ok" ]]; then
+          log "Force-pushing rebased history to existing PR..."
+          git -C "$REPO_ROOT" push --force-with-lease 2>&1 | tail -5 || warn "Force-push failed; PR may still show conflicts"
+        fi
       else
         log "Creating pull request..."
+        # If we rebased, the local branch has diverged from any remote tracking ref;
+        # use force-with-lease to update. For a brand-new branch, plain push -u.
         if ! git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' &>/dev/null; then
           git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH"
+        elif [[ "$REBASE_RESULT" == "ok" ]]; then
+          git -C "$REPO_ROOT" push --force-with-lease 2>&1 | tail -5 || git -C "$REPO_ROOT" push
         elif [[ -n "$(git -C "$REPO_ROOT" log '@{u}..HEAD' --oneline 2>/dev/null)" ]]; then
           git -C "$REPO_ROOT" push
         fi
