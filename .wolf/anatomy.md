@@ -19,14 +19,6 @@
 - `marketplace.json` (~95 tok)
 - `plugin.json` (~122 tok)
 
-## .claude/
-
-- `settings.json` (~441 tok)
-
-## .claude/rules/
-
-- `openwolf.md` (~313 tok)
-
 ## .opencode/commands/
 
 - `epic.generate.md` — OpenCode /epic.generate command (~2477 tok)
@@ -34,7 +26,7 @@
 
 ## commands/
 
-- `epic.generate.md` — /epic.generate - Generate Claude session files (~2477 tok)
+- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~2477 tok)
 - `epic.md` — Parse arguments (~816 tok)
 
 ## docs/

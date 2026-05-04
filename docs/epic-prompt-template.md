@@ -4,7 +4,7 @@ Copy everything below the `---`, paste it after your context/review, and send to
 
 ---
 
-Generate a sequence of session `.md` files that will be executed autonomously by the `/epic` command. Each session runs as a FRESH Claude Code process with zero memory of prior sessions. **Sessions form a directed acyclic graph and parallel siblings run concurrently in per-session worktrees** — design for that.
+Generate a sequence of session `.md` files that will be executed autonomously by the `/epic-toolkit:epic` command in Claude Code, or `/epic` in OpenCode. Each session runs as a FRESH Claude Code process with zero memory of prior sessions. **Sessions form a directed acyclic graph and parallel siblings run concurrently in per-session worktrees** — design for that.
 
 ## Complexity Assessment — Single Epic or Multi-Epic?
 

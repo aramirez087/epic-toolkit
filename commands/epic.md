@@ -1,8 +1,8 @@
 ---
-description: Run a multi-session epic autonomously. DAG mode with parallel waves. /epic <name> [--start N] [--end N] [--timeout M] [--retry N] [--dry-run] [--show-dag] [--max-parallel N] [--strict] [--sequential] [--model opus|sonnet|haiku] [--branch <name>]
+description: Run a multi-session epic autonomously. DAG mode with parallel waves. /epic-toolkit:epic <name> [--start N] [--end N] [--timeout M] [--retry N] [--dry-run] [--show-dag] [--max-parallel N] [--strict] [--sequential] [--model opus|sonnet|haiku] [--branch <name>]
 ---
 
-Orchestrator for multi-session epic. Invoke `run-sessions.sh` which spawns a fresh Claude per session (clean context), plans, executes, commits.
+Orchestrator for multi-session epic. Invoke the bundled `run-sessions.sh` from the installed plugin, which spawns a fresh Claude per session (clean context), plans, executes, commits.
 
 **DAG:** Sessions declare YAML frontmatter (`depends_on`, `touches`, `parallel_safe`) for a DAG. Runner schedules Kahn-style waves, fans out per-session worktrees (concurrent), merges to trunk. No frontmatter = linear chain.
 
@@ -21,10 +21,10 @@ touches: ["analysis/**"]
 parallel_safe: true
 ```
 
-**Multi-epic:** For problems spanning multiple independent subsystems, use `/epic.generate` to split into separate epic directories under `docs/claude-sessions/`. Run each epic sequentially — each must complete and merge to trunk before the next starts:
+**Multi-epic:** For problems spanning multiple independent subsystems, use `/epic-toolkit:epic.generate` to split into separate epic directories under `docs/claude-sessions/`. Run each epic sequentially — each must complete and merge to trunk before the next starts:
 ```bash
-/epic epic-1-name
-/epic epic-2-name
+/epic-toolkit:epic epic-1-name
+/epic-toolkit:epic epic-2-name
 ```
 
 Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base main`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`.
@@ -34,7 +34,7 @@ Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--st
 
 ## Execute
 ```bash
-bash scripts/run-sessions.sh docs/claude-sessions/<name>/ [--start N] [--end N] [--timeout M] [--retry N] [--max-parallel N] [--strict] [--sequential] [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-sessions.sh" docs/claude-sessions/<name>/ [--start N] [--end N] [--timeout M] [--retry N] [--max-parallel N] [--strict] [--sequential] [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
 ```
 
 Run via Bash tool with `run_in_background: true` (long-running). For `--show-dag` only, no background needed.

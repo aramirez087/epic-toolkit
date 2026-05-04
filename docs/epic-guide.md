@@ -8,11 +8,15 @@ per-session worktrees**, then merge into the trunk branch wave by wave.
 
 ```bash
 # Inside Claude Code or OpenCode
-/epic x-api-surface-expansion
+/epic-toolkit:epic x-api-surface-expansion
 
 # From your terminal (equivalent)
 bash scripts/run-sessions.sh docs/claude-sessions/x-api-surface-expansion
 ```
+
+Claude Code marketplace installs expose namespaced commands:
+`/epic-toolkit:epic.generate` and `/epic-toolkit:epic`. OpenCode uses the
+un-namespaced equivalents: `/epic.generate` and `/epic`.
 
 ## Directory convention
 
@@ -166,9 +170,9 @@ docs/claude-sessions/
 Run epics sequentially. Each epic must merge to trunk before the next starts:
 
 ```bash
-/epic epic-1-subsystem-name
+/epic-toolkit:epic epic-1-subsystem-name
 # wait for completion, then:
-/epic epic-2-another-subsystem
+/epic-toolkit:epic epic-2-another-subsystem
 ```
 
 ### Cross-epic handoffs
@@ -187,8 +191,8 @@ epics can include a note pointing to the original epic's operator rules.
 Use `--model` per epic invocation to set the default model:
 
 ```bash
-/epic epic-1-subsystem-name --model opus
-/epic epic-2-another-subsystem --model sonnet
+/epic-toolkit:epic epic-1-subsystem-name --model opus
+/epic-toolkit:epic epic-2-another-subsystem --model sonnet
 ```
 
 Within each epic, individual sessions can override via frontmatter `model:` field
@@ -240,25 +244,25 @@ CLI flags take precedence over config file values.
 
 ```bash
 # Run the whole DAG
-/epic my-epic
+/epic-toolkit:epic my-epic
 
 # Inspect the planned waves before running
-/epic my-epic --show-dag
+/epic-toolkit:epic my-epic --show-dag
 
 # Higher parallelism (e.g., big fan-out wave)
-/epic my-epic --max-parallel 8
+/epic-toolkit:epic my-epic --max-parallel 8
 
 # Resume after a failure at session 04
-/epic my-epic --start 4
+/epic-toolkit:epic my-epic --start 4
 
 # Strict-mode: fail if siblings declare overlapping touches globs
-/epic my-epic --strict
+/epic-toolkit:epic my-epic --strict
 
 # Force the legacy sequential behavior
-/epic my-epic --sequential
+/epic-toolkit:epic my-epic --sequential
 
 # Preview only — non-destructive
-/epic my-epic --dry-run
+/epic-toolkit:epic my-epic --dry-run
 
 # From terminal directly
 bash scripts/run-sessions.sh docs/claude-sessions/my-epic --max-parallel 6 --model opus
@@ -267,11 +271,11 @@ bash scripts/run-sessions.sh docs/claude-sessions/my-epic --max-parallel 6 --mod
 bash scripts/run-sessions.sh docs/claude-sessions/my-epic --cli opencode
 
 # Use timeout and retry for flaky sessions
-/epic my-epic --timeout 45 --retry 2
+/epic-toolkit:epic my-epic --timeout 45 --retry 2
 
 # Mixed configuration: some sessions timeout quickly, others have more time
 # (configure per-session via frontmatter model/cli overrides)
-/epic complex-analysis --timeout 60 --retry 1 --max-parallel 2
+/epic-toolkit:epic complex-analysis --timeout 60 --retry 1 --max-parallel 2
 ```
 
 ## CLI detection

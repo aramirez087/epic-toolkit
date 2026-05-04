@@ -13,13 +13,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Plugin that adds `/epic` and `/epic.generate` slash commands for both **Claude Code** and **OpenCode**. Epics run as a DAG with parallel waves — independent sessions fan out into isolated git worktrees, execute concurrently, then merge back wave by wave.
+Plugin that adds `/epic-toolkit:epic` and `/epic-toolkit:epic.generate` slash commands for **Claude Code**, plus `/epic` and `/epic.generate` equivalents for **OpenCode**. Epics run as a DAG with parallel waves — independent sessions fan out into isolated git worktrees, execute concurrently, then merge back wave by wave.
 
 ## Architecture
 
 ```
-commands/epic.generate.md     → Claude Code /epic.generate command
-commands/epic.md               → Claude Code /epic command
+commands/epic.generate.md     → Claude Code /epic-toolkit:epic.generate command
+commands/epic.md               → Claude Code /epic-toolkit:epic command
 .opencode/commands/            → OpenCode equivalents (tool-neutral wording)
 scripts/run-sessions.sh         → wave orchestrator; spawns CLI per session (claude or opencode)
 scripts/epic-dag.py             → builds DAG from session frontmatter, computes Kahn-style waves

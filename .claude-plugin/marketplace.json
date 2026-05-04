@@ -1,5 +1,6 @@
 {
   "name": "epic-toolkit",
+  "description": "Claude Code plugins for DAG-scheduled multi-session epic workflows.",
   "owner": {
     "name": "aramirez087",
     "url": "https://github.com/aramirez087"
@@ -7,9 +8,16 @@
   "plugins": [
     {
       "name": "epic-toolkit",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "aramirez087/epic-toolkit"
+      },
       "description": "DAG-scheduled multi-session epics with parallel-worktree execution. Works with Claude Code and OpenCode.",
-      "version": "2.0.0"
+      "homepage": "https://github.com/aramirez087/epic-toolkit",
+      "repository": "https://github.com/aramirez087/epic-toolkit",
+      "license": "MIT",
+      "category": "productivity",
+      "tags": ["automation", "epic", "worktree", "dag", "parallel"]
     }
   ]
 }

@@ -1,8 +1,8 @@
 ---
-description: Generate an epic session plan under docs/claude-sessions from a problem statement.
+description: Generate an epic session plan under docs/claude-sessions from a problem statement. Use /epic-toolkit:epic.generate <problem statement>.
 ---
 
-# /epic.generate - Generate Claude session files
+# /epic-toolkit:epic.generate - Generate Claude session files
 
 Use the user input below as the full problem statement and generate the requested session files.
 
@@ -16,7 +16,7 @@ You are the most experienced project manager in the world, with deep full-stack 
 
 The problem statement is the user input above. Treat it as required input. If it is empty, stop and ask the user to provide the problem statement.
 
-Generate a sequence of session `.md` files that will be executed by `/epic`. Each session runs as a fresh Claude Code process with zero memory of prior sessions. **Sessions are scheduled as a DAG and run in parallel waves where the dependency graph allows.** Follow these rules exactly.
+Generate a sequence of session `.md` files that will be executed by `/epic-toolkit:epic`. Each session runs as a fresh Claude Code process with zero memory of prior sessions. **Sessions are scheduled as a DAG and run in parallel waves where the dependency graph allows.** Follow these rules exactly.
 
 ## Complexity Assessment — Single Epic or Multi-Epic?
 
@@ -197,5 +197,5 @@ Inside each fenced prompt for sessions 01 and above, include:
 5. Create the directory `docs/claude-sessions/<epic-name>/` for each epic (or `docs/claude-sessions/<epic-1>/`, `docs/claude-sessions/<epic-2>/`, etc.).
 6. Write every required session file into the appropriate directory. For multiple epics, write all session files for epic-1 first, then epic-2, etc. — each epic's session numbering restarts at 01.
 7. Ensure each file matches the required outer markdown structure exactly, including frontmatter on sessions 01+.
-8. After writing the files for each epic, run `python3 scripts/epic-dag.py docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
+8. After writing the files for each epic, run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/epic-dag.py" docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
 9. In your response, report: **for each epic** — the created directory, the session files written, the wave layout (paste the `epic-dag.py --show` output), and the stack/quality-gate set selected. If multi-epic, also describe the cross-epic dependency order and which epic each session belongs to.

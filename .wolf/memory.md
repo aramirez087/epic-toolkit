@@ -50,3 +50,5 @@
 | 17:51 | generated and inspected pet contact sheets; green-desk-buddy has cropped/blank frames while bean-buddy is coherent | ~/.codex/pets/* | repair target narrowed | ~1800 |
 | 17:51 | repaired green-desk-buddy package by backing up broken atlas and republishing with coherent valid atlas | ~/.codex/pets/green-desk-buddy | validation ok; previews rendered | ~1200 |
 | 17:52 | logged pet repair bug and updated cerebrum with visual-QA learning | .wolf/buglog.json .wolf/cerebrum.md | metadata updated | ~700 |
+| 17:19 | reviewed Claude plugin distribution setup and current docs | README.md .claude-plugin/* commands/* scripts/run-sessions.sh | identified installability gaps | ~6000 |
+| 17:24 | made plugin installable via Claude marketplace conventions | .claude-plugin/* commands/* README.md docs/* .gitignore | validation passed | ~5000 |

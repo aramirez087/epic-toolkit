@@ -6,10 +6,13 @@ branch wave by wave. Works with both **Claude Code** and **OpenCode**.
 
 Adds two slash commands:
 
-- `/epic.generate <problem statement>` — turns a problem statement into a
+- Claude Code: `/epic-toolkit:epic.generate <problem statement>` — turns a problem statement into a
   sequence of session prompt files with DAG metadata.
-- `/epic <name>` — runs the generated epic, fanning out parallel waves and
+- Claude Code: `/epic-toolkit:epic <name>` — runs the generated epic, fanning out parallel waves and
   auto-creating a PR when done.
+
+OpenCode exposes the same commands without the Claude plugin namespace:
+`/epic.generate` and `/epic`.
 
 ## Install
 
@@ -20,11 +23,33 @@ Adds two slash commands:
 /plugin install epic-toolkit@epic-toolkit
 ```
 
+Then run the namespaced Claude Code commands:
+
+```
+/epic-toolkit:epic.generate <problem statement>
+/epic-toolkit:epic <name>
+```
+
+For terminal/scripted setup, the equivalent commands are:
+
+```bash
+claude plugin marketplace add aramirez087/epic-toolkit
+claude plugin install epic-toolkit@epic-toolkit
+```
+
 **OpenCode:**
 
-The `.opencode/commands/` directory is auto-detected. Just clone the repo or
-symlink it into your project and the `/epic` and `/epic.generate` commands
-will be available.
+The `.opencode/commands/` directory is auto-detected. Clone the repo or symlink
+`.opencode/commands/` into your project and the `/epic` and `/epic.generate`
+commands will be available.
+
+## Release / update policy
+
+This plugin uses an explicit version in `.claude-plugin/plugin.json`. Bump that
+version for every user-facing release; Claude Code uses it to decide whether
+installed users should receive updates. The marketplace entry intentionally does
+not duplicate the version, so the plugin manifest remains the single source of
+truth.
 
 ## Dual-tool support
 
@@ -45,10 +70,10 @@ Progress display adapts to the CLI:
 
 ## What it does
 
-1. **`/epic.generate`** writes session prompts under
+1. **`/epic-toolkit:epic.generate`** writes session prompts under
    `docs/claude-sessions/<epic-name>/`. Each session 01+ gets YAML frontmatter
    declaring its DAG edges (`depends_on`, `touches`, `parallel_safe`).
-2. **`/epic`** invokes the runner. It:
+2. **`/epic-toolkit:epic`** invokes the runner. It:
    - Validates the DAG (no cycles, all deps exist).
    - Computes Kahn-style waves (independent sessions in the same wave).
    - Creates a trunk worktree on `epic/<name>` and per-session worktrees on
@@ -58,7 +83,7 @@ Progress display adapts to the CLI:
    - Iteratively `--no-ff` merges successful siblings into trunk between waves.
    - Auto-commits, auto-creates a GitHub PR via `gh`, cleans up worktrees.
 
-## Layout produced by `/epic.generate`
+## Layout produced by `/epic-toolkit:epic.generate`
 
 ```
 docs/claude-sessions/<epic-name>/
@@ -150,10 +175,9 @@ CLI flags override config file values. All keys are optional.
   commands/                # OpenCode slash commands
     epic.md
     epic.generate.md
-  package.json             # OpenCode plugin dependency
 commands/
-  epic.md                  # Claude Code /epic slash command
-  epic.generate.md         # Claude Code /epic.generate slash command
+  epic.md                  # Claude Code /epic-toolkit:epic slash command
+  epic.generate.md         # Claude Code /epic-toolkit:epic.generate slash command
 scripts/
   run-sessions.sh          # wave orchestrator (dual-tool: claude or opencode)
   epic-dag.py              # DAG builder + wave scheduler

@@ -12,6 +12,7 @@
 
 - **Project:** epic-toolkit
 - **Description:** A Claude Code plugin for running multi-session epics as a **directed acyclic
+- **Distribution:** Claude Code plugins installed from marketplaces expose namespaced commands like `/epic-toolkit:epic`; command files that need bundled scripts should invoke them via `${CLAUDE_PLUGIN_ROOT}` because installed plugins are copied to Claude's plugin cache.
 - **Codex pets:** `~/.codex/pets/<id>/spritesheet.webp` can pass structural hatch-pet validation while still being visually unusable; always inspect the contact sheet for cropped, blank, or fragment-only active frames.
 - **Tooling:** Hatch-pet scripts need Pillow; the bundled Python at `/Users/aramirez/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3` has the required image dependencies when the system Python does not.
 

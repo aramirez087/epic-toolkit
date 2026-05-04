@@ -1,12 +1,14 @@
 {
   "name": "epic-toolkit",
   "version": "2.0.0",
-  "description": "DAG-scheduled multi-session epics with parallel-worktree execution. Works with Claude Code and OpenCode. Adds /epic and /epic.generate.",
+  "description": "DAG-scheduled multi-session epics with parallel-worktree execution. Adds /epic-toolkit:epic and /epic-toolkit:epic.generate for Claude Code.",
   "author": {
     "name": "Alexander Ramirez"
   },
   "homepage": "https://github.com/aramirez087/epic-toolkit",
+  "repository": "https://github.com/aramirez087/epic-toolkit",
   "license": "MIT",
+  "commands": "./commands/",
   "keywords": [
     "claude-code",
     "opencode",
