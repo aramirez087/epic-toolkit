@@ -881,6 +881,61 @@ session_completed_on_branch() {
   return 1
 }
 
+# Safely add session to MERGED_SESSIONS with validation.
+# Ensures SESSION_FILE_BASENAME is populated; warns and skips if not.
+# Args: $1 = session id
+add_merged_session() {
+  local sid="$1"
+  local fname="${SESSION_FILE_BASENAME[$sid]:-}"
+  if [[ -z "$fname" ]]; then
+    warn "  ⚠ session $(printf '%02d' "$sid") has no filename in SESSION_FILE_BASENAME; skipping from merge summary"
+    return
+  fi
+  MERGED_SESSIONS+=("$sid $fname")
+}
+
+# Check if a worktree directory is in use by another process.
+# Uses multiple detection methods in order of preference:
+#   1. /proc-based check (Linux/Unix)
+#   2. lsof command (BSD/macOS fallback)
+#   3. Conservative: assumes in-use if we can't determine
+# Args: $1 = worktree directory path
+# Returns: 0 if in use, 1 if not in use
+is_worktree_in_use() {
+  local wt_dir="$1"
+  [[ -d "$wt_dir" ]] || return 1
+
+  # Method 1: Check /proc (Linux/Unix) for any process with CWD in this directory
+  if [[ -d /proc ]]; then
+    for proc_dir in /proc/*/cwd; do
+      [[ -L "$proc_dir" ]] || continue
+      local link_target
+      link_target="$(readlink "$proc_dir" 2>/dev/null)" || continue
+      # Check if this process's CWD is under our worktree
+      if [[ "$link_target" == "$wt_dir"* ]]; then
+        return 0
+      fi
+    done
+  fi
+
+  # Method 2: Try lsof (macOS/BSD fallback)
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof +D "$wt_dir" 2>/dev/null | grep -q .; then
+      return 0
+    fi
+  fi
+
+  # Method 3: fuser command (alternative to lsof)
+  if command -v fuser >/dev/null 2>&1; then
+    if fuser "$wt_dir" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  # Unable to conclusively detect — assume not in use
+  return 1
+}
+
 # Look up a session id's handoff file under docs/roadmap/<epic>/
 # Search the current epic's roadmap dir first (intra-epic dependency),
 # then fall back to all epic dirs (cross-epic handoff).
@@ -1672,19 +1727,15 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
       # 1. No process has a CWD inside it (concurrent runner)
       # 2. No unmerged commits beyond the trunk branch (uncaptured work)
       if [[ -d "$sess_wt" ]]; then
-        wt_in_use=false
-        if command -v lsof >/dev/null 2>&1 && lsof +D "$sess_wt" 2>/dev/null | grep -q .; then
-          wt_in_use=true
+        if is_worktree_in_use "$sess_wt"; then
+          err "  ✗ worktree for session $sid is in use by another process: $sess_wt"
+          err "    refusing to delete; aborting. Stop the other runner or remove manually."
+          exit 1
         fi
         has_unmerged=false
         if git show-ref --verify --quiet "refs/heads/$sess_branch"; then
           ahead="$(git rev-list --count "$BRANCH..$sess_branch" 2>/dev/null || echo 0)"
           [[ "$ahead" -gt 0 ]] && has_unmerged=true
-        fi
-        if $wt_in_use; then
-          err "  ✗ worktree for session $sid is in use by another process: $sess_wt"
-          err "    refusing to delete; aborting. Stop the other runner or remove manually."
-          exit 1
         fi
         if $has_unmerged; then
           err "  ✗ session $sid branch '$sess_branch' has unmerged commits ahead of $BRANCH"
@@ -1791,7 +1842,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
               "$sess_branch"
           then
             ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk"
-            MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
+            add_merged_session "$sid"
           else
             # Wave merge conflict. Try auto-resolving if conflicts are
             # .wolf/-only (append-only metadata; theirs = session = winner).
@@ -1802,7 +1853,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 
 Co-Authored-By: AI <noreply@ai>" 2>/dev/null
               ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk (wolf conflicts auto-resolved)"
-              MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
+              add_merged_session "$sid"
             else
               err "  ⇢ MERGE CONFLICT merging session $(printf '%02d' "$sid") into trunk"
               err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
@@ -1814,7 +1865,7 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null
           fi
         else
           # Session committed directly to trunk; no merge required.
-          MERGED_SESSIONS+=("$sid ${SESSION_FILE_BASENAME[$sid]}")
+          add_merged_session "$sid"
         fi
         ;;
       failed)
@@ -2007,10 +2058,15 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
 
         EPIC_NAME="$(basename "$TRUNK_SESSIONS_DIR" | tr '-' ' ')"
         SESSION_LIST=""
-        for entry in "${MERGED_SESSIONS[@]}"; do
-          SESSION_LIST="${SESSION_LIST}
+        if [[ ${#MERGED_SESSIONS[@]} -gt 0 ]]; then
+          for entry in "${MERGED_SESSIONS[@]}"; do
+            SESSION_LIST="${SESSION_LIST}
 - ${entry}"
-        done
+          done
+        else
+          SESSION_LIST="
+(No sessions were merged in this run)"
+        fi
         DIFF_STATS="$(git -C "$REPO_ROOT" diff --shortstat "${DEFAULT_BRANCH}...HEAD" 2>/dev/null || echo "")"
 
         PR_TITLE="feat: ${EPIC_NAME}"

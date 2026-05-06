@@ -23,6 +23,9 @@
 - [2026-05-02] Do not accept a custom pet solely because `validate_atlas.py` returns ok; render/contact-sheet QA is required to catch visually corrupted rows.
 - [2026-05-06] Do not iterate session ids with `for (( sid=1; sid<=999; sid++ )); break-on-missing` — session ids may have gaps (user removed a session) or trailing holes (epic halted before later waves ran), and the early break silently drops every session past the gap. Iterate `${!SESSION_SLUG_BY_ID[@]}` (the DAG-derived index set) instead.
 - [2026-05-06] Do not hard-code result-file paths in the command docs (`commands/epic.md`, `.opencode/commands/epic.md`). The script writes to `${TMPDIR}/epic-toolkit/<repo>--<name>.result.json` and the path will drift from any doc that re-states it. Have the script print `RESULT_FILE=<path>` inside the `[EPIC_RESULT_START]/[END]` block and have the docs tell Claude to read that line.
+- [2026-05-05] Do not use single-method process detection (e.g., only lsof) for concurrent safety checks — if the tool is unavailable, the check silently fails and data corruption results. Use multiple methods (/proc, lsof, fuser) with fallback to conservative error. (bugs 017)
+- [2026-05-05] Do not directly access sparse associative arrays without validation (e.g., `${arr[$id]}` when some IDs may not be in the array). Validate with `${arr[$id]:-}` and handle empty case. Use helper functions to enforce consistency. (bug-018)
+- [2026-05-05] Do not build PR descriptions with empty arrays silently — always check `${#array[@]} -gt 0` before assuming entries, or provide a fallback message for the empty case. (bug-019)
 
 ## Decision Log
 

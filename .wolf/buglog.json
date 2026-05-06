@@ -258,8 +258,8 @@
         "sh"
       ],
       "related_bugs": [],
-      "occurrences": 1,
-      "last_seen": "2026-05-06T03:05:04.408Z"
+      "occurrences": 3,
+      "last_seen": "2026-05-06T03:09:24.736Z"
     },
     {
       "id": "bug-016",
@@ -272,6 +272,60 @@
         "model-mapping",
         "cli-override",
         "session-config",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "Worktree in-use detection fails silently on systems without lsof. If lsof is unavailable, is_worktree_in_use() always returns false, allowing concurrent epic runners to delete each other's worktrees and corrupt the run.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Line 1676: `if command -v lsof >/dev/null 2>&1 && lsof +D \"$sess_wt\" 2>/dev/null | grep -q .` only checks if lsof exists; if it doesn't, wt_in_use stays false. No fallback detection method or error warning. Systems like macOS, BSD, or minimal Linux containers may not have lsof installed.",
+      "fix": "Added new helper function is_worktree_in_use() that tries multiple detection methods in order: (1) /proc-based check for process CWD (Linux/Unix), (2) lsof (macOS/BSD), (3) fuser (alternative). Conservative fallback: if unable to determine, assumes not in use but logs the limitation. Updated line 1676 to call the helper instead of inline lsof check.",
+      "tags": [
+        "worktree",
+        "concurrent-safety",
+        "process-detection",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "SESSION_FILE_BASENAME could be unset for sparse session IDs, causing corrupted MERGED_SESSIONS entries with missing filenames. PR body generation would then have malformed session list.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Lines 1832, 1843, 1855 directly access SESSION_FILE_BASENAME[$sid] without validation. If SESSION_FILE_BASENAME is not populated (e.g., due to DAG parsing error or sparse session IDs), the array access returns empty string, creating MERGED_SESSIONS entries like \"1 \" with trailing space but no filename.",
+      "fix": "Added helper function add_merged_session() that validates SESSION_FILE_BASENAME[$sid] is non-empty before appending to MERGED_SESSIONS. Warns and skips if missing. Replaced all three direct MERGED_SESSIONS+=() calls with add_merged_session() calls.",
+      "tags": [
+        "array-bounds",
+        "validation",
+        "merged-sessions",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-019",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "PR body generation produces malformed markdown when MERGED_SESSIONS is empty. Header reads '### Sessions' with nothing after it, creating confusing PR description.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Lines 2059-2062 build SESSION_LIST by iterating MERGED_SESSIONS. If the array is empty (all sessions failed to merge), SESSION_LIST is empty string, and PR_BODY contains '### Sessions' followed by blank line. Not invalid markdown, but confusing to readers.",
+      "fix": "Added check: if MERGED_SESSIONS is empty, set SESSION_LIST to '\\n(No sessions were merged in this run)' instead of empty string. PR body now clearly indicates when no sessions merged.",
+      "tags": [
+        "pr-generation",
+        "markdown",
+        "empty-state",
         "sh",
         "found-by-bug-hunt"
       ],
