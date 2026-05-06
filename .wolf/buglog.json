@@ -901,8 +901,20 @@
       "file": "scripts/wolf-merge/merge-wolf-json.py",
       "root_cause": "load() called Path(path).read_text() and write() called Path(path).write_text(...) with no `encoding=` argument. pathlib falls back to locale.getpreferredencoding(False), which is cp1252 on Windows and ASCII when LC_ALL=C / PYTHONUTF8=0. Any non-ASCII byte in the file (or in data being written) raises UnicodeDecodeError / UnicodeEncodeError before merge_buglog can run.",
       "fix": "Applied. Pinned encoding='utf-8' on both Path.read_text and Path.write_text in scripts/wolf-merge/merge-wolf-json.py. Added UnicodeDecodeError to the load() except clause so a non-utf-8 file is treated as 'unreadable' (returning None) rather than crashing the whole driver. Verified end-to-end: merge driver invoked under PYTHONUTF8=0 LC_ALL=C LANG=C with ours.fix='Café — résumé' and theirs.fix='naïve façade ☃' now returns 0 and produces a merged buglog with both entries' utf-8 bytes preserved.",
-      "tags": ["unicode", "encoding", "windows", "locale", "wolf-merge", "merge-driver", "python", "found-by-bug-hunt"],
-      "related_bugs": ["bug-035", "bug-024"],
+      "tags": [
+        "unicode",
+        "encoding",
+        "windows",
+        "locale",
+        "wolf-merge",
+        "merge-driver",
+        "python",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-035",
+        "bug-024"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T00:00:00Z"
     },
@@ -913,8 +925,17 @@
       "file": "scripts/lib/epic-result.sh",
       "root_cause": "classify_error pre-escaped the captured grep -oE error message with `sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g; s/\\t/\\\\t/g'` before writing to .errtype. write_epic_result then opens that file in Python and stores the contents in entry['error_detail']; json.dump escapes them AGAIN. Net effect: every literal backslash and double quote in the original error is doubled in the JSON-encoded output, and round-tripping the JSON yields '\\\"' instead of '\"'. The bash escaping was redundant from the start because Python is the only consumer and json.dump already escapes for JSON.",
       "fix": "Applied. Removed the sed pre-escape in classify_error and switched the redirection to printf '%s\\n' so .errtype contains the raw single-line error verbatim. write_epic_result's existing json.dump now performs the only escaping, producing well-formed JSON that round-trips cleanly. Verified with a fixture log containing 'Bad input: \"foo\" said the parser': .errtype now holds the unescaped string and json.dumps encodes it as 'Bad input: \\\"foo\\\" said the parser' (one backslash, the JSON escape).",
-      "tags": ["error-reporting", "double-escape", "json-encoding", "result-file", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-009"],
+      "tags": [
+        "error-reporting",
+        "double-escape",
+        "json-encoding",
+        "result-file",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-009"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T00:00:00Z"
     },
@@ -925,8 +946,57 @@
       "file": "scripts/wolf-merge/install-merge-driver.sh",
       "root_cause": "The script wrote `git config merge.wolf-json.driver \"python3 \\\"$DRIVER\\\" %O %A %B %P\"` unconditionally. It never probed whether `python3` could actually run, and the git config value persists across invocations — so even if the user later installs a real python3 on a different PATH, the registered driver still points to whatever `python3` resolves to at merge time (and on Windows that's typically the Store stub that errors with no helpful message).",
       "fix": "Applied. Added the same probe used in run-sessions.sh: try `python3 --version` first, fall back to `python --version`, exit 0 (no registration) if neither runs. Stored the chosen interpreter in PY_CMD and substituted it into the driver config string. Verified end-to-end with PATH limited to a tempdir that exposes only `python` (no `python3`): registered driver is now `python \"...\" %O %A %B %P` instead of the broken `python3` form. Re-running on macOS with python3 present preserves the python3 selection.",
-      "tags": ["windows", "python-detection", "merge-driver", "wolf-merge", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-049"],
+      "tags": [
+        "windows",
+        "python-detection",
+        "merge-driver",
+        "wolf-merge",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-049"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-052",
+      "timestamp": "2026-05-06T13:11:24.404Z",
+      "error_message": "Incorrect value in code",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Had ') as f:\n    json.dump({'",
+      "fix": "Changed to ', encoding='",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T13:11:24.404Z"
+    },
+    {
+      "id": "bug-053",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "Three open() sites in scripts/lib/epic-result.sh and scripts/run-sessions.sh still relied on locale.getpreferredencoding(False), so the same UnicodeDecodeError class that took down epic-dag.py (bug-035) and merge-wolf-json.py (bug-049) lived on in the result-reporting and status-init paths. Reproduced under PYTHONUTF8=0 LC_ALL=C LANG=C against a tmp_merged file containing 'session-01-café-résumé.md' / 'session-02-naïve-façade-☃.md': the bare open() at epic-result.sh:150 crashed mid write_epic_result with `UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3`, the [EPIC_RESULT_START]/[END] block was never emitted, and external watchers polling RESULT_FILE never saw a sentinel. Sibling-helper bug — exactly the audit that the cerebrum 2026-05-05 entry for bug-035 said to do across every open( site, not just the file being edited.",
+      "file": "scripts/lib/epic-result.sh, scripts/run-sessions.sh",
+      "root_cause": "Three places opened text files without encoding='utf-8', falling back to platform default (cp1252 on Windows, ASCII under LC_ALL=C / PYTHONUTF8=0): (a) epic-result.sh:150 read the bash-written tmp_merged file (lines like '1 session-01-foo.md' — filenames are user-supplied and frequently carry em-dashes / accents in AI-named sessions), this is the active-crash site; (b) epic-result.sh:204 read back the just-written result.json for terminal pretty-printing — latent because json.dump defaults to ensure_ascii=True so the file is pure ASCII today, but a future ensure_ascii=False would surface it; (c) run-sessions.sh:682 wrote the initial .epic-status.json — also latent for the same ensure_ascii reason. The audit cerebrum entry warned 'sibling helpers often have the same bug' after bug-035 (and again after bug-049 in merge-wolf-json.py); these three sites in the result/status path were missed both times.",
+      "fix": "Applied. Pinned encoding='utf-8' on all three sites: `open(sys.argv[3], encoding='utf-8')` for the merged-sessions read (epic-result.sh:150), `json.load(open(sys.argv[1], encoding='utf-8'))` for the result-print read (epic-result.sh:204), and `open(sf, 'w', encoding='utf-8')` for the status-init write (run-sessions.sh:682). Verified the active-crash site by writing a tmp_merged fixture from bash with 'café-résumé' / 'naïve-façade-☃' filenames and reading it under PYTHONUTF8=0 LC_ALL=C LANG=C: pre-fix raised UnicodeDecodeError on byte 0xc3 mid-read, post-fix returned `read OK, count = 2 byte-len of first = 27`. Verified bash -n on all three modified shell scripts.",
+      "tags": ["unicode", "encoding", "windows", "locale", "result-file", "status-init", "python", "found-by-bug-hunt"],
+      "related_bugs": ["bug-024", "bug-035", "bug-049", "bug-052"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-054",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "cleanup_merged_epic_branches never deletes a stale `epic/*` branch that has no PR but is fully merged on the remote, whenever the user's local default branch lags origin. After `git fetch --prune origin` updates origin/main but does NOT fast-forward local main (the common case in a worktree-based workflow where main is rarely checked out), the no-PR fallback runs `git merge-base --is-ancestor \"$br\" \"$default_branch\"` against the LOCAL ref, gets a false negative, and silently keeps the branch forever. Stale `epic/*` branches accumulate across runs with no surfaced error. Reproduced with a scratch bare-remote / clone fixture: origin/main fast-forwarded to epic/foo's tip, local main left at the original commit, fetch+prune run, then the guard checked — pre-fix `WOULD KEEP (stale!)`, post-fix `WOULD DELETE`.",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "Line 218 used `merge-base --is-ancestor \"$br\" \"$default_branch\"` where `$default_branch` is the bare branch name returned by `gh repo view --json defaultBranchRef -q '.defaultBranchRef.name'` (e.g. 'main'). Bare names resolve to the LOCAL ref refs/heads/main, but the only ref this code path can rely on being current is `origin/<default_branch>` — that's what the `git fetch --prune origin` immediately above just updated. The mismatch was invisible whenever the user's local main happened to be up-to-date, which is rare in a worktree workflow.",
+      "fix": "Applied. Resolve a `default_ref` that prefers `origin/$default_branch` when that ref exists (verified via `git rev-parse --verify --quiet`), falling back to the bare local name only if no remote-tracking ref is present (e.g. detached/no-origin repos). The is-ancestor guard now compares against the same ref `git fetch --prune` just updated. Verified with a scratch bare-remote/local-clone fixture (origin/main fast-forwarded but local main left behind): pre-fix the guard answered 'keep stale!', post-fix 'delete'. bash -n clean.",
+      "tags": ["git", "branch-cleanup", "stale-ref", "fetch-prune", "default-branch", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-033"],
       "occurrences": 1,
       "last_seen": "2026-05-06T00:00:00Z"
     }

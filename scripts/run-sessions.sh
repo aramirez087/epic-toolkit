@@ -679,7 +679,7 @@ with open(pf, encoding='utf-8', errors='replace') as f:
             'title': slug.replace('-', ' ').title(),
             'step': 0, 'tool': '', 'target': '', 'elapsed': 0.0,
         }
-with open(sf, 'w') as f:
+with open(sf, 'w', encoding='utf-8') as f:
     json.dump({'epic': epic, 'started_at': time.time(), 'sessions': sessions}, f, indent=2)
 PYEOF_INIT
 

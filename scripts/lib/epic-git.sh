@@ -215,7 +215,17 @@ cleanup_merged_epic_branches() {
         ;;
       "")
         # No PR exists. Only delete if the branch is fully merged into default.
-        if git -C "$repo_root" merge-base --is-ancestor "$br" "$default_branch" 2>/dev/null; then
+        # Compare against `origin/<default_branch>` rather than the local ref:
+        # `git fetch --prune origin` (line ~194) updates the remote-tracking
+        # branch but does NOT fast-forward the local one. A user whose local
+        # `main` lags behind `origin/main` (very common in worktree workflows)
+        # would otherwise see this guard return false for branches already
+        # merged on origin, leaving stale `epic/*` branches uncleaned.
+        local default_ref="$default_branch"
+        if git -C "$repo_root" rev-parse --verify --quiet "origin/$default_branch" >/dev/null 2>&1; then
+          default_ref="origin/$default_branch"
+        fi
+        if git -C "$repo_root" merge-base --is-ancestor "$br" "$default_ref" 2>/dev/null; then
           if git -C "$repo_root" branch -d "$br" &>/dev/null; then
             removed=$((removed + 1))
             log "  Pruned merged epic branch (no PR): $br"

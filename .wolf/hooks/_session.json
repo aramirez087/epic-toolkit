@@ -1,86 +1,102 @@
 {
-  "session_id": "session-2026-05-06-0629",
-  "started": "2026-05-06T12:29:18.247Z",
+  "session_id": "session-2026-05-06-0705",
+  "started": "2026-05-06T13:05:42.251Z",
   "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
+      "count": 2,
+      "tokens": 13160,
+      "first_read": "2026-05-06T13:06:18.767Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
+      "count": 1,
+      "tokens": 773,
+      "first_read": "2026-05-06T13:06:26.521Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
+      "count": 1,
+      "tokens": 341,
+      "first_read": "2026-05-06T13:06:27.028Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/resolve-wolf.sh": {
       "count": 1,
       "tokens": 650,
-      "first_read": "2026-05-06T12:53:42.816Z"
+      "first_read": "2026-05-06T13:06:27.753Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
       "count": 1,
-      "tokens": 2251,
-      "first_read": "2026-05-06T12:53:43.158Z"
+      "tokens": 2324,
+      "first_read": "2026-05-06T13:06:27.820Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
       "count": 1,
       "tokens": 3021,
-      "first_read": "2026-05-06T12:53:43.509Z"
+      "first_read": "2026-05-06T13:06:36.260Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+      "count": 1,
+      "tokens": 650,
+      "first_read": "2026-05-06T13:06:36.449Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
       "count": 1,
       "tokens": 5623,
-      "first_read": "2026-05-06T12:54:05.297Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 4,
-      "tokens": 13160,
-      "first_read": "2026-05-06T12:54:34.224Z"
+      "first_read": "2026-05-06T13:06:36.834Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
       "count": 1,
       "tokens": 4533,
-      "first_read": "2026-05-06T12:56:23.481Z"
+      "first_read": "2026-05-06T13:08:19.130Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
       "count": 1,
       "tokens": 4344,
-      "first_read": "2026-05-06T12:57:03.730Z"
+      "first_read": "2026-05-06T13:08:19.315Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py": {
       "count": 1,
       "tokens": 2076,
-      "first_read": "2026-05-06T12:57:26.446Z"
+      "first_read": "2026-05-06T13:08:26.225Z"
     },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
       "count": 1,
-      "tokens": 850,
-      "first_read": "2026-05-06T12:57:38.666Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
-      "count": 1,
-      "tokens": 400,
-      "first_read": "2026-05-06T12:58:22.664Z"
+      "tokens": 3346,
+      "first_read": "2026-05-06T13:08:26.283Z"
     }
   },
   "files_written": [
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh",
       "action": "edit",
-      "tokens": 238,
-      "at": "2026-05-06T12:59:31.428Z"
+      "tokens": 27,
+      "at": "2026-05-06T13:11:21.948Z"
     },
     {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh",
       "action": "edit",
-      "tokens": 181,
-      "at": "2026-05-06T12:59:40.029Z"
+      "tokens": 16,
+      "at": "2026-05-06T13:11:22.719Z"
     },
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
       "action": "edit",
-      "tokens": 308,
-      "at": "2026-05-06T12:59:52.323Z"
+      "tokens": 39,
+      "at": "2026-05-06T13:11:24.403Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
+      "action": "edit",
+      "tokens": 300,
+      "at": "2026-05-06T13:11:34.836Z"
     }
   ],
   "edit_counts": {
-    "scripts/wolf-merge/merge-wolf-json.py": 1,
-    "scripts/lib/epic-result.sh": 1,
-    "scripts/wolf-merge/install-merge-driver.sh": 1
+    "scripts/lib/epic-result.sh": 2,
+    "scripts/run-sessions.sh": 1,
+    "scripts/lib/epic-git.sh": 1
   },
-  "anatomy_hits": 10,
+  "anatomy_hits": 12,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 3,
+  "repeated_reads_warned": 1,
   "cerebrum_warnings": 0,
   "stop_count": 1
 }

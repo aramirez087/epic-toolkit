@@ -147,7 +147,7 @@ data = {
     'status':         os.environ['EPIC_STATUS'],
     'first_failed_id': json.loads(os.environ['FIRST_FAILED']),
     'sessions':       {},
-    'merged_sessions': [l.strip() for l in open(sys.argv[3]) if l.strip()],
+    'merged_sessions': [l.strip() for l in open(sys.argv[3], encoding='utf-8') if l.strip()],
     'wave':           int(os.environ['RESULT_WAVE']),
     'runtime_seconds': int(os.environ['RUNTIME_SECS']),
     'started_at':     int(os.environ['START_TS']),
@@ -201,7 +201,7 @@ PYEOF_RESULT
   echo "RESULT_FILE=$result_file"
   "$PYTHON_CMD" - "$result_file" <<'PYEOF_PRINT'
 import json, sys
-data = json.load(open(sys.argv[1]))
+data = json.load(open(sys.argv[1], encoding='utf-8'))
 if data['status'] == 'failed':
     print('STATUS=failed')
     print('FIRST_FAILED=' + str(data['first_failed_id']))
