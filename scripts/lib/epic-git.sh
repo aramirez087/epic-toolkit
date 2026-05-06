@@ -153,10 +153,20 @@ rebase_with_wolf_resolve() {
   if git -C "$workdir" -c core.editor=true rebase -q "$target" 2>/dev/null; then
     return 0
   fi
+  # Rebase failed. Distinguish "paused on conflict" (rebase-merge/rebase-apply
+  # exists) from "fast-fail without state" (dirty tree, invalid upstream, etc.
+  # — git refuses before starting). The previous code fell through the conflict
+  # while-loop in the no-state case and returned 0, causing the caller to
+  # force-push un-rebased history while reporting "Rebased onto …". (bug-074)
+  local _rmerge _rapply
+  _rmerge="$(git -C "$workdir" rev-parse --git-path rebase-merge 2>/dev/null)"
+  _rapply="$(git -C "$workdir" rev-parse --git-path rebase-apply 2>/dev/null)"
+  if [[ ! -d "$_rmerge" && ! -d "$_rapply" ]]; then
+    return 1
+  fi
   # Rebase paused on conflict. Iterate, resolving .wolf/ conflicts.
   local max_iters=50 i=0
-  while git -C "$workdir" rev-parse --git-path rebase-merge 2>/dev/null | xargs -I{} test -d {} \
-       || git -C "$workdir" rev-parse --git-path rebase-apply 2>/dev/null | xargs -I{} test -d {}; do
+  while [[ -d "$_rmerge" || -d "$_rapply" ]]; do
     i=$((i + 1))
     if [[ $i -gt $max_iters ]]; then
       git -C "$workdir" rebase --abort 2>/dev/null || true

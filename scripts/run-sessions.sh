@@ -351,15 +351,16 @@ JOB_PIDS=()
 JOB_SIDS=()
 
 # EXIT handler — cleans up in-flight session subshells, UI, and temp files.
-# Mirrors the wave-timeout kill logic (bug-063 / bug-065): pkill -P kills
-# claude/python children before we kill the parent subshell, so no orphans
-# remain if the runner aborts mid-wave via set -e, SIGINT, or external kill.
+# Uses kill_tree (epic-wave.sh) for a recursive SIGKILL walk so that --timeout
+# wrapper grandchildren (timeout → claude) don't leak as orphans when the
+# runner aborts mid-wave via set -e, SIGINT, or external kill. The earlier
+# `pkill -9 -P` only walked one level and left `claude` reparented to PID 1
+# whenever --timeout MINS was set. (bug-063, bug-065, bug-073)
 _on_exit() {
   local _rc=$?
   for _tp in "${JOB_PIDS[@]:-}"; do
     [[ -n "$_tp" ]] || continue
-    pkill -9 -P "$_tp" 2>/dev/null || true
-    kill -9 "$_tp" 2>/dev/null || true
+    kill_tree "$_tp"
   done
   [[ -n "${UI_PID:-}" ]] && kill "${UI_PID}" 2>/dev/null || true
   rm -f "${DAG_TMP:-}"
@@ -879,12 +880,10 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
       for _ti in "${!JOB_PIDS[@]}"; do
         _tpid="${JOB_PIDS[$_ti]}"
         _tsid="${JOB_SIDS[$_ti]}"
-        # Kill children first (claude, python progress) then the subshell itself.
-        # `kill -9 <pid>` (positive PID) only kills that PID; children are
-        # reparented to init and keep running. pkill -P sends to all direct
-        # children; the subshell kill catches any race between kill and exec.
-        pkill -9 -P "$_tpid" 2>/dev/null || true
-        kill -9 "$_tpid" 2>/dev/null || true
+        # Recursive process-tree kill — covers --timeout wrapper grandchildren
+        # (subshell → `timeout` → `claude`) that pkill -P alone would leave
+        # orphaned at PID 1. See kill_tree in epic-wave.sh. (bug-073)
+        kill_tree "$_tpid"
         wait "$_tpid" 2>/dev/null || true
         _telapsed=$(( $(date +%s) - ${SESSION_START_TS[$_tsid]:-0} ))
         SESSION_STATUS[$_tsid]="failed"

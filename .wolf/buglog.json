@@ -1255,6 +1255,128 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T16:07:53.712Z"
+    },
+    {
+      "id": "bug-068",
+      "timestamp": "2026-05-06T16:25:34.466Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 11→12 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T16:25:34.466Z"
+    },
+    {
+      "id": "bug-073",
+      "timestamp": "2026-05-06T17:30:00.000Z",
+      "error_message": "After wave timeout or runner abort with --timeout MINS set, claude/opencode child process is reparented to init and keeps running (orphan), continuing to burn API tokens and hold worktree handles.",
+      "file": "scripts/run-sessions.sh, scripts/lib/epic-session.sh",
+      "root_cause": "When TIMEOUT > 0, run_cli builds the pipeline as `timeout DURATION env -u CLAUDECODE claude ... | python progress.py`. The session subshell forks `timeout` as a direct child; `timeout` in turn forks `claude` (env execs into claude inside that child). So claude is a GRANDCHILD of the subshell, not a direct child. `pkill -9 -P $subshell_pid` (used in both _on_exit at run-sessions.sh:357-368 and the wave-timeout cleanup at run-sessions.sh:879-896) only matches direct children. After SIGKILLing `timeout`, claude's parent dies and claude is reparented to PID 1 — it survives with no one waiting on it. Reproduced locally with `sh -c 'sleep 30 & wait' &; pkill -9 -P parent; kill -9 parent` — sleep persists with PPID=1. The bug-063 cerebrum entry described the symptom (orphaned children) but the fix only walks one process-tree level.",
+      "fix": "Walk the process tree before killing. Replace the single `pkill -9 -P` with a recursive helper, e.g.: `kill_tree(){ local p=$1; for c in $(pgrep -P $p 2>/dev/null); do kill_tree $c; done; kill -9 $p 2>/dev/null||true; }`. Apply at both call sites (EXIT trap and wave-timeout). Or: spawn each session subshell via `setsid` so the whole subshell tree is its own process group, and kill with `kill -9 -<pgid>` (negative pid). The setsid approach is cleaner but requires checking macOS behaviour.",
+      "tags": [
+        "found-by-bug-hunt",
+        "process-management",
+        "orphan",
+        "pkill",
+        "wave-timeout",
+        "exit-trap",
+        "timeout-wrapper"
+      ],
+      "related_bugs": [
+        "bug-063",
+        "bug-065"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:30:00.000Z"
+    },
+    {
+      "id": "bug-074",
+      "timestamp": "2026-05-06T17:30:00.000Z",
+      "error_message": "Pre-PR rebase reports REBASE_RESULT=ok and pushes the un-rebased branch when `git rebase` fails fast (dirty tree, missing target ref, etc.) without leaving rebase-merge/rebase-apply state.",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "rebase_with_wolf_resolve() at epic-git.sh:146-191 has three return paths to 0: (1) already a descendant; (2) clean rebase succeeded; (3) the function falls off the end after the conflict-resolve while-loop. Path 3 is reached whenever the initial `git rebase ...; then return 0; fi` fails AND no rebase state directory exists for the while-loop to enter. That happens when git rebase rejects the operation early — verified locally: `git rebase nonexistent-branch` exits 128, prints `fatal: invalid upstream`, and leaves NO `.git/rebase-merge` or `.git/rebase-apply`. In that case the while loop body never runs and the function returns 0. The caller at run-sessions.sh:1115-1117 then sets REBASE_RESULT=ok, prints `Rebased onto origin/<default> — PR will be fast-forward-mergeable`, and force-pushes the un-rebased branch with --force-with-lease (line 1148). The PR shows the un-rebased history while the user is told it was rebased.",
+      "fix": "Track whether a rebase was actually performed. After the initial `git rebase` attempt fails, check for rebase state BEFORE entering the while loop and treat 'no state' as a hard failure: `if ! git -C \"$workdir\" rev-parse --git-path rebase-merge | xargs test -d && ! git -C \"$workdir\" rev-parse --git-path rebase-apply | xargs test -d; then return 1; fi`. Or capture the initial rebase exit code and propagate it when no state dir exists. Either makes REBASE_RESULT=conflict and falls through to a non-force push, which is the safe behaviour.",
+      "tags": [
+        "found-by-bug-hunt",
+        "rebase",
+        "pre-pr",
+        "wolf-resolve",
+        "false-success",
+        "auto-pr"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:30:00.000Z"
+    },
+    {
+      "id": "bug-071",
+      "timestamp": "2026-05-06T16:57:24.520Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→18 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T16:57:24.520Z"
+    },
+    {
+      "id": "bug-072",
+      "timestamp": "2026-05-06T16:59:17.772Z",
+      "error_message": "Wrong reference: 069 should be 073",
+      "file": "scripts/lib/epic-wave.sh",
+      "root_cause": "Used \"069\" instead of \"073\"",
+      "fix": "Changed 069 → 073",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T16:59:17.772Z"
+    },
+    {
+      "id": "bug-073",
+      "timestamp": "2026-05-06T16:59:19.307Z",
+      "error_message": "Wrong reference: 069 should be 073",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Used \"069\" instead of \"073\"",
+      "fix": "Changed 069 → 073",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T16:59:20.798Z"
+    },
+    {
+      "id": "bug-074",
+      "timestamp": "2026-05-06T16:59:22.680Z",
+      "error_message": "Wrong reference: 070 should be 074",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "Used \"070\" instead of \"074\"",
+      "fix": "Changed 070 → 074",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T16:59:22.680Z"
     }
   ]
 }

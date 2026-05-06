@@ -7,6 +7,24 @@ format_elapsed() {
   printf "%dm%02ds" $((s / 60)) $((s % 60))
 }
 
+# Recursively SIGKILL a process and all its descendants. `pkill -P` only
+# matches DIRECT children, so when --timeout wraps the CLI (subshell →
+# `timeout` → `claude`), pkill -P kills `timeout` and leaves `claude`
+# orphaned to PID 1, where it keeps burning API tokens. Walk the tree
+# leaves-first via pgrep -P so grandchildren are reaped before their
+# parents disappear. Silent and best-effort: missing pgrep / vanished
+# pids are treated as no-ops, never as errors. (bug-073)
+# Args: $1 = root pid
+kill_tree() {
+  local _pid="$1"
+  [[ -z "$_pid" ]] && return 0
+  local _child
+  for _child in $(pgrep -P "$_pid" 2>/dev/null); do
+    kill_tree "$_child"
+  done
+  kill -9 "$_pid" 2>/dev/null || true
+}
+
 # Safely add session to MERGED_SESSIONS with validation.
 # Ensures SESSION_FILE_BASENAME is populated; warns and skips if not.
 # Args: $1 = session id

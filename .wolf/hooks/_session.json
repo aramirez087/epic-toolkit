@@ -1,66 +1,133 @@
 {
-  "session_id": "session-2026-05-06-0800",
-  "started": "2026-05-06T14:00:49.570Z",
+  "session_id": "session-2026-05-06-1030",
+  "started": "2026-05-06T16:30:22.165Z",
   "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 1,
-      "tokens": 13468,
-      "first_read": "2026-05-06T14:01:04.512Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 2,
-      "tokens": 5623,
-      "first_read": "2026-05-06T14:01:10.590Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
-      "count": 1,
-      "tokens": 650,
-      "first_read": "2026-05-06T14:01:10.701Z"
-    },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
       "count": 1,
-      "tokens": 3279,
-      "first_read": "2026-05-06T14:01:15.052Z"
+      "tokens": 3388,
+      "first_read": "2026-05-06T16:31:09.485Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
       "count": 1,
       "tokens": 2333,
-      "first_read": "2026-05-06T14:01:15.208Z"
+      "first_read": "2026-05-06T16:31:09.850Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+      "count": 1,
+      "tokens": 650,
+      "first_read": "2026-05-06T16:31:10.147Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
+      "count": 5,
+      "tokens": 13778,
+      "first_read": "2026-05-06T16:31:28.430Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
+      "count": 1,
+      "tokens": 5682,
+      "first_read": "2026-05-06T16:32:32.475Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
+      "count": 1,
+      "tokens": 4488,
+      "first_read": "2026-05-06T16:33:05.799Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
       "count": 1,
-      "tokens": 4533,
-      "first_read": "2026-05-06T14:01:20.996Z"
+      "tokens": 4602,
+      "first_read": "2026-05-06T16:33:25.124Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/.gitignore": {
+      "count": 1,
+      "tokens": 15,
+      "first_read": "2026-05-06T16:34:30.990Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
+      "count": 1,
+      "tokens": 3346,
+      "first_read": "2026-05-06T16:34:31.496Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
+      "count": 1,
+      "tokens": 341,
+      "first_read": "2026-05-06T16:38:20.806Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
+      "count": 1,
+      "tokens": 773,
+      "first_read": "2026-05-06T16:38:21.568Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/resolve-wolf.sh": {
+      "count": 1,
+      "tokens": 650,
+      "first_read": "2026-05-06T16:38:21.817Z"
     }
   },
   "files_written": [
     {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh",
+      "action": "edit",
+      "tokens": 224,
+      "at": "2026-05-06T16:56:54.017Z"
+    },
+    {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
       "action": "edit",
-      "tokens": 14,
-      "at": "2026-05-06T14:38:37.651Z"
+      "tokens": 192,
+      "at": "2026-05-06T16:57:05.208Z"
     },
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
       "action": "edit",
-      "tokens": 130,
-      "at": "2026-05-06T14:38:46.654Z"
+      "tokens": 115,
+      "at": "2026-05-06T16:57:13.644Z"
     },
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
       "action": "edit",
-      "tokens": 119,
-      "at": "2026-05-06T14:38:52.155Z"
+      "tokens": 260,
+      "at": "2026-05-06T16:57:24.519Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh",
+      "action": "edit",
+      "tokens": 16,
+      "at": "2026-05-06T16:59:17.771Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+      "action": "edit",
+      "tokens": 18,
+      "at": "2026-05-06T16:59:19.306Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+      "action": "edit",
+      "tokens": 20,
+      "at": "2026-05-06T16:59:20.797Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
+      "action": "edit",
+      "tokens": 22,
+      "at": "2026-05-06T16:59:22.679Z"
+    },
+    {
+      "file": "/tmp/epic-toolkit-commit-msg.txt",
+      "action": "create",
+      "tokens": 472,
+      "at": "2026-05-06T16:59:54.505Z"
     }
   ],
   "edit_counts": {
-    "scripts/run-sessions.sh": 1,
-    "scripts/lib/epic-session.sh": 1,
-    "scripts/epic-dag.py": 1
+    "scripts/lib/epic-wave.sh": 2,
+    "scripts/run-sessions.sh": 4,
+    "scripts/lib/epic-git.sh": 2,
+    "../../../../tmp/epic-toolkit-commit-msg.txt": 1
   },
-  "anatomy_hits": 6,
+  "anatomy_hits": 12,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 1,
+  "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
   "stop_count": 1
 }
