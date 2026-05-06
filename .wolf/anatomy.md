@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T02:36:54.076Z
-> Files: 19 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T02:47:10.007Z
+> Files: 21 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -10,6 +10,11 @@
 ## ../../.claude/
 
 - `settings.json` (~725 tok)
+
+## ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/
+
+- `MEMORY.md` — Memory Index (~54 tok)
+- `openwolf_auto_hooks.md` (~550 tok)
 
 ## ./
 
@@ -26,12 +31,12 @@
 ## .opencode/commands/
 
 - `epic.generate.md` — OpenCode /epic.generate command (~2477 tok)
-- `epic.md` — OpenCode /epic command (~816 tok)
+- `epic.md` — Validate (~769 tok)
 
 ## commands/
 
 - `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~2477 tok)
-- `epic.md` — Parse arguments (~816 tok)
+- `epic.md` — Validate (~807 tok)
 
 ## docs/
 
@@ -44,4 +49,4 @@
 - `epic-poll-progress.py` — Polling-based progress fallback (~2076 tok)
 - `epic-progress.py` — Live progress display for Claude stream-json & OpenCode JSON (~2226 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~21765 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~21967 tok)

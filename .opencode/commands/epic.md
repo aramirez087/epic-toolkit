@@ -48,7 +48,7 @@ Example: "Running epic '<name>' — all sessions will commit to branch `epic/<na
 
 ## After completion
 1. Parse `[EPIC_RESULT_START]` / `[EPIC_RESULT_END]` block from output.
-2. If `STATUS=failed`: read `.epic-worktrees/<repo>/<epic--name>/.epic-result.json`, report failed session ID(s), error type, exit code, log path, `ERROR_DETAIL` if present. Provide resume command. Note `.epic-result.json` retained only on failure.
+2. If `STATUS=failed`: read the JSON at the path emitted as `RESULT_FILE=` inside the result block (lives under `${TMPDIR}/epic-toolkit/`, retained on both success and failure). Report failed session ID(s), error type, exit code, log path, and `ERROR_DETAIL` if present. Provide resume command.
 3. If `STATUS=success`: report waves, sessions completed, runtime.
 4. Report trunk worktree location (if applicable).
 5. Report session logs and plans location.

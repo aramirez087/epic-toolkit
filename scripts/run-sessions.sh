@@ -1398,28 +1398,34 @@ write_epic_result() {
   end_ts="$(date +%s)"
   local runtime=$(( end_ts - start_ts ))
   
-  # Write session data to temp file for Python to consume
+  # Write session data to temp file for Python to consume.
+  # Iterate the actual DAG session ids — not 1..999 with break — so:
+  #   (a) gaps in session numbering (1, 2, 5) don't truncate the report;
+  #   (b) sessions in unreached waves (epic failed early) still appear,
+  #       defaulted to "pending" instead of vanishing from the result.
   local tmp_data
   tmp_data="$(mktemp)"
-  for (( sid=1; sid<=999; sid++ )); do
-    [[ -z "${SESSION_STATUS[$sid]:-}" ]] && break
+  local _sids_sorted
+  _sids_sorted="$(printf '%s\n' "${!SESSION_SLUG_BY_ID[@]}" | sort -n)"
+  while IFS= read -r sid; do
+    [[ -z "$sid" ]] && continue
     local padded
     padded="$(printf '%02d' "$sid")"
     local key="session-${padded}"
-    local status="${SESSION_STATUS[$sid]:-unknown}"
+    local status="${SESSION_STATUS[$sid]:-pending}"
     local slug="${SESSION_SLUG_BY_ID[$sid]:-unknown}"
     local elapsed="${SESSION_ELAPSED_BY_ID[$sid]:-0}"
     local exit_code="${SESSION_EXIT_BY_ID[$sid]:-0}"
     local error_type="none"
     local log_path="$TRUNK_SESSIONS_DIR/.session-${padded}-exec.log"
     local stderr_path="$TRUNK_SESSIONS_DIR/.session-${padded}-exec.log.errtype"
-    
+
     if [[ "$status" == "failed" ]]; then
       error_type="$(classify_error "$TRUNK_SESSIONS_DIR/.session-${padded}-exec.log" "$exit_code")"
     fi
-    
+
     echo "${key}|${status}|${slug}|${elapsed}|${exit_code}|${error_type}|${log_path}|${stderr_path}" >> "$tmp_data"
-  done
+  done <<< "$_sids_sorted"
   
   # Build merged sessions list via temp file
   local tmp_merged
@@ -1493,15 +1499,21 @@ PYEOF_RESULT
   
   rm -f "$tmp_data" "$tmp_merged"
   
-  # Clean up .errtype temp files created by classify_error
-  for (( sid=1; sid<=999; sid++ )); do
-    [[ -z "${SESSION_STATUS[$sid]:-}" ]] && break
+  # Clean up .errtype temp files created by classify_error.
+  # Iterate every known session (gaps allowed) — see comment on the data loop above.
+  while IFS= read -r sid; do
+    [[ -z "$sid" ]] && continue
     rm -f "$TRUNK_SESSIONS_DIR/.session-$(printf '%02d' "$sid")-exec.log.errtype"
-  done
+  done <<< "$_sids_sorted"
   
-  # Print structured output block for orchestrator consumption
+  # Print structured output block for orchestrator consumption.
+  # RESULT_FILE is emitted on both success and failure so the calling tool
+  # (Claude / OpenCode / external watcher) reads the JSON from a path the
+  # script itself reports — no second source of truth in the command docs
+  # to drift out of sync with the actual write location.
   echo ""
   echo "[EPIC_RESULT_START]"
+  echo "RESULT_FILE=$result_file"
   "$PYTHON_CMD" - "$result_file" <<'PYEOF_PRINT'
 import json, sys
 data = json.load(open(sys.argv[1]))

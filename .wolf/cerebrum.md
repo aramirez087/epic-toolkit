@@ -21,6 +21,8 @@
 <!-- Mistakes made and corrected. Each entry prevents the same mistake recurring. -->
 <!-- Format: [YYYY-MM-DD] Description of what went wrong and what to do instead. -->
 - [2026-05-02] Do not accept a custom pet solely because `validate_atlas.py` returns ok; render/contact-sheet QA is required to catch visually corrupted rows.
+- [2026-05-06] Do not iterate session ids with `for (( sid=1; sid<=999; sid++ )); break-on-missing` — session ids may have gaps (user removed a session) or trailing holes (epic halted before later waves ran), and the early break silently drops every session past the gap. Iterate `${!SESSION_SLUG_BY_ID[@]}` (the DAG-derived index set) instead.
+- [2026-05-06] Do not hard-code result-file paths in the command docs (`commands/epic.md`, `.opencode/commands/epic.md`). The script writes to `${TMPDIR}/epic-toolkit/<repo>--<name>.result.json` and the path will drift from any doc that re-states it. Have the script print `RESULT_FILE=<path>` inside the `[EPIC_RESULT_START]/[END]` block and have the docs tell Claude to read that line.
 
 ## Decision Log
 

@@ -97,6 +97,74 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T02:35:47.371Z"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-05-06T02:43:29.820Z",
+      "error_message": "Wrong operator: <= should be <<",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Used \"<=\" instead of \"<<\"",
+      "fix": "Changed operator <= → <<",
+      "tags": [
+        "auto-detected",
+        "operator-fix",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T02:43:37.608Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-05-06T02:43:58.436Z",
+      "error_message": "Incorrect value in code",
+      "file": "commands/epic.md",
+      "root_cause": "Had `.epic-worktrees/<repo>/<epic--name>/.epic-result.",
+      "fix": "Changed to `RESULT_FILE=`",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T02:44:02.310Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-05-06T20:44:00Z",
+      "error_message": "Post-completion handler in commands/epic.md and .opencode/commands/epic.md instructed Claude to read .epic-worktrees/<repo>/<epic--name>/.epic-result.json, which never exists. The script writes to ${TMPDIR}/epic-toolkit/<repo>--<name>.result.json (different directory, different filename). Docs also claimed the file was retained only on failure, but the code retains it on both. Whenever an epic failed, Claude reported it could not find the result JSON.",
+      "file": "commands/epic.md, .opencode/commands/epic.md, scripts/run-sessions.sh",
+      "root_cause": "Two sources of truth for the result-file path: write_epic_result in run-sessions.sh and two command-doc files. The script's path was changed (moved out of the worktree so it survives cleanup) but the docs were not updated.",
+      "fix": "Made the script the single source of truth: it now emits 'RESULT_FILE=<path>' as the first line of the [EPIC_RESULT_START]/[END] block on both success and failure. Both command docs were rewritten to read that line instead of hard-coding a path.",
+      "tags": [
+        "documentation-drift",
+        "result-file",
+        "post-completion",
+        "claude-code",
+        "opencode"
+      ],
+      "related_bugs": ["bug-008"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T20:44:00Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-06T20:44:00Z",
+      "error_message": "write_epic_result silently dropped sessions whose ids fell after a gap. With sessions [1, 2, 5] only sessions 1-2 appeared in the result JSON; session 5 vanished. Same when an epic failed in wave 1 of a three-wave plan — sessions in waves 2 and 3 had no SESSION_STATUS entry, so the loop hit a gap at sid=2 and broke immediately, reporting only the failed session.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Both the data loop (line 1404) and the .errtype cleanup loop (line 1497) used 'for (( sid=1; sid<=999; sid++ )); [[ -z status ]] && break'. The break-on-empty pattern assumes contiguous, fully-populated session ids, which is not guaranteed: ids can be sparse by design and waves past a failure point never get a SESSION_STATUS entry at all.",
+      "fix": "Replaced both loops with iteration over the DAG-derived id set: '_sids_sorted=$(printf %s\\\\n \"${!SESSION_SLUG_BY_ID[@]}\" | sort -n)' then a 'while IFS= read -r sid <<< \"$_sids_sorted\"' loop. Sessions with no SESSION_STATUS entry now default to 'pending' instead of vanishing, so unreached waves are visible in the result JSON. Verified with a standalone snippet using sparse ids [1,2,5,7] and missing statuses for 2 and 7 — old loop reported only sid=1, new loop reported all four with correct statuses.",
+      "tags": [
+        "iteration",
+        "session-ids",
+        "result-file",
+        "sparse-arrays",
+        "sh"
+      ],
+      "related_bugs": ["bug-009"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T20:44:00Z"
     }
   ]
 }

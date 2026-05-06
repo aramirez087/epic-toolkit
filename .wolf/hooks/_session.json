@@ -1,106 +1,12 @@
 {
-  "session_id": "session-2026-05-06-1948",
-  "started": "2026-05-06T01:48:28.533Z",
-  "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 24,
-      "tokens": 20944,
-      "first_read": "2026-05-06T01:49:18.730Z"
-    }
-  },
-  "files_written": [
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 930,
-      "at": "2026-05-06T01:50:16.260Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 44,
-      "at": "2026-05-06T01:50:37.988Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 130,
-      "at": "2026-05-06T01:52:19.797Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 340,
-      "at": "2026-05-06T01:52:29.307Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 76,
-      "at": "2026-05-06T01:52:41.910Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 171,
-      "at": "2026-05-06T01:55:01.174Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 421,
-      "at": "2026-05-06T01:55:18.441Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 993,
-      "at": "2026-05-06T02:26:28.057Z"
-    },
-    {
-      "file": "/tmp/commit-msg.txt",
-      "action": "create",
-      "tokens": 240,
-      "at": "2026-05-06T02:27:25.095Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 511,
-      "at": "2026-05-06T02:34:50.381Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 322,
-      "at": "2026-05-06T02:35:08.790Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 1042,
-      "at": "2026-05-06T02:35:47.371Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 830,
-      "at": "2026-05-06T02:36:11.686Z"
-    },
-    {
-      "file": "/tmp/commit-msg.txt",
-      "action": "create",
-      "tokens": 666,
-      "at": "2026-05-06T02:36:54.082Z"
-    }
-  ],
-  "edit_counts": {
-    "scripts/run-sessions.sh": 12,
-    "../../../../tmp/commit-msg.txt": 2
-  },
-  "anatomy_hits": 1,
+  "session_id": "session-2026-05-06-2047",
+  "started": "2026-05-06T02:47:55.821Z",
+  "files_read": {},
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 0,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 23,
+  "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
-  "stop_count": 4
+  "stop_count": 0
 }
