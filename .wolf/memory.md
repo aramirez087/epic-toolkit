@@ -122,3 +122,17 @@
 | now | Patched bug-012 (META prefix-strip parser) | scripts/run-sessions.sh | path-with-spaces preserved end-to-end | ~3k |
 | now | Patched bug-013 (reap on wave timeout) | scripts/run-sessions.sh | timed-out sessions now mark failed/137 + EPIC_FAILED=true | ~3k |
 | 21:00 | Session end: 3 writes across 2 files (epic-progress.py, run-sessions.sh) | 5 reads | ~34393 tok |
+| 21:01 | Session end: 3 writes across 2 files (epic-progress.py, run-sessions.sh) | 5 reads | ~34393 tok |
+
+## Session: 2026-05-06 21:01
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:05 | Edited scripts/run-sessions.sh | 3→3 lines | ~25 |
+| 21:05 | Edited scripts/run-sessions.sh | 9→8 lines | ~134 |
+| 21:05 | Session end: 2 writes across 1 files (run-sessions.sh) | 4 reads | ~32755 tok |
+
+## Session: 2026-05-06 21:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

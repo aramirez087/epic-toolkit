@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 163850,
-    "total_reads": 16,
-    "total_writes": 54,
-    "total_sessions": 11,
-    "anatomy_hits": 15,
+    "total_tokens_estimated": 331379,
+    "total_reads": 39,
+    "total_writes": 62,
+    "total_sessions": 14,
+    "anatomy_hits": 38,
     "anatomy_misses": 1,
-    "repeated_reads_blocked": 71,
-    "estimated_savings_vs_bare_cli": 1470862
+    "repeated_reads_blocked": 117,
+    "estimated_savings_vs_bare_cli": 2348990
   },
   "sessions": [
     {
@@ -543,6 +543,267 @@
         "reads_count": 4,
         "writes_count": 7,
         "repeated_reads_blocked": 6,
+        "anatomy_lookups": 4
+      }
+    },
+    {
+      "id": "session-2026-05-06-2048",
+      "started": "2026-05-06T02:48:41.160Z",
+      "ended": "2026-05-06T02:55:36.942Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 3793,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 21967,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 2226,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py",
+          "tokens_estimated": 2076,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py",
+          "tokens_estimated": 3346,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 33408,
+        "output_tokens_estimated": 0,
+        "reads_count": 5,
+        "writes_count": 0,
+        "repeated_reads_blocked": 4,
+        "anatomy_lookups": 5
+      }
+    },
+    {
+      "id": "session-2026-05-06-2048",
+      "started": "2026-05-06T02:48:41.160Z",
+      "ended": "2026-05-06T03:00:14.335Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 3793,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 21967,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 2226,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py",
+          "tokens_estimated": 2076,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py",
+          "tokens_estimated": 3346,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 205,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 398,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 382,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 33408,
+        "output_tokens_estimated": 985,
+        "reads_count": 5,
+        "writes_count": 3,
+        "repeated_reads_blocked": 5,
+        "anatomy_lookups": 5
+      }
+    },
+    {
+      "id": "session-2026-05-06-2048",
+      "started": "2026-05-06T02:48:41.160Z",
+      "ended": "2026-05-06T03:01:06.095Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 3793,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 21967,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 2226,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py",
+          "tokens_estimated": 2076,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py",
+          "tokens_estimated": 3346,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 205,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 398,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 382,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 33408,
+        "output_tokens_estimated": 985,
+        "reads_count": 5,
+        "writes_count": 3,
+        "repeated_reads_blocked": 5,
+        "anatomy_lookups": 5
+      }
+    },
+    {
+      "id": "session-2026-05-06-2101",
+      "started": "2026-05-06T03:01:28.323Z",
+      "ended": "2026-05-06T03:04:40.214Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 22367,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 4344,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 3793,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py",
+          "tokens_estimated": 2076,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 32580,
+        "output_tokens_estimated": 0,
+        "reads_count": 4,
+        "writes_count": 0,
+        "repeated_reads_blocked": 15,
+        "anatomy_lookups": 4
+      }
+    },
+    {
+      "id": "session-2026-05-06-2101",
+      "started": "2026-05-06T03:01:28.323Z",
+      "ended": "2026-05-06T03:05:37.708Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 22372,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 4344,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 3793,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py",
+          "tokens_estimated": 2076,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 27,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 143,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 32585,
+        "output_tokens_estimated": 170,
+        "reads_count": 4,
+        "writes_count": 2,
+        "repeated_reads_blocked": 17,
         "anatomy_lookups": 4
       }
     }

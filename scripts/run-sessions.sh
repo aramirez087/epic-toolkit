@@ -875,7 +875,7 @@ session_completed_on_branch() {
   if grep -qE "^Merge session ${padded} \(" <<<"$subjects"; then
     return 0
   fi
-  if grep -qE "^feat: Session ${sid}([^[:alnum:]]|\$)" <<<"$subjects"; then
+  if grep -qE "^feat: Session ${sid}([^[:alnum:]]|$)" <<<"$subjects"; then
     return 0
   fi
   return 1
@@ -939,11 +939,10 @@ run_cli() {
   if [[ "$sid" -gt 0 && -n "${SESSION_CLI_BY_ID[$sid]:-}" ]]; then
     session_cli="${SESSION_CLI_BY_ID[$sid]}"
     # Re-map model if CLI changed (e.g. session overrides cli from opencode to claude
-    # or vice versa — model shorthand depends on which CLI is in use)
-    if [[ "$sid" -gt 0 && -n "${SESSION_MODEL_BY_ID[$sid]:-}" ]]; then
-      local raw_model2="${SESSION_MODEL_BY_ID[$sid]}"
-      session_model="$(map_model_shorthand "$raw_model2" "$session_cli")"
-    fi
+    # or vice versa — model shorthand depends on which CLI is in use).
+    # Remap whether model was explicitly overridden or is using the default.
+    local raw_model_for_remap="${SESSION_MODEL_BY_ID[$sid]:-$MODEL}"
+    session_model="$(map_model_shorthand "$raw_model_for_remap" "$session_cli")"
   fi
 
   # Build progress args (status file updates work even in quiet/parallel mode)

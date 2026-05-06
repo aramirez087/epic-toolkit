@@ -244,6 +244,40 @@
       "related_bugs": [],
       "occurrences": 2,
       "last_seen": "2026-05-06T02:58:15.245Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-05-06T03:05:04.408Z",
+      "error_message": "Incorrect value in code",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Had \"^feat: Session ${sid}([^[:alnum:]]|\\$)\"",
+      "fix": "Changed to \"^feat: Session ${sid}([^[:alnum:]]|$)\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T03:05:04.408Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "Model not remapped when CLI is overridden without explicit model override. Session with `cli: opencode` and no model override would send invalid model flag to CLI (e.g., `--model sonnet` instead of `--model opencode/claude-sonnet-4`).",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "In run_cli() function (lines 935-947), the default model was only remapped when CLI was overridden IF the model was also explicitly overridden. When a session overrode CLI but not model, the default model was never remapped for the new CLI, causing a model mismatch between the script's expectations and the CLI's supported model identifiers.",
+      "fix": "Applied. Lines 939-946 now always remap the model when CLI is overridden, using the explicitly-overridden model if present, or the default MODEL if not. Changed from conditional remap (only if SESSION_MODEL_BY_ID set) to unconditional remap (always when SESSION_CLI_BY_ID set).",
+      "tags": [
+        "model-mapping",
+        "cli-override",
+        "session-config",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
     }
   ]
 }
