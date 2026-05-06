@@ -281,9 +281,37 @@ session_completed_on_branch() {
   if [[ "${SESSION_STATUS[$sid]:-}" == "done" ]]; then
     return 0
   fi
-  local padded subjects
+  local padded subjects rev_range
   padded="$(printf '%02d' "$sid")"
-  subjects="$(git -C "$repo" log --format='%s' "$branch" 2>/dev/null || true)"
+
+  # Scope the subject scan to commits made on the epic branch itself.
+  # Without this, an unscoped `git log $branch` walks back through the
+  # entire base branch (main) history. A single commit anywhere on main
+  # whose subject happens to begin with "feat: Session 1" — for example,
+  # from a previously-merged epic of the same family, or any unrelated
+  # commit using a session-style convention — falsely matches and causes
+  # the runner to silently skip every session's Claude execution as
+  # "already committed on this branch". The fresh per-session worktree
+  # (created at run-sessions.sh:860 from $BRANCH, which was just branched
+  # off $BASE_BRANCH) inherits all of main's history, so the bug fires
+  # on the very first run with no resume artifacts. Limiting to
+  # ${BASE_BRANCH}..${branch} keeps only commits unique to this epic.
+  rev_range="$branch"
+  if [[ -n "${BASE_BRANCH:-}" ]]; then
+    local base_ref=""
+    if git -C "$repo" rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
+      base_ref="$BASE_BRANCH"
+    elif git -C "$repo" rev-parse --verify --quiet "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+      # Worktree-only checkouts may not have a local copy of $BASE_BRANCH;
+      # fall back to the remote-tracking ref so the scope still applies.
+      base_ref="origin/$BASE_BRANCH"
+    fi
+    if [[ -n "$base_ref" ]]; then
+      rev_range="${base_ref}..${branch}"
+    fi
+  fi
+
+  subjects="$(git -C "$repo" log --format='%s' "$rev_range" 2>/dev/null || true)"
   if grep -qE "^Merge session ${padded} \(" <<<"$subjects"; then
     return 0
   fi

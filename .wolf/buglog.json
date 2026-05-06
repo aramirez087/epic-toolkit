@@ -1460,6 +1460,47 @@
       "related_bugs": [],
       "occurrences": 2,
       "last_seen": "2026-05-06T17:17:03.741Z"
+    },
+    {
+      "id": "bug-079",
+      "timestamp": "2026-05-06T17:25:03.658Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 16→35 lines (2 removed) | Also: if [[ -n \"${BASE_BRANCH:-}\" ]] \\; && git -C \"$repo\" rev-parse --verify --quiet \"$BAS",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T17:25:29.390Z"
+    },
+    {
+      "id": "bug-080",
+      "timestamp": "2026-05-06T17:30:00.000Z",
+      "error_message": "User reported epic runner skipped all session execution: '✓ session 0N already committed on this branch — skipping (use --fresh to force re-run)' for every session on a fresh epic run, total runtime 18 seconds, no code produced. The epic created worktrees, synced session prompts, made the bootstrap commit, then immediately reported every session as 'already committed' and merged only the bootstrap before exiting. --fresh worked around it.",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "session_completed_on_branch ran `git log --format='%s' \"$branch\"` over the entire branch history. The per-session worktree (created at run-sessions.sh:860 from $BRANCH, which was just branched off $BASE_BRANCH at line 611) inherits the full base-branch history. A single commit anywhere on main whose subject begins with 'feat: Session N' or 'Merge session NN (' — common when a previously-merged epic of the same family is in main, or any unrelated commit happens to use a session-style subject — falsely matched the resume-cache regex for every session, so every run_one_session call returned early before invoking Claude. The bug fires on the very first run with no prior epic state at all; nothing in the workflow signals to the user that the cache check is poisoned by inherited history.",
+      "fix": "Scope the subject scan to commits unique to the epic by using rev range `${BASE_BRANCH}..${branch}` instead of bare `$branch`. Falls back to `origin/$BASE_BRANCH..` when only the remote-tracking ref exists locally, and to the legacy unscoped scan when neither resolves so we never harden into a worse failure mode. Verified with two scenarios: (a) main carrying a poison `feat: Session 1 — old work` commit no longer triggers a false skip, and (b) a real `feat: Session 1` commit made on the epic branch is still detected as completed for legitimate resume.",
+      "tags": [
+        "user-reported",
+        "found-by-bug-hunt",
+        "sh",
+        "git",
+        "cache",
+        "silent-failure",
+        "resume",
+        "epic-runner"
+      ],
+      "related_bugs": [
+        "bug-033",
+        "bug-036",
+        "bug-075"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:30:00.000Z"
     }
   ]
 }

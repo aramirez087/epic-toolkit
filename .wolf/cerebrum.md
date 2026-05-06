@@ -49,6 +49,7 @@
 - [2026-05-06] Do not kill backgrounded session subshells with `kill -9 <pid>` alone — this leaves the claude/python children running as orphans. Always `pkill -9 -P <pid>` the children first, then kill the subshell. (bug-063)
 - [2026-05-06] Do not add lock-file acquisition loops (O_CREAT|O_EXCL) without a stale-lock age check. Any process can be SIGKILL'd while holding the lock; without the check, all subsequent callers silently give up after a timeout, freezing the UI for the rest of the run. Always mirror the STALE_LOCK_SECS pattern from mark_session. (bug-064)
 - [2026-05-06] Do not assume cleanup runs before every `exit`. The EXIT trap is the only reliable hook. Always put UI and job teardown in the trap, not just in a pre-exit block, so new exit paths added later don't accidentally skip them. (bug-065)
+- [2026-05-06] Do not run `git log --format='%s' <branch>` to detect "session already done on this branch" without scoping to the rev range above the base branch. A bare-branch scan walks the entire base history; one commit on `main` matching `^feat: Session N` or `^Merge session NN (` (a previously-merged epic, or any unrelated session-style subject) silently makes every session skip Claude execution on a fresh run. Use `${BASE_BRANCH}..${branch}` (with `origin/$BASE_BRANCH` fallback) so only commits unique to the epic are inspected. (bug-080)
 
 ## Decision Log
 
