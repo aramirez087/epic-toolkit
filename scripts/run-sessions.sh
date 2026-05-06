@@ -344,7 +344,28 @@ UI_SCRIPT="$(dirname "$0")/epic-ui.py"
 
 # --- Build the DAG plan ---
 DAG_TMP="$(mktemp)"
-trap '_exit_rc=$?; [[ -n "${UI_PID:-}" ]] && kill "${UI_PID}" 2>/dev/null || true; rm -f "${DAG_TMP:-}"; exit $_exit_rc' EXIT
+
+# Global arrays declared before the EXIT trap so the handler can always see them,
+# even when the script aborts before the wave loop initialises them per-wave.
+JOB_PIDS=()
+JOB_SIDS=()
+
+# EXIT handler — cleans up in-flight session subshells, UI, and temp files.
+# Mirrors the wave-timeout kill logic (bug-063 / bug-065): pkill -P kills
+# claude/python children before we kill the parent subshell, so no orphans
+# remain if the runner aborts mid-wave via set -e, SIGINT, or external kill.
+_on_exit() {
+  local _rc=$?
+  for _tp in "${JOB_PIDS[@]:-}"; do
+    [[ -n "$_tp" ]] || continue
+    pkill -9 -P "$_tp" 2>/dev/null || true
+    kill -9 "$_tp" 2>/dev/null || true
+  done
+  [[ -n "${UI_PID:-}" ]] && kill "${UI_PID}" 2>/dev/null || true
+  rm -f "${DAG_TMP:-}"
+  exit "$_rc"
+}
+trap '_on_exit' EXIT
 
 DAG_ARGS=()
 $STRICT && ! $SEQUENTIAL && DAG_ARGS+=(--strict)
@@ -537,11 +558,11 @@ if [[ -d "$WORKTREE_BASE" ]]; then
   done < "$DAG_TMP"
 
   cleaned_count=0
-  for stale_wt in "$WORKTREE_BASE/${BRANCH_SANITIZED}--s"[0-9][0-9]-*; do
+  for stale_wt in "$WORKTREE_BASE/${BRANCH_SANITIZED}--s"[0-9]*-*; do
     [[ ! -d "$stale_wt" ]] && continue
 
-    # Extract session ID from worktree name
-    if [[ "$(basename "$stale_wt")" =~ --s([0-9][0-9])- ]]; then
+    # Extract session ID from worktree name; [0-9]+ matches 2- and 3-digit ids.
+    if [[ "$(basename "$stale_wt")" =~ --s([0-9]+)- ]]; then
       stale_id="${BASH_REMATCH[1]}"
       # Remove leading zero for comparison
       stale_id="$((10#$stale_id))"

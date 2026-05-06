@@ -52,15 +52,16 @@ provision_wolf_merge() {
   mkdir -p "$wolf_dir/scripts" "$repo_root/scripts"
 
   # Sync each bundled asset; only log when contents actually change.
+  # chmod +x runs unconditionally — it is idempotent and ensures the +x bit
+  # is always present even when file content was already up-to-date
+  # (e.g. after archive extraction that strips exec bits).
   _wolf_sync_file() {
     local src="$1" dst="$2"
     if [[ ! -f "$dst" ]] || ! cmp -s "$src" "$dst"; then
       cp "$src" "$dst"
-      chmod +x "$dst"
       provisioned=$((provisioned + 1))
-      return 0
     fi
-    return 1
+    chmod +x "$dst" 2>/dev/null || true
   }
 
   _wolf_sync_file "$toolkit_assets/merge-wolf-json.py" "$wolf_dir/scripts/merge-wolf-json.py" || true
@@ -85,7 +86,10 @@ provision_wolf_merge() {
   fi
 
   # Register the wolf-json driver in local git config (idempotent, fast).
-  if [[ -x "$wolf_dir/scripts/install-merge-driver.sh" ]]; then
+  # Guard on -f (file exists), not -x (executable): bash does not require +x
+  # to read a script, and _wolf_sync_file's chmod +x may not have run yet on
+  # this call (e.g. content unchanged but git config drifted).
+  if [[ -f "$wolf_dir/scripts/install-merge-driver.sh" ]]; then
     bash "$wolf_dir/scripts/install-merge-driver.sh" 2>/dev/null || true
   fi
 
