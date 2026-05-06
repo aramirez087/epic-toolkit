@@ -136,3 +136,24 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 21:09 | Edited scripts/run-sessions.sh | modified is_worktree_in_use() | ~388 |
+| 21:09 | Edited scripts/run-sessions.sh | 19→15 lines | ~212 |
+| 21:09 | Edited scripts/run-sessions.sh | modified add_merged_session() | ~213 |
+| 21:09 | Edited scripts/run-sessions.sh | 4→4 lines | ~41 |
+| 21:09 | Edited scripts/run-sessions.sh | 2→2 lines | ~42 |
+| 21:09 | Edited scripts/run-sessions.sh | 3→3 lines | ~31 |
+| 21:09 | Edited scripts/run-sessions.sh | 16→21 lines | ~181 |
+| 21:10 | Session end: 7 writes across 1 files (run-sessions.sh) | 1 reads | ~3263 tok |
+| 21:11 | Session end: 7 writes across 1 files (run-sessions.sh) | 1 reads | ~3263 tok |
+
+## Session: 2026-05-06 21:11
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:20 | Created scripts/lib/epic-git.sh | — | ~2964 |
+| 21:20 | Created scripts/lib/epic-wave.sh | — | ~650 |
+| 21:21 | Created scripts/lib/epic-result.sh | — | ~2251 |
+| 21:23 | Created scripts/lib/epic-session.sh | — | ~4764 |
+| 21:28 | Created scripts/run-sessions.sh | — | ~12278 |
+| 21:29 | refactor: split run-sessions.sh (2183→1146 lines) into scripts/lib/{epic-git,epic-session,epic-result,epic-wave}.sh | scripts/run-sessions.sh scripts/lib/ | syntax OK, all 19 functions extracted | ~14000 tok |
+| 21:29 | Session end: 5 writes across 5 files (epic-git.sh, epic-wave.sh, epic-result.sh, epic-session.sh, run-sessions.sh) | 1 reads | ~47341 tok |
