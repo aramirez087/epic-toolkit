@@ -167,8 +167,10 @@ run_cli() {
     session_cli="${SESSION_CLI_BY_ID[$sid]}"
     # Re-map model if CLI changed (e.g. session overrides cli from opencode to claude
     # or vice versa — model shorthand depends on which CLI is in use).
-    # Remap whether model was explicitly overridden or is using the default.
-    local raw_model_for_remap="${SESSION_MODEL_BY_ID[$sid]:-$MODEL}"
+    # Fall back to MODEL_RAW (the user-supplied form before the global map) so
+    # we don't feed the opencode-style id `opencode/claude-sonnet-4` to claude
+    # when the global cli was opencode but this session forces cli: claude.
+    local raw_model_for_remap="${SESSION_MODEL_BY_ID[$sid]:-${MODEL_RAW:-$MODEL}}"
     session_model="$(map_model_shorthand "$raw_model_for_remap" "$session_cli")"
   fi
 

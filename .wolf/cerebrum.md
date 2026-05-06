@@ -39,6 +39,10 @@
 - [2026-05-06] Do not implement `--sequential` by only setting `MAX_PARALLEL=1`. That serializes process launch but leaves original DAG waves intact, so same-wave sessions still branch from the same trunk head and merge only after the wave. Flatten to one session per wave or merge after each serial session. (bug-037)
 - [2026-05-06] Do not use GNU-only `timeout` unguarded in macOS-supported shell paths. Probe `timeout`/`gtimeout` first or run the command directly as a fallback. The auto-commit fallback currently skips commits on stock Darwin. (bug-038)
 - [2026-05-06] Do not run repo-mutating setup before preview exits (`--dry-run`, `--show-dag`). Even "helpful" provisioning violates preview guarantees and can create untracked files during validation. Gate side effects behind real execution. (bug-039)
+- [2026-05-06] Do not put `ps` probes in bare command substitutions under `set -e` when "no row" is an expected state. `pstate="$(ps ...)"` exits the runner before the empty-state branch can wait/reap a vanished child. Add `|| true` or use an explicit conditional. (bug-043)
+- [2026-05-06] Do not let `run-sessions.sh` proceed when the sessions directory is outside the repo selected from the current working directory. Validate before OpenWolf provisioning, branch creation, or worktree setup, and exit on mismatch. (bug-044)
+- [2026-05-06] Do not continue merging later siblings in a wave after a non-auto-resolvable merge conflict. Once `EPIC_FAILED=true`, break the sibling merge loop so trunk does not advance past the first failed session. (bug-045)
+- [2026-05-06] Do not define path variables only in the default worktree path when cleanup also runs in `--no-worktree` mode. Shared cleanup needs a relative sessions path assigned before the mode split. (bug-046)
 
 ## Decision Log
 

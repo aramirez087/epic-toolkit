@@ -244,6 +244,13 @@ map_model_shorthand() {
   fi
 }
 
+# Preserve the user-supplied (un-mapped) model so per-session cli overrides
+# can re-derive the correct CLI-specific id. Without this, a session that
+# overrides `cli: claude` on a global `--cli opencode --model sonnet` run
+# inherits the already-mapped `opencode/claude-sonnet-4` and passes it to
+# Claude, which rejects the unknown model id. map_model_shorthand is a
+# one-way transform once `model != */*` no longer holds.
+MODEL_RAW="$MODEL"
 MODEL="$(map_model_shorthand "$MODEL" "$CLI_CMD")"
 
 # Resolve python interpreter. On Windows, `python3` is often a Microsoft Store
@@ -286,6 +293,19 @@ unset _LIB_DIR
 # See epic-git.sh for the rationale on why _realpath is necessary.
 REPO_ROOT="$(_realpath "$(cd "$(git rev-parse --show-toplevel)" && pwd)")"
 ORIG_REPO_ROOT="$REPO_ROOT"
+ORIG_SESSIONS_DIR="$(_realpath "$SESSIONS_DIR")"
+
+# The runner mutates the repo selected by the current working directory
+# (branches, worktrees, OpenWolf provisioning). Refuse a sessions directory
+# from another repo before any of those side effects can happen.
+if [[ "$ORIG_SESSIONS_DIR" != "$ORIG_REPO_ROOT"/* ]]; then
+  err "Sessions dir is not under the current git repo.
+  repo root    : $ORIG_REPO_ROOT
+  sessions dir : $ORIG_SESSIONS_DIR
+Run the command from the repository that owns the sessions directory, or pass a sessions path inside this repo."
+  exit 1
+fi
+ORIG_SESSIONS_REL="${ORIG_SESSIONS_DIR#$ORIG_REPO_ROOT/}"
 
 # Auto-provision .wolf/ merge auto-resolution if the repo uses OpenWolf.
 # Preview modes must stay read-only; dry-run/show-dag exit before worktree
@@ -293,7 +313,6 @@ ORIG_REPO_ROOT="$REPO_ROOT"
 if ! $DRY_RUN && ! $SHOW_DAG; then
   provision_wolf_merge "$REPO_ROOT"
 fi
-ORIG_SESSIONS_DIR="$(_realpath "$SESSIONS_DIR")"
 EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 
 if [[ -z "$BRANCH" ]]; then
@@ -554,7 +573,7 @@ if $USE_WORKTREE; then
   REPO_ROOT="$TRUNK_WORKTREE_DIR"
 
   # Mirror sessions dir into trunk if absent (uncommitted-source case).
-  TRUNK_SESSIONS_REL="${ORIG_SESSIONS_DIR#$ORIG_REPO_ROOT/}"
+  TRUNK_SESSIONS_REL="$ORIG_SESSIONS_REL"
   # Guard: if the strip was a no-op, the paths didn't share a prefix — almost
   # always a case mismatch on a case-insensitive filesystem (macOS). Fail fast
   # with a clear message rather than building a malformed //abs/path/inside/dir.
@@ -565,6 +584,7 @@ if $USE_WORKTREE; then
 Possible cause: case mismatch on a case-insensitive filesystem (macOS APFS/HFS+).
 Install GNU coreutils ('brew install coreutils') to enable reliable realpath resolution,
 or ensure the sessions dir path uses the same case as the repo root."
+    exit 1
   fi
   TRUNK_SESSIONS_DIR="$TRUNK_WORKTREE_DIR/$TRUNK_SESSIONS_REL"
   # Always sync session files from the source — overwrite stale copies that
@@ -605,6 +625,7 @@ else
   fi
   TRUNK_WORKTREE_DIR="$REPO_ROOT"
   TRUNK_SESSIONS_DIR="$SESSIONS_DIR"
+  TRUNK_SESSIONS_REL="$ORIG_SESSIONS_REL"
 fi
 
 # --- Run mode ---
@@ -898,6 +919,7 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null
               git -C "$TRUNK_WORKTREE_DIR" merge --abort 2>/dev/null || true
               EPIC_FAILED=true
               [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
+              break
             fi
           fi
         else

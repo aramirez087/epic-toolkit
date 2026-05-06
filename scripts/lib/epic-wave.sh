@@ -32,7 +32,7 @@ reap_finished_jobs() {
     # child whose status we haven't yet collected. Reading the process state
     # column distinguishes them: empty = vanished, leading 'Z' = zombie.
     local pstate
-    pstate="$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ')"
+    pstate="$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
     if [[ -z "$pstate" || "$pstate" == Z* ]]; then
       local rc=0
       wait "$pid" || rc=$?

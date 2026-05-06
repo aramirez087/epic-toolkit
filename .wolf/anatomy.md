@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T04:13:47.962Z
-> Files: 32 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T04:35:26.534Z
+> Files: 36 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -25,23 +25,26 @@
 - `LICENSE` — Project license (~290 tok)
 - `README.md` — Project documentation (~1005 tok)
 
-## .wolf/
-
-- `OPENWOLF.md` — OpenWolf operating protocol and mandatory memory/bug logging rules (~1638 tok)
-- `anatomy.md` — Project file map with token estimates (~496 tok)
-- `buglog.json` — OpenWolf bug registry (~1135 tok tail read)
-- `cerebrum.md` — Project memory, key learnings, and do-not-repeat notes (~1566 tok)
-- `memory.md` — Session action log (~337 tok tail read)
-
 ## .claude-plugin/
 
 - `marketplace.json` (~95 tok)
 - `plugin.json` (~122 tok)
 
+## .opencode/
+
+- `package-lock.json` — OpenCode dependency lockfile (~2600 tok)
+- `package.json` — OpenCode package metadata (~80 tok)
+
 ## .opencode/commands/
 
 - `epic.generate.md` — OpenCode /epic.generate command (~2477 tok)
 - `epic.md` — Validate (~769 tok)
+
+## .wolf/
+
+- `anatomy.md` — Project file map with token estimates (~496 tok)
+- `cerebrum.md` — Project memory, key learnings, and do-not-repeat notes (~1566 tok)
+- `OPENWOLF.md` — OpenWolf operating protocol and mandatory memory/bug logging rules (~1638 tok)
 
 ## commands/
 
@@ -55,15 +58,22 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~4419 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~4533 tok)
 - `epic-poll-progress.py` — Polling-based progress fallback (~2076 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4344 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~12379 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~13160 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3021 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2251 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5428 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5623 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~650 tok)
+
+## scripts/wolf-merge/
+
+- `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
+- `install-merge-driver.sh` — Installs local git merge driver for OpenWolf JSON metadata (~400 tok)
+- `merge-wolf-json.py` — Custom JSON merge driver for OpenWolf metadata files (~850 tok)
+- `resolve-wolf.sh` — Helper for resolving in-progress OpenWolf-only merge/rebase conflicts (~650 tok)

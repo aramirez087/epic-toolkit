@@ -281,6 +281,13 @@ def globs_overlap(a_globs: list[str], b_globs: list[str]) -> bool:
     def _stem(g: str) -> str:
         return g.split("**")[0].rstrip("/").rstrip("*")
 
+    def _is_under(child: str, parent: str) -> bool:
+        # Anchor on the path separator so sibling directories that share a
+        # name prefix (e.g. `src/foo` vs `src/foo-extra`) are not falsely
+        # flagged as overlapping. Same class as the bug-022/bug-033 literal-
+        # prefix glob bugs in run-sessions.sh.
+        return child == parent or child.startswith(parent + "/")
+
     for ag in a_globs:
         for bg in b_globs:
             if ag == bg:
@@ -288,7 +295,7 @@ def globs_overlap(a_globs: list[str], b_globs: list[str]) -> bool:
             if fnmatch.fnmatch(ag, bg) or fnmatch.fnmatch(bg, ag):
                 return True
             ap, bp = _stem(ag), _stem(bg)
-            if ap and bp and (ap.startswith(bp) or bp.startswith(ap)):
+            if ap and bp and (_is_under(ap, bp) or _is_under(bp, ap)):
                 return True
     return False
 

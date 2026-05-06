@@ -207,3 +207,16 @@
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
 | 22:24 | Completed cross-platform bug fixes and verification pass | scripts/run-sessions.sh, scripts/lib/epic-session.sh | bash -n, JSON validation, sequential/strict dry-run fixtures passed | ~43000 tok |
+| 22:29 | Loaded OpenWolf guidance, checked buglog/status/file map for bug hunt | .wolf/OPENWOLF.md, .wolf/anatomy.md, .wolf/cerebrum.md, .wolf/buglog.json | proceeding with focused review; existing dirty hook file left untouched | ~8000 tok |
+| 22:36 | Bug hunt found reaper set-e exit, wrong-repo sessions side effects, and merge-loop continuation after conflict | scripts/lib/epic-wave.sh, scripts/run-sessions.sh, .wolf/anatomy.md, .wolf/buglog.json, .wolf/cerebrum.md | logged bugs 043-045; cleaned temporary branch/provisioning artifacts from repro | ~36000 tok |
+| 22:45 | Patched bug hunt findings and no-worktree cleanup blocker | scripts/lib/epic-wave.sh, scripts/run-sessions.sh, .wolf/buglog.json, .wolf/cerebrum.md | bash/python syntax OK; vanished-child, no-worktree, and external-sessions repros verified | ~43000 tok |
+| 22:40 | Normalized changed epic-dag hunk line endings after diff-check warning | scripts/epic-dag.py | git diff --check passed without whole-file line-ending churn | ~1000 tok |
+| 22:35 | Edited scripts/run-sessions.sh | expanded (+7 lines) | ~132 |
+| 22:35 | Edited scripts/lib/epic-session.sh | 8→10 lines | ~179 |
+| 22:35 | Edited scripts/epic-dag.py | modified globs_overlap() | ~306 |
+| 22:36 | Session end: 3 writes across 3 files (run-sessions.sh, epic-session.sh, epic-dag.py) | 10 reads | ~38554 tok |
+
+## Session: 2026-05-06 22:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

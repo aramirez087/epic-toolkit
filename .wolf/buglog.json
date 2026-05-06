@@ -584,8 +584,19 @@
       "file": "scripts/lib/epic-git.sh",
       "root_cause": "Line 201 used `grep -qF \"branch refs/heads/$br\"` against the `git worktree list --porcelain` output. `grep -F` matches the fixed string ANYWHERE on the line, so the search for `branch refs/heads/epic/foo` succeeds against the line `branch refs/heads/epic/foo-bar` (substring containment). The guard intended whole-line equality but didn't anchor.",
       "fix": "Applied. Changed to `grep -qFx`, which requires whole-line match. Verified with a porcelain fixture: epic/foo is no longer flagged when only epic/foo-bar is in the worktree; legitimate same-branch matches still detect correctly.",
-      "tags": ["worktree", "branch-cleanup", "grep", "substring-match", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-022", "bug-028", "bug-031"],
+      "tags": [
+        "worktree",
+        "branch-cleanup",
+        "grep",
+        "substring-match",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-022",
+        "bug-028",
+        "bug-031"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -596,8 +607,19 @@
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "The awk used a single `fm_done` flag set to 1 at the closing `---`, then `fm_done && /^# / { fm_done=0; next }` to swallow the title. Because intermediate non-`# ` content (description text, blank lines) didn't reset the flag, the swallow rule fired against the first `# ` heading encountered no matter how far into the body it appeared.",
       "fix": "Applied. Replaced the single fm_done flag with `awaiting_title` that is true only between the closing `---` and the first non-blank body line. Blank lines within the window are preserved; a `# ` heading in the window is stripped (the title); any other content closes the window so later `# Heading` lines pass through unchanged. Verified with two fixtures: (a) no-title body keeps `# Implementation Notes`; (b) with-title body strips the title but keeps later `# Section A`.",
-      "tags": ["prompt-extraction", "awk", "title-strip", "silent-truncation", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-023", "bug-029", "bug-032"],
+      "tags": [
+        "prompt-extraction",
+        "awk",
+        "title-strip",
+        "silent-truncation",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-023",
+        "bug-029",
+        "bug-032"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -608,8 +630,18 @@
       "file": "scripts/epic-dag.py",
       "root_cause": "Line 135 used `with open(path) as f:` — no explicit `encoding=` arg. Python 3.x picks `locale.getpreferredencoding(False)` for that mode, which is platform/locale dependent. Other open() sites in the script (the inline init in run-sessions.sh, mark_session, write_epic_result) already pass `encoding='utf-8'`; this one was missed.",
       "fix": "Applied. Added `encoding=\"utf-8\"` to the `open(path)` call. Verified: `PYTHONUTF8=0 LANG=C LC_ALL=C python3 scripts/epic-dag.py <dir> --bash` now succeeds on a session file containing `Café — résumé`, where before it raised UnicodeDecodeError mid-parse.",
-      "tags": ["unicode", "encoding", "windows", "locale", "python", "found-by-bug-hunt"],
-      "related_bugs": ["bug-024", "bug-029"],
+      "tags": [
+        "unicode",
+        "encoding",
+        "windows",
+        "locale",
+        "python",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-024",
+        "bug-029"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -620,7 +652,13 @@
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "rc is initialized once before the retry loop. When an attempt sets rc=1, the next loop iteration never resets rc to 0 before planning. The execute pass is gated by `if [[ $rc -eq 0 ]]`, so a successful retry plan can still skip execution, and the break condition continues to see the stale failure.",
       "fix": "Applied. Reset rc to 0 at the start of each retry-loop iteration so a failed attempt cannot poison the next attempt. Verified with shell syntax checks.",
-      "tags": ["retry", "session-runner", "stale-state", "sh", "found-by-bug-hunt"],
+      "tags": [
+        "retry",
+        "session-runner",
+        "stale-state",
+        "sh",
+        "found-by-bug-hunt"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:24:02Z"
@@ -632,7 +670,13 @@
       "file": "scripts/run-sessions.sh",
       "root_cause": "The flag changes throttling only. The DAG plan remains grouped into the original waves, and the wave loop merges children after all sessions in IN_RANGE are spawned/reaped. Serially throttled siblings therefore do not see prior siblings' commits.",
       "fix": "Applied. Rewrote the effective bash plan when --sequential is set so each session becomes its own synthetic wave, updates WAVE_IDS/SESSION_WAVE_OF/WAVE_COUNT, and makes show-dag/dry-run/banner render the effective sequential plan. Also bypassed strict sibling-overlap validation in sequential mode because there are no sibling waves after flattening. Verified with fixtures: normal dry-run shows 2 waves; --sequential dry-run shows 3 one-session waves; --sequential --strict passes overlapping touches while --strict without sequential fails.",
-      "tags": ["sequential", "dag", "worktree", "merge-order", "found-by-bug-hunt"],
+      "tags": [
+        "sequential",
+        "dag",
+        "worktree",
+        "merge-order",
+        "found-by-bug-hunt"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:24:02Z"
@@ -644,7 +688,13 @@
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "run_cli guards optional session timeouts with `command -v timeout`, but the auto-commit fallback calls `timeout 60 git commit` directly. On Darwin/BSD shells without coreutils, that command returns 127 and the fallback commit is skipped.",
       "fix": "Applied. Added gtimeout support for session timeouts and changed the auto-commit fallback to use timeout/gtimeout when available, otherwise run git commit directly. Verified the empty timeout-wrapper expansion under bash -euo pipefail on stock macOS where neither timeout nor gtimeout is present.",
-      "tags": ["macos", "timeout", "auto-commit", "portability", "found-by-bug-hunt"],
+      "tags": [
+        "macos",
+        "timeout",
+        "auto-commit",
+        "portability",
+        "found-by-bug-hunt"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:24:02Z"
@@ -656,10 +706,128 @@
       "file": "scripts/run-sessions.sh",
       "root_cause": "provision_wolf_merge ran immediately after REPO_ROOT resolution, before the show-dag/dry-run exits. Preview modes therefore mutated the repo before reaching the no-side-effects block.",
       "fix": "Applied. Wrapped provision_wolf_merge so it only runs when neither DRY_RUN nor SHOW_DAG is active. Removed the untracked files created by the verification run and re-ran the sequential dry-run fixture, confirming git status stayed unchanged.",
-      "tags": ["dry-run", "show-dag", "side-effects", "openwolf", "sh", "found-during-fix"],
-      "related_bugs": ["bug-037"],
+      "tags": [
+        "dry-run",
+        "show-dag",
+        "side-effects",
+        "openwolf",
+        "sh",
+        "found-during-fix"
+      ],
+      "related_bugs": [
+        "bug-037"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:24:02Z"
+    },
+    {
+      "id": "bug-040",
+      "timestamp": "2026-05-06T04:35:19.031Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→10 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:35:19.031Z"
+    },
+    {
+      "id": "bug-041",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "Per-session `cli: claude` overrides silently passed an OpenCode-style model id to the Claude CLI when the global run was `--cli opencode --model sonnet`. Claude rejects `--model opencode/claude-sonnet-4` (unknown model), and the session fails with no obvious link to the cli swap. Reverse direction (claude→opencode) worked because the global MODEL was still in shorthand form.",
+      "file": "scripts/run-sessions.sh, scripts/lib/epic-session.sh",
+      "root_cause": "run-sessions.sh:247 mutated MODEL in place via `MODEL=\"$(map_model_shorthand \"$MODEL\" \"$CLI_CMD\")\"`, so by the time run_cli's per-session remap ran, the user-supplied shorthand was already gone. The bug-016 fallback `${SESSION_MODEL_BY_ID[$sid]:-$MODEL}` then handed the already-mapped `opencode/claude-sonnet-4` to map_model_shorthand for cli=claude, which is a no-op for non-opencode targets. The mapping function is one-way once the model contains a `/`.",
+      "fix": "Applied. Snapshot the un-mapped value into MODEL_RAW before the global remap, and use `${SESSION_MODEL_BY_ID[$sid]:-${MODEL_RAW:-$MODEL}}` in the per-session cli-override branch so the shorthand is re-mapped against the new cli. Verified with five fixtures covering both directions, model-only override, cli-only override, and the no-override baseline — every case now produces a cli-correct model id.",
+      "tags": [
+        "model-mapping",
+        "cli-override",
+        "session-config",
+        "opencode",
+        "claude",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-016",
+        "bug-040"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-042",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "epic-dag.py --strict false-positives on sibling directories whose names share a prefix. Two sessions declaring `touches: [src/foo/**]` and `touches: [src/foo-extra/**]` are flagged as overlapping and (with --strict) the run aborts with exit 2, even though no path is reachable from both globs. Same class as the bug-022 / bug-033 literal-prefix glob bugs in the bash side.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "globs_overlap()'s _stem comparison used `ap.startswith(bp) or bp.startswith(ap)` against directory stems with no separator anchoring. `src/foo-extra`.startswith(`src/foo`) returns True, so the stems are deemed overlapping despite living in disjoint dirs.",
+      "fix": "Applied. Replaced the bare startswith with `_is_under(child, parent)` that requires either equality or `child.startswith(parent + '/')` — anchored on the path separator. Verified with five fixtures: prefix-shared siblings (now NO overlap), real subdir (still overlaps), exact match (still overlaps), unrelated dirs (no overlap), and `api/**` vs `api-v2/**` regression (no overlap).",
+      "tags": [
+        "strict-mode",
+        "touches-overlap",
+        "globs",
+        "literal-prefix",
+        "python",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-022",
+        "bug-033"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-043",
+      "timestamp": "2026-05-06T04:36:13Z",
+      "error_message": "Fast-finishing session jobs can make run-sessions.sh exit with rc=1 while leaving the session status stuck at running. Minimal repro: under `set -euo pipefail`, `pstate=\"$(ps -o state= -p \"$pid\" 2>/dev/null | tr -d ' ')\"` exits the shell when `ps` returns no row for an already-finished child.",
+      "file": "scripts/lib/epic-wave.sh",
+      "root_cause": "reap_finished_jobs intends an empty ps result to mean the child vanished and should be waited, but the command substitution is a bare assignment under `set -e`. When `ps` returns nonzero, the shell exits before the subsequent `[[ -z \"$pstate\" || \"$pstate\" == Z* ]]` check can run.",
+      "fix": "Applied. Guarded the ps pipeline with `|| true` so vanished children fall through to the existing wait/reap path. Verified with a minimal `set -euo pipefail` repro and a disposable fast-finishing --no-worktree epic run.",
+      "tags": ["reap", "set-e", "ps", "fast-session", "sh", "found-by-bug-hunt"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:45:00Z"
+    },
+    {
+      "id": "bug-044",
+      "timestamp": "2026-05-06T04:36:13Z",
+      "error_message": "Running run-sessions.sh from repo A with a sessions directory in repo B can mutate repo A: it provisions OpenWolf files and can create/switch an epic branch before discovering the sessions path does not belong under the selected repo.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "REPO_ROOT is resolved from the current working directory, not from the sessions directory. The only under-repo guard is inside trunk worktree setup after provisioning side effects, and that guard prints `err` without exiting.",
+      "fix": "Applied. Resolve and validate `ORIG_SESSIONS_DIR` under `ORIG_REPO_ROOT` before OpenWolf provisioning, branch creation, or worktree setup; exit nonzero on mismatch. Also added a defensive exit to the later canonicalization guard. Verified an external sessions path exits rc=1 and leaves the branch unchanged.",
+      "tags": ["wrong-repo", "sessions-dir", "side-effects", "openwolf", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-039"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:45:00Z"
+    },
+    {
+      "id": "bug-045",
+      "timestamp": "2026-05-06T04:36:13Z",
+      "error_message": "If one successful sibling hits a non-auto-resolvable merge conflict, the wave merge loop sets EPIC_FAILED but continues iterating and may merge later sibling branches into trunk before halting.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The merge-conflict branch sets `EPIC_FAILED=true` and `FIRST_FAILED_ID`, then falls out of the case block without breaking the `for sid in IN_RANGE` loop. The halt check runs only after every sibling has been considered.",
+      "fix": "Applied. Added an immediate `break` after a non-auto-resolved merge conflict sets EPIC_FAILED, preventing later siblings in the same wave from being merged after the first conflict. Verified shell syntax.",
+      "tags": ["merge-conflict", "wave", "sibling-merge", "resume", "sh", "found-by-bug-hunt"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:45:00Z"
+    },
+    {
+      "id": "bug-046",
+      "timestamp": "2026-05-06T04:45:00Z",
+      "error_message": "--no-worktree successful runs can reach cleanup with TRUNK_SESSIONS_REL unset, causing `set -u` to abort at the session scaffolding cleanup step.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "TRUNK_SESSIONS_REL was assigned only inside the worktree setup branch. The --no-worktree branch set TRUNK_SESSIONS_DIR but never populated the relative path later used by cleanup for `_EPIC_SLUG`, git rm, and rm -rf.",
+      "fix": "Applied. Compute ORIG_SESSIONS_REL once after validating the sessions directory and assign TRUNK_SESSIONS_REL in both worktree and --no-worktree paths. Verified a disposable --no-worktree run completes rc=0 and performs cleanup.",
+      "tags": ["no-worktree", "cleanup", "set-u", "sessions-dir", "sh", "found-during-fix"],
+      "related_bugs": ["bug-043", "bug-044"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:45:00Z"
     }
   ]
 }
