@@ -288,7 +288,11 @@ REPO_ROOT="$(_realpath "$(cd "$(git rev-parse --show-toplevel)" && pwd)")"
 ORIG_REPO_ROOT="$REPO_ROOT"
 
 # Auto-provision .wolf/ merge auto-resolution if the repo uses OpenWolf.
-provision_wolf_merge "$REPO_ROOT"
+# Preview modes must stay read-only; dry-run/show-dag exit before worktree
+# setup, so provisioning is only needed for real execution.
+if ! $DRY_RUN && ! $SHOW_DAG; then
+  provision_wolf_merge "$REPO_ROOT"
+fi
 ORIG_SESSIONS_DIR="$(_realpath "$SESSIONS_DIR")"
 EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 
@@ -315,7 +319,7 @@ DAG_TMP="$(mktemp)"
 trap 'rm -f "$DAG_TMP"' EXIT
 
 DAG_ARGS=()
-$STRICT && DAG_ARGS+=(--strict)
+$STRICT && ! $SEQUENTIAL && DAG_ARGS+=(--strict)
 
 if [[ ${#DAG_ARGS[@]} -gt 0 ]]; then
   "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --bash "${DAG_ARGS[@]}" > "$DAG_TMP" || {
@@ -374,6 +378,71 @@ if [[ -z "$OPERATOR_PATH" || "$WAVE_COUNT" -eq 0 ]]; then
   exit 1
 fi
 
+# --sequential means one session per merge boundary, not just one process at a
+# time. Rewriting the effective plan keeps the wave loop unchanged while making
+# each session branch from trunk after the previous synthetic wave has merged.
+show_effective_dag() {
+  local _show_wn _show_ids _show_sid
+  if ! $SEQUENTIAL; then
+    "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+    return
+  fi
+
+  echo "Sessions: ${#SESSION_SLUG_BY_ID[@]} across $WAVE_COUNT wave(s)"
+  for (( _show_wn=1; _show_wn<=WAVE_COUNT; _show_wn++ )); do
+    _show_ids="${WAVE_IDS[$_show_wn]:-}"
+    _show_ids="$(echo "$_show_ids" | xargs)"
+    [[ -z "$_show_ids" ]] && continue
+    for _show_sid in $_show_ids; do
+      printf "  ║ Wave %d: [%02d %s]\n" \
+        "$_show_wn" "$_show_sid" "${SESSION_SLUG_BY_ID[$_show_sid]}"
+    done
+  done
+}
+
+if $SEQUENTIAL; then
+  _seq_tmp="$(mktemp)"
+  _old_wave_count="$WAVE_COUNT"
+  _new_wave=0
+  declare -a _SEQ_WAVE_IDS
+  declare -a _SEQ_SESSION_WAVE_OF
+  {
+    echo "META operator_path=$OPERATOR_PATH"
+    echo "META operator_file=$(basename "$OPERATOR_PATH")"
+    echo "META wave_count=${#SESSION_SLUG_BY_ID[@]}"
+    echo "META any_frontmatter=$ANY_FRONTMATTER"
+    for (( _old_wn=1; _old_wn<=_old_wave_count; _old_wn++ )); do
+      _ids="${WAVE_IDS[$_old_wn]:-}"
+      _ids="$(echo "$_ids" | xargs)"
+      [[ -z "$_ids" ]] && continue
+      for _sid in $_ids; do
+        _new_wave=$((_new_wave + 1))
+        _SEQ_WAVE_IDS[$_new_wave]="$_sid"
+        _SEQ_SESSION_WAVE_OF[$_sid]="$_new_wave"
+        echo "WAVE $_new_wave 1"
+        printf 'SESSION %s %s %s %s %s %s %s %s\n' \
+          "$_new_wave" "$_sid" "${SESSION_FILE_BASENAME[$_sid]}" \
+          "${SESSION_DEPS_BY_ID[$_sid]}" "${SESSION_SLUG_BY_ID[$_sid]}" \
+          "${SESSION_PARALLEL[$_sid]}" "${SESSION_MODEL_BY_ID[$_sid]:-}" \
+          "${SESSION_CLI_BY_ID[$_sid]:-}"
+      done
+    done
+  } > "$_seq_tmp"
+  mv "$_seq_tmp" "$DAG_TMP"
+  WAVE_COUNT="$_new_wave"
+  unset WAVE_IDS SESSION_WAVE_OF
+  declare -a WAVE_IDS
+  declare -a SESSION_WAVE_OF
+  for (( _seq_wn=1; _seq_wn<=WAVE_COUNT; _seq_wn++ )); do
+    WAVE_IDS[$_seq_wn]="${_SEQ_WAVE_IDS[$_seq_wn]}"
+  done
+  for _seq_sid in "${!_SEQ_SESSION_WAVE_OF[@]}"; do
+    SESSION_WAVE_OF[$_seq_sid]="${_SEQ_SESSION_WAVE_OF[$_seq_sid]}"
+  done
+  unset _seq_tmp _old_wave_count _new_wave _ids _sid _seq_wn _seq_sid
+  unset _SEQ_WAVE_IDS _SEQ_SESSION_WAVE_OF
+fi
+
 OPERATOR_PROMPT="$(extract_prompt "$OPERATOR_PATH")"
 if [[ -z "$OPERATOR_PROMPT" ]]; then
   err "Could not extract operator prompt from $OPERATOR_PATH"
@@ -382,14 +451,14 @@ fi
 
 # --- Show DAG and exit if requested ---
 if $SHOW_DAG; then
-  "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+  show_effective_dag
   exit 0
 fi
 
 # --- Dry-run: print plan and exit BEFORE any side effects (worktree, branches) ---
 if $DRY_RUN; then
   log "${BOLD}DRY RUN${NC} — no worktrees, no branches, no commits will be created."
-  "$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+  show_effective_dag
   echo ""
   for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     ids="${WAVE_IDS[$wn]:-}"
@@ -561,7 +630,7 @@ log "Branch       : $BRANCH (trunk)"
   && log "Trunk wt     : ${TRUNK_WORKTREE_DIR/#$HOME/~}"
 log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-"$PYTHON_CMD" "$DAG_SCRIPT" "$SESSIONS_DIR" --show
+show_effective_dag
 echo ""
 
 # --- Live UI setup ---

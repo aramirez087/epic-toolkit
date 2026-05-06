@@ -612,6 +612,54 @@
       "related_bugs": ["bug-024", "bug-029"],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-036",
+      "timestamp": "2026-05-06T04:16:53Z",
+      "error_message": "--retry cannot recover after the first failed attempt because run_one_session carries a nonzero rc into the next attempt. A later successful plan/exec path is skipped or still treated as failed.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "rc is initialized once before the retry loop. When an attempt sets rc=1, the next loop iteration never resets rc to 0 before planning. The execute pass is gated by `if [[ $rc -eq 0 ]]`, so a successful retry plan can still skip execution, and the break condition continues to see the stale failure.",
+      "fix": "Applied. Reset rc to 0 at the start of each retry-loop iteration so a failed attempt cannot poison the next attempt. Verified with shell syntax checks.",
+      "tags": ["retry", "session-runner", "stale-state", "sh", "found-by-bug-hunt"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:24:02Z"
+    },
+    {
+      "id": "bug-037",
+      "timestamp": "2026-05-06T04:16:53Z",
+      "error_message": "--sequential is documented as one-session-per-wave / linear mode, but it only sets MAX_PARALLEL=1. Sessions from the same DAG wave still branch from the same trunk head and are merged only after the whole original wave completes.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The flag changes throttling only. The DAG plan remains grouped into the original waves, and the wave loop merges children after all sessions in IN_RANGE are spawned/reaped. Serially throttled siblings therefore do not see prior siblings' commits.",
+      "fix": "Applied. Rewrote the effective bash plan when --sequential is set so each session becomes its own synthetic wave, updates WAVE_IDS/SESSION_WAVE_OF/WAVE_COUNT, and makes show-dag/dry-run/banner render the effective sequential plan. Also bypassed strict sibling-overlap validation in sequential mode because there are no sibling waves after flattening. Verified with fixtures: normal dry-run shows 2 waves; --sequential dry-run shows 3 one-session waves; --sequential --strict passes overlapping touches while --strict without sequential fails.",
+      "tags": ["sequential", "dag", "worktree", "merge-order", "found-by-bug-hunt"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:24:02Z"
+    },
+    {
+      "id": "bug-038",
+      "timestamp": "2026-05-06T04:16:53Z",
+      "error_message": "Auto-commit fallback does not work on stock macOS because it unconditionally invokes GNU `timeout`, which is not available by default.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "run_cli guards optional session timeouts with `command -v timeout`, but the auto-commit fallback calls `timeout 60 git commit` directly. On Darwin/BSD shells without coreutils, that command returns 127 and the fallback commit is skipped.",
+      "fix": "Applied. Added gtimeout support for session timeouts and changed the auto-commit fallback to use timeout/gtimeout when available, otherwise run git commit directly. Verified the empty timeout-wrapper expansion under bash -euo pipefail on stock macOS where neither timeout nor gtimeout is present.",
+      "tags": ["macos", "timeout", "auto-commit", "portability", "found-by-bug-hunt"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:24:02Z"
+    },
+    {
+      "id": "bug-039",
+      "timestamp": "2026-05-06T04:24:02Z",
+      "error_message": "`run-sessions.sh --dry-run` claimed no side effects but still provisioned OpenWolf merge-driver assets before the dry-run exit, creating `.gitattributes`, `.wolf/scripts/`, and `scripts/resolve-wolf.sh` in an OpenWolf repo.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "provision_wolf_merge ran immediately after REPO_ROOT resolution, before the show-dag/dry-run exits. Preview modes therefore mutated the repo before reaching the no-side-effects block.",
+      "fix": "Applied. Wrapped provision_wolf_merge so it only runs when neither DRY_RUN nor SHOW_DAG is active. Removed the untracked files created by the verification run and re-ran the sequential dry-run fixture, confirming git status stayed unchanged.",
+      "tags": ["dry-run", "show-dag", "side-effects", "openwolf", "sh", "found-during-fix"],
+      "related_bugs": ["bug-037"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:24:02Z"
     }
   ]
 }

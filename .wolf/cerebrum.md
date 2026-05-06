@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-05-01
+> Last updated: 2026-05-06
 
 ## User Preferences
 
@@ -35,6 +35,10 @@
 - [2026-05-05] Do not use `grep -F` for "is this exact branch/line in this output" checks. `-F` is fixed-string but still matches anywhere on the line, so a prefix-shared sibling (`epic/foo-bar` for `epic/foo`) silently produces a false positive. Use `grep -qFx` (whole-line match) or `awk '$0 == "..."'` whenever the input is one record per line and you want equality. (bug-033)
 - [2026-05-05] Do not strip "the title" with a single sticky flag like `fm_done && /^# / { … }`. The flag survives intermediate content, so the rule fires against the first `# Heading` anywhere in the body when there is no leading title. Use a window flag (`awaiting_title`) that is cleared by ANY non-blank non-title line, so the strip only happens immediately after the frontmatter close. (bug-034)
 - [2026-05-05] Do not call Python `open(path)` without `encoding="utf-8"` for any text file you wrote yourself or expect to be UTF-8. The default is `locale.getpreferredencoding(False)` — cp1252 on Windows, ASCII when `LC_ALL=C` — and crashes with UnicodeDecodeError on em-dashes / smart quotes / accents. Audit every `open(` site, not just the ones in the file you're editing — sibling helpers often have the same bug. (bug-035, related bug-024)
+- [2026-05-06] Do not leave retry-loop status variables initialized only before the loop. Reset `rc` at the start of each attempt and set success explicitly, or a failed first attempt poisons every later retry and can skip execution behind `if [[ $rc -eq 0 ]]`. (bug-036)
+- [2026-05-06] Do not implement `--sequential` by only setting `MAX_PARALLEL=1`. That serializes process launch but leaves original DAG waves intact, so same-wave sessions still branch from the same trunk head and merge only after the wave. Flatten to one session per wave or merge after each serial session. (bug-037)
+- [2026-05-06] Do not use GNU-only `timeout` unguarded in macOS-supported shell paths. Probe `timeout`/`gtimeout` first or run the command directly as a fallback. The auto-commit fallback currently skips commits on stock Darwin. (bug-038)
+- [2026-05-06] Do not run repo-mutating setup before preview exits (`--dry-run`, `--show-dag`). Even "helpful" provisioning violates preview guarantees and can create untracked files during validation. Gate side effects behind real execution. (bug-039)
 
 ## Decision Log
 

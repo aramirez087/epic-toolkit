@@ -183,6 +183,8 @@ run_cli() {
   if [[ "$TIMEOUT" -gt 0 ]]; then
     if command -v timeout >/dev/null 2>&1; then
       timeout_cmd=(timeout $((TIMEOUT * 60)))
+    elif command -v gtimeout >/dev/null 2>&1; then
+      timeout_cmd=(gtimeout $((TIMEOUT * 60)))
     else
       warn "timeout command not available, ignoring --timeout setting"
     fi
@@ -380,6 +382,7 @@ run_one_session() {
   baseline_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
 
   while [[ $attempt -le $max_attempts ]]; do
+    rc=0
     if [[ $attempt -gt 1 ]]; then
       echo "Retry attempt $attempt of $max_attempts" >> "$exec_log"
     fi
@@ -509,8 +512,16 @@ EXEC_EOF
         commit_subject="feat(partial): Session ${sid} — ${friendly}"
         commit_note="Auto-recovered after session exited rc=$rc. Files were created but session did not commit them. Verify before merging."
       fi
-      # Use timeout to prevent git commit hanging on index.lock
-      if timeout 60 git commit -q -m "$commit_subject
+      # Use timeout/gtimeout when available to prevent git commit hanging on index.lock.
+      # Stock macOS has neither; in that case, run git commit directly so the
+      # fallback still captures work instead of failing with command-not-found.
+      local commit_timeout_cmd=()
+      if command -v timeout >/dev/null 2>&1; then
+        commit_timeout_cmd=(timeout 60)
+      elif command -v gtimeout >/dev/null 2>&1; then
+        commit_timeout_cmd=(gtimeout 60)
+      fi
+      if ${commit_timeout_cmd[@]+"${commit_timeout_cmd[@]}"} git commit -q -m "$commit_subject
 
 $commit_note
 

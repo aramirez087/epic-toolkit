@@ -197,3 +197,13 @@
 | 22:10 | Edited scripts/lib/epic-session.sh | expanded (+8 lines) | ~247 |
 | 22:10 | Edited scripts/epic-dag.py | 2→7 lines | ~121 |
 | 22:12 | Session end: 3 writes across 3 files (epic-git.sh, epic-session.sh, epic-dag.py) | 7 reads | ~32679 tok |
+| 22:13 | Created ../../../../tmp/epic-toolkit-commit-msg.txt | — | ~304 |
+| 22:14 | Session end: 4 writes across 4 files (epic-git.sh, epic-session.sh, epic-dag.py, epic-toolkit-commit-msg.txt) | 7 reads | ~33005 tok |
+| 22:16 | Bug hunt found retry rc leakage, non-linear --sequential behavior, and unguarded macOS timeout in auto-commit | scripts/lib/epic-session.sh, scripts/run-sessions.sh | logged bugs 036-038 | ~35000 tok |
+| 22:24 | Fixed retry rc reset, true sequential waves, portable timeout fallback, and preview-mode provisioning side effect | scripts/lib/epic-session.sh, scripts/run-sessions.sh, .wolf/buglog.json, .wolf/cerebrum.md | bash -n passed; dry-run fixture verified sequential plan and unchanged git status | ~41000 tok |
+
+## Session: 2026-05-06 22:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:24 | Completed cross-platform bug fixes and verification pass | scripts/run-sessions.sh, scripts/lib/epic-session.sh | bash -n, JSON validation, sequential/strict dry-run fixtures passed | ~43000 tok |

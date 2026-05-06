@@ -1,71 +1,12 @@
 {
-  "session_id": "session-2026-05-06-2158",
-  "started": "2026-05-06T03:58:34.886Z",
-  "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 1,
-      "tokens": 12379,
-      "first_read": "2026-05-06T03:59:10.591Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 1,
-      "tokens": 5279,
-      "first_read": "2026-05-06T03:59:10.741Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
-      "count": 1,
-      "tokens": 2964,
-      "first_read": "2026-05-06T03:59:17.607Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
-      "count": 1,
-      "tokens": 2251,
-      "first_read": "2026-05-06T03:59:17.703Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
-      "count": 1,
-      "tokens": 650,
-      "first_read": "2026-05-06T03:59:17.835Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
-      "count": 1,
-      "tokens": 4313,
-      "first_read": "2026-05-06T03:59:22.353Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
-      "count": 1,
-      "tokens": 4344,
-      "first_read": "2026-05-06T03:59:26.591Z"
-    }
-  },
-  "files_written": [
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
-      "action": "edit",
-      "tokens": 114,
-      "at": "2026-05-06T04:10:10.144Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
-      "action": "edit",
-      "tokens": 264,
-      "at": "2026-05-06T04:10:19.911Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 121,
-      "at": "2026-05-06T04:10:26.643Z"
-    }
-  ],
-  "edit_counts": {
-    "scripts/lib/epic-git.sh": 1,
-    "scripts/lib/epic-session.sh": 1,
-    "scripts/epic-dag.py": 1
-  },
-  "anatomy_hits": 7,
+  "session_id": "session-2026-05-06-2221",
+  "started": "2026-05-06T04:21:27.180Z",
+  "files_read": {},
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 0,
   "anatomy_misses": 0,
   "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
-  "stop_count": 1
+  "stop_count": 0
 }

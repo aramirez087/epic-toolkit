@@ -1,12 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T04:10:26.637Z
-> Files: 26 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T04:13:47.962Z
+> Files: 32 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
 - `bughunt-tests.sh` (~1187 tok)
 - `commit-msg.txt` (~308 tok)
+- `epic-toolkit-commit-msg.txt` (~285 tok)
 
 ## ../../.claude/
 
@@ -23,6 +24,14 @@
 - `CLAUDE.md` — OpenWolf (~57 tok)
 - `LICENSE` — Project license (~290 tok)
 - `README.md` — Project documentation (~1005 tok)
+
+## .wolf/
+
+- `OPENWOLF.md` — OpenWolf operating protocol and mandatory memory/bug logging rules (~1638 tok)
+- `anatomy.md` — Project file map with token estimates (~496 tok)
+- `buglog.json` — OpenWolf bug registry (~1135 tok tail read)
+- `cerebrum.md` — Project memory, key learnings, and do-not-repeat notes (~1566 tok)
+- `memory.md` — Session action log (~337 tok tail read)
 
 ## .claude-plugin/
 
