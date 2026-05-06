@@ -336,7 +336,11 @@ EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 if [[ -z "$BRANCH" ]]; then
   BRANCH="epic/${EPIC_NAME_SLUG}"
 fi
-BRANCH_SANITIZED="$(echo "$BRANCH" | tr '/' '--')"
+# sed (not tr): tr maps SET1 chars to SET2 chars positionally, so
+# `tr '/' '--'` only uses the first '-' and silently produces a single-dash
+# output ('epic/foo' → 'epic-foo') — diverging from the documented
+# 'epic--<name>' worktree layout in the header. (bug-091)
+BRANCH_SANITIZED="$(echo "$BRANCH" | sed 's|/|--|g')"
 
 # --no-worktree forces sequential — can't safely parallelize in one CWD.
 if ! $USE_WORKTREE && [[ "$MAX_PARALLEL" -gt 1 ]]; then

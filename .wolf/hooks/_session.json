@@ -63,8 +63,31 @@
       "first_read": "2026-05-06T18:22:07.673Z"
     }
   },
-  "files_written": [],
-  "edit_counts": {},
+  "files_written": [
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+      "action": "edit",
+      "tokens": 634,
+      "at": "2026-05-06T18:29:55.969Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+      "action": "edit",
+      "tokens": 92,
+      "at": "2026-05-06T18:30:02.633Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+      "action": "edit",
+      "tokens": 298,
+      "at": "2026-05-06T18:30:17.173Z"
+    }
+  ],
+  "edit_counts": {
+    "scripts/wolf-merge/merge-wolf-json.py": 1,
+    "scripts/run-sessions.sh": 1,
+    "scripts/epic-dag.py": 1
+  },
   "anatomy_hits": 11,
   "anatomy_misses": 1,
   "repeated_reads_warned": 4,

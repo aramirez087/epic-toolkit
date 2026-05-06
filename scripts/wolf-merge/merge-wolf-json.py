@@ -33,21 +33,72 @@ def write(path: str, data) -> None:
     Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def _bug_signature(bug):
+    return (
+        bug.get("timestamp", ""),
+        bug.get("error_message", ""),
+        bug.get("file", ""),
+        bug.get("root_cause", ""),
+    )
+
+
+def _next_free_bug_id(used_ids):
+    max_n = 0
+    for bid in used_ids:
+        try:
+            n = int(str(bid).rsplit("-", 1)[-1])
+        except (ValueError, IndexError):
+            continue
+        if n > max_n:
+            max_n = n
+    return f"bug-{max_n + 1:03d}"
+
+
 def merge_buglog(ours, theirs):
-    """Union bugs[] dedup'd by id; keep entry with latest last_seen."""
+    """Union bugs[] by id; preserve both entries on a true id collision.
+
+    Two parallel sessions can independently allocate the same next-free id
+    because each hook reads its own local buglog.json before appending —
+    neither sees the sibling's addition. When the colliding entries describe
+    the SAME event (matching timestamp/file/error/cause), keep the one with
+    the latest last_seen (true duplicate). When they describe DIFFERENT
+    events that merely collided on id, the previous behavior silently
+    dropped one; instead, re-id the second under the next free slot so both
+    survive the merge. (bug-090)
+    """
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
         return ours
+    used_ids = {
+        bug.get("id")
+        for src in (ours, theirs)
+        for bug in src.get("bugs", [])
+        if bug.get("id")
+    }
     by_id = {}
+    extras = []
     for src in (ours, theirs):
         for bug in src.get("bugs", []):
             bid = bug.get("id")
             if not bid:
                 continue
             existing = by_id.get(bid)
-            if existing is None or bug.get("last_seen", "") > existing.get("last_seen", ""):
+            if existing is None:
                 by_id[bid] = bug
+                continue
+            if _bug_signature(bug) == _bug_signature(existing):
+                if bug.get("last_seen", "") > existing.get("last_seen", ""):
+                    by_id[bid] = bug
+                continue
+            new_bid = _next_free_bug_id(used_ids)
+            used_ids.add(new_bid)
+            renumbered = dict(bug)
+            renumbered["id"] = new_bid
+            extras.append(renumbered)
     merged = dict(ours)
-    merged["bugs"] = sorted(by_id.values(), key=lambda b: b.get("id", ""))
+    merged["bugs"] = sorted(
+        list(by_id.values()) + extras,
+        key=lambda b: b.get("id", ""),
+    )
     return merged
 
 

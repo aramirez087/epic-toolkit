@@ -129,17 +129,22 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         path = os.path.join(sessions_dir, entry)
         sid = int(m.group(1))
         slug = m.group(2)
-        # Reject characters that break field-delimited parsers downstream.
-        # Space:  breaks `set -- $_rest` in bash SESSION-line parsing (bug-062).
-        # Pipe:   breaks `|`-delimited result rows in epic-result.sh (bug-082).
-        # Tab:    breaks IFS word-splitting of SESSION lines in run-sessions.sh.
-        for _bad_char, _bad_name in ((" ", "a space"), ("|", "a pipe '|'"), ("\t", "a tab")):
-            if _bad_char in slug:
-                raise SystemExit(
-                    f"ERROR: {entry} — slug contains {_bad_name}. "
-                    f"Rename the file using hyphens only "
-                    f"(e.g. session-{sid:02d}-{slug.replace(_bad_char, '-')}.md)"
-                )
+        # Whitelist [A-Za-z0-9._-] for slugs. Rejects:
+        #   space — breaks `set -- $_rest` field splitting in run-sessions.sh (bug-062)
+        #   pipe  — breaks `|`-delimited result rows in epic-result.sh (bug-082)
+        #   tab   — breaks IFS word-splitting of SESSION lines in run-sessions.sh
+        #   glob meta (* ? [ ]) — silently expands during `set -- $_rest` if the
+        #     cwd contains matching files, corrupting later columns (bug-092)
+        #   shell meta ($ ` ; & < > etc) — defensive; never used in real slugs
+        # The same whitelist also keeps sess_branch and sess_wt_dir_name
+        # construction in run-sessions.sh:837-838 safe by construction.
+        if not re.match(r"^[A-Za-z0-9._-]+$", slug):
+            safe_suggestion = re.sub(r"[^A-Za-z0-9._-]", "-", slug)
+            raise SystemExit(
+                f"ERROR: {entry} — slug must match [A-Za-z0-9._-]+. "
+                f"Rename the file using hyphens only "
+                f"(e.g. session-{sid:02d}-{safe_suggestion}.md)"
+            )
         if sid == 0:
             operator = path
             continue
