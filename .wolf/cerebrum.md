@@ -46,6 +46,9 @@
 - [2026-05-06] Do not pass `$REPO_ROOT` to functions called after worktree teardown. REPO_ROOT is reassigned to TRUNK_WORKTREE_DIR at line 582 so git commands during the run target the worktree; once the worktree is deleted (line 1182) any git -C "$REPO_ROOT" silently fails. Use $ORIG_REPO_ROOT for post-teardown operations. (bug-060)
 - [2026-05-06] Do not rely solely on Python `finally` blocks for lock-file cleanup when the locked operation runs inside subprocess trees that the wave timeout kills with SIGKILL. SIGKILL bypasses finally, leaking the lock file. Add a stale-lock age check (>60s) in the acquisition retry loop so the next caller auto-recovers. (bug-061)
 - [2026-05-06] Do not use an unanchored `.+` in SESSION_RE to capture the slug — it allows spaces in filenames, which breaks the space-delimited SESSION line protocol parsed by `set -- $line` in run-sessions.sh. Validate that the slug contains no spaces immediately after extraction. (bug-062)
+- [2026-05-06] Do not kill backgrounded session subshells with `kill -9 <pid>` alone — this leaves the claude/python children running as orphans. Always `pkill -9 -P <pid>` the children first, then kill the subshell. (bug-063)
+- [2026-05-06] Do not add lock-file acquisition loops (O_CREAT|O_EXCL) without a stale-lock age check. Any process can be SIGKILL'd while holding the lock; without the check, all subsequent callers silently give up after a timeout, freezing the UI for the rest of the run. Always mirror the STALE_LOCK_SECS pattern from mark_session. (bug-064)
+- [2026-05-06] Do not assume cleanup runs before every `exit`. The EXIT trap is the only reliable hook. Always put UI and job teardown in the trap, not just in a pre-exit block, so new exit paths added later don't accidentally skip them. (bug-065)
 
 ## Decision Log
 

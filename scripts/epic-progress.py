@@ -26,6 +26,9 @@ import threading
 import time
 
 
+STALE_LOCK_SECS = 60  # lock older than this was left by a SIGKILL'd process
+
+
 def update_status_file(path: str, session_id: int, update: dict) -> None:
     """Atomically merge `update` into sessions[session_id] in the shared status JSON."""
     if not path or not os.path.isfile(path):
@@ -39,6 +42,14 @@ def update_status_file(path: str, session_id: int, update: dict) -> None:
             acquired = True
             break
         except (FileExistsError, OSError):
+            # Recover a lock file left behind by a SIGKILL'd progress process
+            # (SIGKILL bypasses finally, so the lock is never released).
+            # Mirror the same stale-lock logic in mark_session (bug-061 / bug-064).
+            try:
+                if time.time() - os.path.getmtime(lock) > STALE_LOCK_SECS:
+                    os.unlink(lock)
+            except OSError:
+                pass
             time.sleep(0.02)
     if not acquired:
         return

@@ -344,7 +344,7 @@ UI_SCRIPT="$(dirname "$0")/epic-ui.py"
 
 # --- Build the DAG plan ---
 DAG_TMP="$(mktemp)"
-trap 'rm -f "$DAG_TMP"' EXIT
+trap '_exit_rc=$?; [[ -n "${UI_PID:-}" ]] && kill "${UI_PID}" 2>/dev/null || true; rm -f "${DAG_TMP:-}"; exit $_exit_rc' EXIT
 
 DAG_ARGS=()
 $STRICT && ! $SEQUENTIAL && DAG_ARGS+=(--strict)
@@ -858,6 +858,11 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
       for _ti in "${!JOB_PIDS[@]}"; do
         _tpid="${JOB_PIDS[$_ti]}"
         _tsid="${JOB_SIDS[$_ti]}"
+        # Kill children first (claude, python progress) then the subshell itself.
+        # `kill -9 <pid>` (positive PID) only kills that PID; children are
+        # reparented to init and keep running. pkill -P sends to all direct
+        # children; the subshell kill catches any race between kill and exec.
+        pkill -9 -P "$_tpid" 2>/dev/null || true
         kill -9 "$_tpid" 2>/dev/null || true
         wait "$_tpid" 2>/dev/null || true
         _telapsed=$(( $(date +%s) - ${SESSION_START_TS[$_tsid]:-0} ))
