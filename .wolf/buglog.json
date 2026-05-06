@@ -1880,6 +1880,42 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T19:01:58.419Z"
+    },
+    {
+      "id": "bug-102",
+      "timestamp": "2026-05-06T19:30:00.000Z",
+      "error_message": "Sessions that fail deliverables validation surface in the structured [EPIC_RESULT_START] block as 'SESSION_FAIL=... error=unknown ...' instead of identifying the real cause, even though run_one_session sets a dedicated exit code (rc=97) for that case.",
+      "file": "scripts/lib/epic-result.sh",
+      "root_cause": "epic-session.sh:601 sets rc=97 specifically for deliverables_failure (sibling of rc=99 for no_output and rc=124 for timeout). classify_error() in epic-result.sh handled 124 and 99 explicitly but had no branch for 97. The fall-through then ran log-pattern grep against the validator's stderr (which the runner appended to the exec log as 'ERROR: declared deliverables missing...'). That stderr line does NOT start with the literal '[ERROR]' tag the cli_error pattern requires, and matches none of the cli_crash patterns, so classify_error returned 'unknown'. Result: orchestrators (Claude/OpenCode/external watchers) reading the structured output see 'error=unknown' and cannot distinguish a genuine unknown crash from a deliverables-policy violation.",
+      "fix": "Added an explicit `if [[ $exit_code -eq 97 ]]; then echo deliverables_failure; return; fi` branch in classify_error, placed alongside the existing 99 and 124 special cases. error_type now flows through to entry['error_type'] in the result JSON and the SESSION_FAIL line in [EPIC_RESULT_START], so deliverables failures are distinguishable from generic crashes without parsing log text.",
+      "tags": [
+        "error-classification",
+        "exit-code",
+        "epic-result",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": ["bug-101"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T19:30:00.000Z"
+    },
+    {
+      "id": "bug-103",
+      "timestamp": "2026-05-06T19:31:00.000Z",
+      "error_message": "A session that advances HEAD but produces an empty diff (e.g. an empty merge commit, or a chain of commits that net out to no path changes) silently passes deliverables validation when no `produces:` is declared, defeating the metadata-only heuristic that was supposed to catch sessions with no real output.",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "_is_metadata_only(changed_paths) returned False when changed_paths was empty, on the (mistaken) assumption that the runner's no-op guard would have caught the case first. But the no-op guard requires HEAD == baseline_head AND a clean tree AND no untracked files; an empty commit, an internal-rename-only commit, or any sequence whose net diff is empty advances HEAD without changing path status. The validator is then invoked (current_head_v != baseline_head), _read_diff returns ([], []), _is_metadata_only([]) returns False, and main() returns 0. Bug-101's intent — catch sessions whose output is purely metadata or nothing — was bypassed for the 'nothing' subset.",
+      "fix": "Removed the early `if not changed_paths: return False` short-circuit so the all() over HEURISTIC_METADATA_PATTERNS naturally returns True on an empty set (vacuous truth). Added an explicit empty-changed branch in main()'s error reporting so the user sees 'session HEAD advanced but produced no changed paths' instead of the misleading 'all changed paths matched ...:' header followed by no entries.",
+      "fix_files": ["scripts/validate-session-deliverables.py"],
+      "tags": [
+        "deliverables",
+        "empty-commit",
+        "validation",
+        "silent-failure",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": ["bug-101"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T19:31:00.000Z"
     }
   ]
 }

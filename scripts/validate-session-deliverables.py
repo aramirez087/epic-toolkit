@@ -70,8 +70,11 @@ def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
 
 
 def _is_metadata_only(changed_paths: list[str]) -> bool:
-    if not changed_paths:
-        return False
+    # Empty diff means the session committed (HEAD changed) but added no files
+    # outside metadata — typically an empty commit or a commit whose only
+    # content was rename-equivalent. The no-op guard in run_one_session passes
+    # because HEAD moved; without treating empty as metadata-only here, the
+    # session would silently sail through deliverables validation too.
     for p in changed_paths:
         if not any(rx.match(p) for rx in HEURISTIC_METADATA_PATTERNS):
             return False
@@ -178,16 +181,23 @@ def main() -> int:
         return 0
 
     if _is_metadata_only(changed):
-        print(
-            "ERROR: session committed only metadata/handoff files — no real deliverables",
-            file=sys.stderr,
-        )
-        print(
-            "All changed paths matched .wolf/* or docs/roadmap/*-handoff.md:",
-            file=sys.stderr,
-        )
-        for p in changed:
-            print(f"  + {p}", file=sys.stderr)
+        if not changed:
+            print(
+                "ERROR: session HEAD advanced but produced no changed paths — "
+                "likely empty commit(s) with no real deliverables",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "ERROR: session committed only metadata/handoff files — no real deliverables",
+                file=sys.stderr,
+            )
+            print(
+                "All changed paths matched .wolf/* or docs/roadmap/*-handoff.md:",
+                file=sys.stderr,
+            )
+            for p in changed:
+                print(f"  + {p}", file=sys.stderr)
         print("", file=sys.stderr)
         print(
             "If this is intentional (kickoff or docs-only session), add to frontmatter:",

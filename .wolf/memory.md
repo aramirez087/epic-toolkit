@@ -393,3 +393,14 @@
 | 13:00 | Edited .opencode/commands/epic.generate.md | 1→3 lines | ~268 |
 | 13:00 | Edited .opencode/commands/epic.generate.md | inline fix | ~101 |
 | 13:00 | Edited docs/epic-guide.md | expanded (+16 lines) | ~440 |
+| 13:02 | Created ../../../../tmp/epic-toolkit-fix-msg.txt | — | ~377 |
+| 13:02 | Session end: 12 writes across 6 files (validate-session-deliverables.py, epic-session.sh, epic-prompt-template.md, epic.generate.md, epic-guide.md) | 7 reads | ~38806 tok |
+
+## Session: 2026-05-06 13:24
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:34 | Edited scripts/lib/epic-result.sh | 4→9 lines | ~43 |
+| 13:34 | Edited scripts/validate-session-deliverables.py | modified _is_metadata_only() | ~165 |
+| 13:34 | Edited scripts/validate-session-deliverables.py | modified _is_metadata_only() | ~194 |
+| 13:35 | Session end: 3 writes across 2 files (epic-result.sh, validate-session-deliverables.py) | 11 reads | ~46299 tok |

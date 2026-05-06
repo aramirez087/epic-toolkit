@@ -18,6 +18,11 @@ classify_error() {
     return
   fi
 
+  if [[ "$exit_code" -eq 97 ]]; then
+    echo "deliverables_failure"
+    return
+  fi
+
   if grep -q "ERROR: could not extract prompt" "$log_file" 2>/dev/null; then
     echo "prompt_error"
     return
