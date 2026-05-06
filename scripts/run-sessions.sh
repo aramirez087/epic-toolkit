@@ -845,6 +845,41 @@ cleanup_merged_epic_branches() {
   return 0
 }
 
+# Returns 0 if session $1 has evidence of completion on branch $2 within
+# repo $3. Combines three signals so prior-run history and AI subject
+# variation don't leave stale scaffolding behind:
+#
+#   1. SESSION_STATUS[$1] == "done" — this run completed it (covers fresh
+#      runs and resume early-returns).
+#   2. Wave merge commit "Merge session NN (slug) into BRANCH" — script-
+#      generated, deterministic; present on every prior run that used
+#      worktree mode (the default). Survives across runs.
+#   3. AI feat commit "feat: Session N <sep>..." with sep matched as any
+#      non-alphanumeric byte. The character class avoids hard-coding
+#      multibyte separators (em-dash, en-dash) which behave differently
+#      across grep locales — Git Bash on Windows often runs grep in the C
+#      locale where a literal em-dash inside a regex character class is
+#      compared byte-by-byte and produces inconsistent matches. Excludes
+#      "feat(partial):" subjects since the auto-commit fallback uses that
+#      prefix when work was recovered but the session didn't actually
+#      finish.
+session_completed_on_branch() {
+  local sid="$1" branch="$2" repo="$3"
+  if [[ "${SESSION_STATUS[$sid]:-}" == "done" ]]; then
+    return 0
+  fi
+  local padded subjects
+  padded="$(printf '%02d' "$sid")"
+  subjects="$(git -C "$repo" log --format='%s' "$branch" 2>/dev/null || true)"
+  if grep -qE "^Merge session ${padded} \(" <<<"$subjects"; then
+    return 0
+  fi
+  if grep -qE "^feat: Session ${sid}([^[:alnum:]]|\$)" <<<"$subjects"; then
+    return 0
+  fi
+  return 1
+}
+
 # Look up a session id's handoff file under docs/roadmap/<epic>/
 # Search the current epic's roadmap dir first (intra-epic dependency),
 # then fall back to all epic dirs (cross-epic handoff).
@@ -1086,25 +1121,17 @@ run_one_session() {
   # Two levels of caching, both controlled by --fresh:
   #
   # 1. Skip the entire session if a successful commit already exists on
-  #    the current branch. The auto-commit fallback uses the canonical
-  #    subject `feat: Session N — friendly`, and Claude is instructed to
-  #    use the same. Partial-commits use `feat(partial):` and are NOT
-  #    matched here, so they correctly trigger a re-run.
+  #    the current branch. Detection delegates to session_completed_on_branch
+  #    so it tolerates AI subject-line variation (em-dash vs hyphen vs
+  #    colon) and Git Bash on Windows where regex multibyte handling is
+  #    unreliable. Partial-commits use `feat(partial):` and are NOT
+  #    matched, so they correctly trigger a re-run.
   # 2. Reuse a cached plan file if it exists, is non-empty, and is
   #    newer than the session prompt. The mtime check ensures that
   #    edits to the session prompt invalidate the cached plan.
-  local done_subject="feat: Session ${sid} — ${friendly}"
   local plan_cached=false
   if ! $FRESH; then
-    # Materialize git log into a variable before grep. Piping `git log | grep -q`
-    # under `set -o pipefail` is broken: grep -q exits at first match, closes
-    # the pipe, and git log then dies with SIGPIPE (141). Pipefail propagates
-    # that as a non-zero pipeline exit even though the match succeeded — which
-    # silently disables the resume logic. Reading once into a string + here-doc
-    # grep avoids the pipe entirely.
-    local committed_subjects
-    committed_subjects="$(git log --format='%s' 2>/dev/null || true)"
-    if grep -qxF -- "$done_subject" <<<"$committed_subjects"; then
+    if session_completed_on_branch "$sid" HEAD "$wt_dir"; then
       log "  ✓ session ${padded_sid} already committed on this branch — skipping (use --fresh to force re-run)"
       cd "$prev_cwd"
       return 0
@@ -1827,21 +1854,17 @@ if ! $EPIC_FAILED; then
   # false when sessions are skipped via --start/--end (partial run) or when
   # the user resumed a prior run. Cleanup deletes the session prompt files
   # and roadmap handoffs, so doing it on a partial epic destroys scaffolding
-  # the user still needs. Verify every session has its successful commit on
-  # the branch before any destructive step runs.
+  # the user still needs. Delegate per-session detection to the helper so
+  # AI subject variation (em-dash vs hyphen) and Git Bash on Windows locale
+  # quirks don't false-negative an actually-complete epic.
   ALL_SESSIONS_DONE=true
   INCOMPLETE_SESSIONS=()
-  BRANCH_SUBJECTS="$(git -C "$TRUNK_WORKTREE_DIR" log --format='%s' "$BRANCH" 2>/dev/null || true)"
   for sid in "${!SESSION_SLUG_BY_ID[@]}"; do
-    _slug="${SESSION_SLUG_BY_ID[$sid]}"
-    _friendly="${_slug//-/ }"
-    _done_subject="feat: Session ${sid} — ${_friendly}"
-    if ! grep -qxF -- "$_done_subject" <<<"$BRANCH_SUBJECTS"; then
+    if ! session_completed_on_branch "$sid" "$BRANCH" "$TRUNK_WORKTREE_DIR"; then
       ALL_SESSIONS_DONE=false
       INCOMPLETE_SESSIONS+=("session-$(printf '%02d' "$sid") (${SESSION_STATUS[$sid]:-not-run})")
     fi
   done
-  unset _slug _friendly _done_subject
 
   if ! $ALL_SESSIONS_DONE; then
     warn "Skipping scaffolding cleanup — ${#INCOMPLETE_SESSIONS[@]} session(s) without a success commit on $BRANCH:"
@@ -1849,7 +1872,7 @@ if ! $EPIC_FAILED; then
       warn "  - $_s"
     done
     unset _s
-    warn "Re-run to finish the remaining sessions; cleanup runs only when every session has its 'feat: Session N — slug' commit."
+    warn "Re-run to finish the remaining sessions; cleanup runs only when every session has its merge or 'feat: Session N' commit."
     AUTO_PR=false
   else
     # --- Cleanup: orchestrator artifacts + session scaffolding ---
@@ -1870,16 +1893,21 @@ if ! $EPIC_FAILED; then
 
     # 2. Session prompt files and handoffs (scaffolding, not product code)
     _EPIC_SLUG="$(basename "$TRUNK_SESSIONS_REL")"
+    _ROADMAP_REL="docs/roadmap/$_EPIC_SLUG"
     if ! $KEEP_SESSION_DOCS; then
-      # Remove docs/claude-sessions/<epic-name>/ entirely
+      # Remove docs/claude-sessions/<epic-name>/ — git rm for tracked files,
+      # then rm -rf to catch untracked stragglers (logs the AI wrote outside
+      # the bootstrap commit, files added but never committed, etc.) before
+      # the worktree teardown might silently leak them.
       if git ls-files --error-unmatch "$TRUNK_SESSIONS_REL" &>/dev/null 2>&1; then
         git rm -r -q "$TRUNK_SESSIONS_REL" 2>/dev/null || true
       fi
-      # Remove docs/roadmap/<epic-name>/ if sessions wrote handoffs there
-      _ROADMAP_REL="docs/roadmap/$_EPIC_SLUG"
+      rm -rf "$REPO_ROOT/$TRUNK_SESSIONS_REL" 2>/dev/null || true
+      # Same dual-removal for docs/roadmap/<epic-name>/.
       if git ls-files --error-unmatch "$_ROADMAP_REL" &>/dev/null 2>&1; then
         git rm -r -q "$_ROADMAP_REL" 2>/dev/null || true
       fi
+      rm -rf "$REPO_ROOT/$_ROADMAP_REL" 2>/dev/null || true
     fi
 
     if ! git diff --cached --quiet 2>/dev/null; then
@@ -1990,8 +2018,26 @@ ${DIFF_STATS}
     if $KEEP_WORKTREE; then
       log "Keeping trunk worktree: $TRUNK_WORKTREE_DIR"
     else
-      git worktree remove "$TRUNK_WORKTREE_DIR" --force 2>/dev/null || true
-      # Also sweep any empty leftover scaffolding under the worktree base
+      # Try git's worktree remove first, then plain rm -rf. On Windows,
+      # `git worktree remove --force` regularly fails when antivirus, an
+      # IDE, or another shell holds a handle inside the worktree — and
+      # silently swallowing that error left users with a half-cleaned
+      # scaffolding dir. Surface the failure so they know to retry rather
+      # than wonder why session files persisted on a "successful" run.
+      _wt_err="$(mktemp 2>/dev/null || echo "/tmp/wt-rm.$$")"
+      if git worktree remove "$TRUNK_WORKTREE_DIR" --force 2>"$_wt_err"; then
+        :
+      elif rm -rf "$TRUNK_WORKTREE_DIR" 2>/dev/null && [[ ! -d "$TRUNK_WORKTREE_DIR" ]]; then
+        warn "Trunk worktree removed via rm -rf fallback (git worktree remove failed): $TRUNK_WORKTREE_DIR"
+      else
+        warn "Could not remove trunk worktree: $TRUNK_WORKTREE_DIR"
+        [[ -s "$_wt_err" ]] && warn "  git worktree said: $(head -n 3 "$_wt_err" | tr '\n' ' ')"
+        warn "  Common causes on Windows: antivirus scanning, IDE/editor handles, another shell with cwd inside."
+        warn "  Retry manually: git worktree remove --force '$TRUNK_WORKTREE_DIR' && git worktree prune"
+      fi
+      rm -f "$_wt_err"
+      unset _wt_err
+      # Sweep any empty leftover scaffolding under the worktree base
       # (handles both this run's parent dir and stale dirs from old runs).
       _wt_base="$(dirname "$TRUNK_WORKTREE_DIR")"
       if [[ -d "$_wt_base" ]]; then
@@ -2007,6 +2053,22 @@ ${DIFF_STATS}
     fi
   fi
   git worktree prune 2>/dev/null || true
+
+  # Surface any per-session worktree leaks (silently swallowed during the
+  # wave loop's per-session removal). On Windows these can pile up across
+  # runs because file locks block `git worktree remove` and we don't notice.
+  if $USE_WORKTREE && ! $KEEP_SESSION_WORKTREES \
+     && [[ -n "${WORKTREE_BASE:-}" && -d "$WORKTREE_BASE" ]]; then
+    _leaked=0
+    for _d in "$WORKTREE_BASE/${BRANCH_SANITIZED}--s"*; do
+      [[ -d "$_d" ]] && _leaked=$((_leaked + 1))
+    done
+    if [[ $_leaked -gt 0 ]]; then
+      warn "$_leaked per-session worktree(s) could not be removed: $WORKTREE_BASE"
+      warn "  Inspect, then: git worktree prune (and rm -rf <leftovers> if needed)"
+    fi
+    unset _leaked _d
+  fi
 
   # --- Post-merge stale-branch cleanup ---
   # Sweep merged epic branches whose PRs are closed/merged. This catches
