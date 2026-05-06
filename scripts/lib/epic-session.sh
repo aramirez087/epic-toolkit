@@ -332,7 +332,8 @@ PYEOF
 #
 # Reads from globals: $TRUNK_SESSIONS_DIR, $OPERATOR_PROMPT, $SKIP_PLAN, $MODEL
 # Writes plan/exec logs at $TRUNK_SESSIONS_DIR/.session-NN-{plan,exec}.log
-# Writes plan markdown at $TRUNK_SESSIONS_DIR/.session-NN-plan.md
+# Writes plan markdown at $TRUNK_SESSIONS_DIR/.session-NN-plan.md (mirrored
+# from the session worktree; see plan_file_session below).
 # Returns: 0 on success, non-zero on failure.
 # ---------------------------------------------------------------------------
 run_one_session() {
@@ -342,7 +343,17 @@ run_one_session() {
   # Use zero-padded sid for all artifact names so the writer and the
   # reader (write_epic_result / classify_error) agree on the filename.
   local padded_sid; padded_sid="$(printf '%02d' "$sid")"
-  local plan_file="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-plan.md"
+  # Plan markdown is written by Claude inside the session worktree, then
+  # mirrored to the trunk. `claude -p` treats its cwd ($wt_dir) as the
+  # project root and refuses (or silently rewrites) writes to absolute
+  # paths in a sibling worktree even with --dangerously-skip-permissions,
+  # so handing it $TRUNK_SESSIONS_DIR left the trunk file missing and the
+  # runner aborted the plan phase as failed (bug-110). The mirror keeps
+  # the canonical archive in the trunk so resume can find it after the
+  # session worktree is torn down.
+  local plan_basename=".session-${padded_sid}-plan.md"
+  local plan_file="$TRUNK_SESSIONS_DIR/$plan_basename"
+  local plan_file_session="$wt_dir/$plan_basename"
   local plan_log="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-plan.log"
   local exec_log="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-exec.log"
   local session_prompt
@@ -446,7 +457,7 @@ SESSION INSTRUCTIONS:
 $session_prompt
 $handoff_text
 
-TASK: Write an implementation plan to ${plan_file} containing:
+TASK: Write an implementation plan to ${plan_file_session} containing:
 - Files to create/modify (full paths)
 - Design decisions and rationale
 - Risks and mitigations
@@ -462,9 +473,17 @@ PLAN_EOF
           rc=1
         else
           rm -f "$prompt_file"
-          if [[ ! -f "$plan_file" ]]; then
-            echo "ERROR: plan phase finished but plan file was not created: $plan_file" >> "$exec_log"
+          if [[ ! -s "$plan_file_session" ]]; then
+            echo "ERROR: plan phase finished but plan file was not created or is empty: $plan_file_session" >> "$exec_log"
             rc=1
+          else
+            # Mirror the freshly-written plan to the trunk archive so
+            # resume can find it after the session worktree is removed,
+            # then drop the session-local copy so the exec phase's
+            # `git add -A` doesn't capture it as a deliverable.
+            mkdir -p "$(dirname "$plan_file")"
+            cp -p "$plan_file_session" "$plan_file"
+            rm -f "$plan_file_session"
           fi
         fi
         rm -f "$prompt_file"

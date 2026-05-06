@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T19:51:19.321Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T21:11:47.031Z
 > Files: 40 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -72,7 +72,7 @@
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3902 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2524 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~6255 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~6565 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
 
 ## scripts/wolf-merge/
