@@ -7,7 +7,7 @@
       "error_message": "Significant refactor of ",
       "file": "../../.claude/settings.json",
       "root_cause": "12 lines replaced/restructured",
-      "fix": "Rewrote 82→42 lines (12 removed)",
+      "fix": "Rewrote 82\u219242 lines (12 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -40,7 +40,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "57 lines replaced/restructured",
-      "fix": "Rewrote 73→5 lines (57 removed)",
+      "fix": "Rewrote 73\u21925 lines (57 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -55,7 +55,7 @@
       "timestamp": "2026-05-06T01:55:01.174Z",
       "error_message": "Missing error handling in unknown",
       "file": "scripts/run-sessions.sh",
-      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "root_cause": "Code path had no error handling \u2014 exceptions would propagate uncaught",
       "fix": "Added try/catch block",
       "tags": [
         "auto-detected",
@@ -72,7 +72,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "14 lines replaced/restructured",
-      "fix": "Rewrote 31→23 lines (14 removed) | Also: git worktree remove \"$TRUNK_WORKTREE_DIR\" --force ; # Also sweep any empty leftover scaffolding under ",
+      "fix": "Rewrote 31\u219223 lines (14 removed) | Also: git worktree remove \"$TRUNK_WORKTREE_DIR\" --force ; # Also sweep any empty leftover scaffolding under ",
       "tags": [
         "auto-detected",
         "refactor",
@@ -87,7 +87,7 @@
       "timestamp": "2026-05-06T02:35:47.371Z",
       "error_message": "Missing error handling in unknown",
       "file": "scripts/run-sessions.sh",
-      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "root_cause": "Code path had no error handling \u2014 exceptions would propagate uncaught",
       "fix": "Added try/catch block",
       "tags": [
         "auto-detected",
@@ -104,7 +104,7 @@
       "error_message": "Wrong operator: <= should be <<",
       "file": "scripts/run-sessions.sh",
       "root_cause": "Used \"<=\" instead of \"<<\"",
-      "fix": "Changed operator <= → <<",
+      "fix": "Changed operator <= \u2192 <<",
       "tags": [
         "auto-detected",
         "operator-fix",
@@ -153,10 +153,10 @@
     {
       "id": "bug-010",
       "timestamp": "2026-05-06T20:44:00Z",
-      "error_message": "write_epic_result silently dropped sessions whose ids fell after a gap. With sessions [1, 2, 5] only sessions 1-2 appeared in the result JSON; session 5 vanished. Same when an epic failed in wave 1 of a three-wave plan — sessions in waves 2 and 3 had no SESSION_STATUS entry, so the loop hit a gap at sid=2 and broke immediately, reporting only the failed session.",
+      "error_message": "write_epic_result silently dropped sessions whose ids fell after a gap. With sessions [1, 2, 5] only sessions 1-2 appeared in the result JSON; session 5 vanished. Same when an epic failed in wave 1 of a three-wave plan \u2014 sessions in waves 2 and 3 had no SESSION_STATUS entry, so the loop hit a gap at sid=2 and broke immediately, reporting only the failed session.",
       "file": "scripts/run-sessions.sh",
       "root_cause": "Both the data loop (line 1404) and the .errtype cleanup loop (line 1497) used 'for (( sid=1; sid<=999; sid++ )); [[ -z status ]] && break'. The break-on-empty pattern assumes contiguous, fully-populated session ids, which is not guaranteed: ids can be sparse by design and waves past a failure point never get a SESSION_STATUS entry at all.",
-      "fix": "Replaced both loops with iteration over the DAG-derived id set: '_sids_sorted=$(printf %s\\\\n \"${!SESSION_SLUG_BY_ID[@]}\" | sort -n)' then a 'while IFS= read -r sid <<< \"$_sids_sorted\"' loop. Sessions with no SESSION_STATUS entry now default to 'pending' instead of vanishing, so unreached waves are visible in the result JSON. Verified with a standalone snippet using sparse ids [1,2,5,7] and missing statuses for 2 and 7 — old loop reported only sid=1, new loop reported all four with correct statuses.",
+      "fix": "Replaced both loops with iteration over the DAG-derived id set: '_sids_sorted=$(printf %s\\\\n \"${!SESSION_SLUG_BY_ID[@]}\" | sort -n)' then a 'while IFS= read -r sid <<< \"$_sids_sorted\"' loop. Sessions with no SESSION_STATUS entry now default to 'pending' instead of vanishing, so unreached waves are visible in the result JSON. Verified with a standalone snippet using sparse ids [1,2,5,7] and missing statuses for 2 and 7 \u2014 old loop reported only sid=1, new loop reported all four with correct statuses.",
       "tags": [
         "iteration",
         "session-ids",
@@ -173,9 +173,9 @@
     {
       "id": "bug-011",
       "timestamp": "2026-05-05T00:00:00Z",
-      "error_message": "epic-progress.py loops forever (spinning at ~5Hz on stderr) when the upstream stream-json producer ends with a partial line that has no trailing newline. Reproduced with a Python snippet that fed chunks ending in '...{\"text\":\"hi\"}' followed by EOF — the script never exits the main while.",
+      "error_message": "epic-progress.py loops forever (spinning at ~5Hz on stderr) when the upstream stream-json producer ends with a partial line that has no trailing newline. Reproduced with a Python snippet that fed chunks ending in '...{\"text\":\"hi\"}' followed by EOF \u2014 the script never exits the main while.",
       "file": "scripts/epic-progress.py",
-      "root_cause": "The break condition at the bottom of the main loop is `if eof and not line_buf.strip(): break`. The line-splitting loop only runs while `chunk is not None`, so on every post-EOF iteration `chunk_q.get` raises queue.Empty, chunk=None, the split block is skipped, and line_buf with non-empty trailing content is never drained. The break test stays false forever. Practically triggered when (a) a producer crashes / is killed mid-line (run-sessions.sh wave-timeout SIGKILL is one source — see bug-013), or (b) the final NDJSON line lacks a trailing newline. Combined with the orphaning behavior of `kill -9 $subshell_pid`, the python child can survive into the next epic run, burning CPU.",
+      "root_cause": "The break condition at the bottom of the main loop is `if eof and not line_buf.strip(): break`. The line-splitting loop only runs while `chunk is not None`, so on every post-EOF iteration `chunk_q.get` raises queue.Empty, chunk=None, the split block is skipped, and line_buf with non-empty trailing content is never drained. The break test stays false forever. Practically triggered when (a) a producer crashes / is killed mid-line (run-sessions.sh wave-timeout SIGKILL is one source \u2014 see bug-013), or (b) the final NDJSON line lacks a trailing newline. Combined with the orphaning behavior of `kill -9 $subshell_pid`, the python child can survive into the next epic run, burning CPU.",
       "fix": "Applied. On EOF (chunk is empty bytes), append a synthetic '\\n' to line_buf before the parse-while-newline loop runs, so any trailing partial line is drained on the same iteration that sets eof=True. The existing `if eof and not line_buf.strip(): break` test then fires correctly. Verified by re-running the original Python repro: now exits at iteration 2 instead of looping forever.",
       "tags": [
         "infinite-loop",
@@ -196,7 +196,7 @@
       "error_message": "run-sessions.sh truncates META values whenever the path or value contains a space. With a repo at /Users/Foo Bar/Code/myproj the META line emitted by epic-dag.py is `META operator_path=/Users/Foo Bar/Code/...`; after parsing OPERATOR_PATH becomes `/Users/Foo` and extract_prompt then aborts with `Could not extract operator prompt`. Reproduced with a 5-line bash snippet.",
       "file": "scripts/run-sessions.sh",
       "root_cause": "The DAG-plan parser at line ~421 uses `set -- $line` (intentionally unquoted to word-split into positional params) to tokenize each line, then reads $2 / $3 / $4 etc. That word-split is space-delimited, so any field containing a space is silently broken across multiple positional params. Also affects SESSION rows (file, slug) and any other META key=value where the value may legitimately contain whitespace. epic-dag.py emits paths via `os.path.abspath(...).replace('\\\\', '/')` with no quoting/escaping, so it's fully on the bash side to handle.",
-      "fix": "Applied. Replaced `set -- $line` with case/prefix-strip parsing in run-sessions.sh: META lines use `${line#META operator_path=}` etc. so values containing spaces are preserved verbatim. SESSION rows still word-split via `set -- ${line#SESSION }` because their fields (numeric ids, comma-separated deps, regex-derived slug, 0/1 flags, bare model/cli identifiers) are space-free by construction. Verified end-to-end with a fixture using `/Users/Foo Bar/Code/...` as operator_path — value now flows through to OPERATOR_PATH unmangled.",
+      "fix": "Applied. Replaced `set -- $line` with case/prefix-strip parsing in run-sessions.sh: META lines use `${line#META operator_path=}` etc. so values containing spaces are preserved verbatim. SESSION rows still word-split via `set -- ${line#SESSION }` because their fields (numeric ids, comma-separated deps, regex-derived slug, 0/1 flags, bare model/cli identifiers) are space-free by construction. Verified end-to-end with a fixture using `/Users/Foo Bar/Code/...` as operator_path \u2014 value now flows through to OPERATOR_PATH unmangled.",
       "tags": [
         "path-with-spaces",
         "word-splitting",
@@ -211,10 +211,10 @@
     {
       "id": "bug-013",
       "timestamp": "2026-05-05T00:00:00Z",
-      "error_message": "When a wave hits WAVE_TIMEOUT_MINUTES (default 240m), run-sessions.sh kills the in-flight session pids with `kill -9` and breaks out of the wait loop — but never reaps them, never sets SESSION_STATUS to failed, and never sets EPIC_FAILED. The merge phase finds status='running', falls through both `done` and `failed` cases silently, the outer wave for-loop continues to the next wave, and at the end the script logs `Epic completed successfully` and tries to open a PR. Reproduced by simulating the kill-and-break flow in a standalone bash script.",
+      "error_message": "When a wave hits WAVE_TIMEOUT_MINUTES (default 240m), run-sessions.sh kills the in-flight session pids with `kill -9` and breaks out of the wait loop \u2014 but never reaps them, never sets SESSION_STATUS to failed, and never sets EPIC_FAILED. The merge phase finds status='running', falls through both `done` and `failed` cases silently, the outer wave for-loop continues to the next wave, and at the end the script logs `Epic completed successfully` and tries to open a PR. Reproduced by simulating the kill-and-break flow in a standalone bash script.",
       "file": "scripts/run-sessions.sh",
       "root_cause": "The wave wait loop (line ~1732) handles timeout by iterating JOB_PIDS, sending SIGKILL, and `break`ing. There is no call to reap_finished_jobs after the kill, no manual SESSION_STATUS[$sid]='failed' update, and no `EPIC_FAILED=true`. Compounded by the fact that `kill -9 $pid` sends to a single PID; the run_one_session subshell's children (claude/opencode + the python progress pipeline) become orphans rather than being cleaned up, which interacts badly with bug-011 (the progress python can then spin forever).",
-      "fix": "Applied. After SIGKILL, the timeout branch now iterates JOB_PIDS / JOB_SIDS, calls `wait` to reap each zombie, sets SESSION_STATUS=failed / SESSION_EXIT_BY_ID=137 / SESSION_ELAPSED_BY_ID, calls mark_session 'failed', updates FIRST_FAILED_ID, and finally sets EPIC_FAILED=true before breaking. Verified with a standalone bash fixture: two sleep-60 children → SIGKILL → both end up with status=failed/exit=137, EPIC_FAILED=true, FIRST_FAILED_ID=1. Did NOT switch to negative-pid (process-group) kill because the subshell was not started in its own pgid; orphan-child cleanup remains a separate issue (would need `setsid` or job-control mode).",
+      "fix": "Applied. After SIGKILL, the timeout branch now iterates JOB_PIDS / JOB_SIDS, calls `wait` to reap each zombie, sets SESSION_STATUS=failed / SESSION_EXIT_BY_ID=137 / SESSION_ELAPSED_BY_ID, calls mark_session 'failed', updates FIRST_FAILED_ID, and finally sets EPIC_FAILED=true before breaking. Verified with a standalone bash fixture: two sleep-60 children \u2192 SIGKILL \u2192 both end up with status=failed/exit=137, EPIC_FAILED=true, FIRST_FAILED_ID=1. Did NOT switch to negative-pid (process-group) kill because the subshell was not started in its own pgid; orphan-child cleanup remains a separate issue (would need `setsid` or job-control mode).",
       "tags": [
         "wave-timeout",
         "false-success",
@@ -235,7 +235,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "13 lines replaced/restructured",
-      "fix": "Rewrote 29→30 lines (13 removed) | Also: for pid in \"${JOB_PIDS[@]}\"; do; kill -9 \"$pid\" 2>/dev/null || true",
+      "fix": "Rewrote 29\u219230 lines (13 removed) | Also: for pid in \"${JOB_PIDS[@]}\"; do; kill -9 \"$pid\" 2>/dev/null || true",
       "tags": [
         "auto-detected",
         "refactor",
@@ -339,7 +339,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 11→14 lines (2 removed) | Also: /^```md$/ { capture=1; next }; /^```$/   { if (capture) exit }",
+      "fix": "Rewrote 11\u219214 lines (2 removed) | Also: /^```md$/ { capture=1; next }; /^```$/   { if (capture) exit }",
       "tags": [
         "auto-detected",
         "refactor",
@@ -355,7 +355,7 @@
       "error_message": "Wrong return value",
       "file": "scripts/epic-dag.py",
       "root_cause": "Was returning: {}, text",
-      "fix": "Now returns: {} — every session",
+      "fix": "Now returns: {} \u2014 every session",
       "tags": [
         "auto-detected",
         "return-value",
@@ -368,10 +368,10 @@
     {
       "id": "bug-022",
       "timestamp": "2026-05-05T00:00:00Z",
-      "error_message": "is_worktree_in_use returns false-positive 'in use' when an unrelated process has a CWD inside a sibling directory whose path shares a prefix with the worktree (e.g., wt_dir=…/s01-foo, link_target=…/s01-foo-extra/src). The runner then refuses to clean up the legitimate stale worktree and exits 1, requiring manual intervention. Reproduced with a 5-line bash snippet.",
+      "error_message": "is_worktree_in_use returns false-positive 'in use' when an unrelated process has a CWD inside a sibling directory whose path shares a prefix with the worktree (e.g., wt_dir=\u2026/s01-foo, link_target=\u2026/s01-foo-extra/src). The runner then refuses to clean up the legitimate stale worktree and exits 1, requiring manual intervention. Reproduced with a 5-line bash snippet.",
       "file": "scripts/lib/epic-session.sh",
-      "root_cause": "Line 44 used `[[ \"$link_target\" == \"$wt_dir\"* ]]` — a literal-prefix glob. Bash's pattern `\"$wt_dir\"*` matches `$wt_dir` followed by anything, so `…/s01-foo` matches both the real subdir `…/s01-foo/src` AND any sibling whose name starts with `…/s01-foo` such as `…/s01-foo-extra/src`. There was no separator anchoring on the boundary.",
-      "fix": "Applied. Replaced with `[[ \"$link_target\" == \"$wt_dir\" || \"$link_target\" == \"$wt_dir\"/* ]]` — exact match OR strictly-under match. Verified with a fixture covering: prefix-shared sibling (no longer flagged), real subdir (still flagged), exact match (still flagged), unrelated path (not flagged), no-separator extension `…fooz` (no longer flagged).",
+      "root_cause": "Line 44 used `[[ \"$link_target\" == \"$wt_dir\"* ]]` \u2014 a literal-prefix glob. Bash's pattern `\"$wt_dir\"*` matches `$wt_dir` followed by anything, so `\u2026/s01-foo` matches both the real subdir `\u2026/s01-foo/src` AND any sibling whose name starts with `\u2026/s01-foo` such as `\u2026/s01-foo-extra/src`. There was no separator anchoring on the boundary.",
+      "fix": "Applied. Replaced with `[[ \"$link_target\" == \"$wt_dir\" || \"$link_target\" == \"$wt_dir\"/* ]]` \u2014 exact match OR strictly-under match. Verified with a fixture covering: prefix-shared sibling (no longer flagged), real subdir (still flagged), exact match (still flagged), unrelated path (not flagged), no-separator extension `\u2026fooz` (no longer flagged).",
       "tags": [
         "worktree",
         "concurrent-safety",
@@ -392,8 +392,8 @@
       "timestamp": "2026-05-05T00:00:00Z",
       "error_message": "extract_prompt silently truncates session prompts at the first nested ``` fence. Any session prompt containing an inner code example (```bash, ```python, etc.) had its content cut off at the inner closing ``` line. The model then received a partial prompt with no error, producing confusing failures attributable to 'the model didn't follow instructions' when it actually never saw them. Reproduced with a sample session file containing one inner code block.",
       "file": "scripts/lib/epic-session.sh",
-      "root_cause": "The awk script used `/^```$/ { if (capture) exit }` — any bare-triple-backtick line inside the captured region terminated capture. There was no fence-depth tracking, so an inner code block's closing ``` was indistinguishable from the outer prompt's closing fence. The template at docs/epic-prompt-template.md:93 documents the constraint, but the failure was silent (no warning, no error, just a truncated prompt).",
-      "fix": "Applied. Rewrote the awk to track fence depth: lines matching `/^```[A-Za-z]/` (info-string openers like ```bash, ```python, ```diff) increment depth; bare `^```$` decrements depth if >0, else exits. Verified with three fixtures: language-tagged inner block, plain prompt (regression), multiple inner blocks. Bare-``` inner blocks remain ambiguous in CommonMark — template guidance to indent-instead still applies.",
+      "root_cause": "The awk script used `/^```$/ { if (capture) exit }` \u2014 any bare-triple-backtick line inside the captured region terminated capture. There was no fence-depth tracking, so an inner code block's closing ``` was indistinguishable from the outer prompt's closing fence. The template at docs/epic-prompt-template.md:93 documents the constraint, but the failure was silent (no warning, no error, just a truncated prompt).",
+      "fix": "Applied. Rewrote the awk to track fence depth: lines matching `/^```[A-Za-z]/` (info-string openers like ```bash, ```python, ```diff) increment depth; bare `^```$` decrements depth if >0, else exits. Verified with three fixtures: language-tagged inner block, plain prompt (regression), multiple inner blocks. Bare-``` inner blocks remain ambiguous in CommonMark \u2014 template guidance to indent-instead still applies.",
       "tags": [
         "prompt-extraction",
         "awk",
@@ -435,7 +435,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 34→39 lines (2 removed)",
+      "fix": "Rewrote 34\u219239 lines (2 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -451,7 +451,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "5 lines replaced/restructured",
-      "fix": "Rewrote 26→32 lines (5 removed)",
+      "fix": "Rewrote 26\u219232 lines (5 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -530,7 +530,7 @@
       "error_message": "build_handoff_section emitted a `## Previous Session Handoffs` header plus the `Treat their file paths as the only memory of prior work` intro paragraph with zero entries when none of the parents had a handoff file on disk. The model received a confident header followed by nothing, inviting it to hallucinate the missing context.",
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "Header and intro were appended to `out` unconditionally before the parent loop ran; entries were appended only when find_handoff_for returned a path. If every lookup missed, `out` still contained the header.",
-      "fix": "Refactored to accumulate parent matches into a separate `entries` variable and early-return when empty. The header is now built only when at least one parent contributed a real handoff. Verified: zero-handoff deps → empty output; one-of-two parents has handoff → header plus only that entry; deps='-' regression unchanged.",
+      "fix": "Refactored to accumulate parent matches into a separate `entries` variable and early-return when empty. The header is now built only when at least one parent contributed a real handoff. Verified: zero-handoff deps \u2192 empty output; one-of-two parents has handoff \u2192 header plus only that entry; deps='-' regression unchanged.",
       "tags": [
         "prompt-construction",
         "empty-state",
@@ -551,7 +551,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-git.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 4→7 lines (2 removed)",
+      "fix": "Rewrote 4\u21927 lines (2 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -567,7 +567,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "3 lines replaced/restructured",
-      "fix": "Rewrote 12→20 lines (3 removed)",
+      "fix": "Rewrote 12\u219220 lines (3 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -626,10 +626,10 @@
     {
       "id": "bug-035",
       "timestamp": "2026-05-05T00:00:00Z",
-      "error_message": "epic-dag.py opened each session-NN-*.md file with bare `open(path)`, relying on the platform default text encoding. On Windows (cp1252) and any POSIX shell with `LC_ALL=C`/`PYTHONUTF8=0`, reading a session prompt that contains an em-dash, smart quote, or accented character (very common in AI-authored prompts) crashes the DAG with `UnicodeDecodeError: 'ascii'/'cp1252' codec can't decode byte …`. The runner exits before any session has a chance to start, with a stack trace that doesn't obviously point at encoding.",
+      "error_message": "epic-dag.py opened each session-NN-*.md file with bare `open(path)`, relying on the platform default text encoding. On Windows (cp1252) and any POSIX shell with `LC_ALL=C`/`PYTHONUTF8=0`, reading a session prompt that contains an em-dash, smart quote, or accented character (very common in AI-authored prompts) crashes the DAG with `UnicodeDecodeError: 'ascii'/'cp1252' codec can't decode byte \u2026`. The runner exits before any session has a chance to start, with a stack trace that doesn't obviously point at encoding.",
       "file": "scripts/epic-dag.py",
-      "root_cause": "Line 135 used `with open(path) as f:` — no explicit `encoding=` arg. Python 3.x picks `locale.getpreferredencoding(False)` for that mode, which is platform/locale dependent. Other open() sites in the script (the inline init in run-sessions.sh, mark_session, write_epic_result) already pass `encoding='utf-8'`; this one was missed.",
-      "fix": "Applied. Added `encoding=\"utf-8\"` to the `open(path)` call. Verified: `PYTHONUTF8=0 LANG=C LC_ALL=C python3 scripts/epic-dag.py <dir> --bash` now succeeds on a session file containing `Café — résumé`, where before it raised UnicodeDecodeError mid-parse.",
+      "root_cause": "Line 135 used `with open(path) as f:` \u2014 no explicit `encoding=` arg. Python 3.x picks `locale.getpreferredencoding(False)` for that mode, which is platform/locale dependent. Other open() sites in the script (the inline init in run-sessions.sh, mark_session, write_epic_result) already pass `encoding='utf-8'`; this one was missed.",
+      "fix": "Applied. Added `encoding=\"utf-8\"` to the `open(path)` call. Verified: `PYTHONUTF8=0 LANG=C LC_ALL=C python3 scripts/epic-dag.py <dir> --bash` now succeeds on a session file containing `Caf\u00e9 \u2014 r\u00e9sum\u00e9`, where before it raised UnicodeDecodeError mid-parse.",
       "tags": [
         "unicode",
         "encoding",
@@ -726,7 +726,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 8→10 lines (2 removed)",
+      "fix": "Rewrote 8\u219210 lines (2 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -739,10 +739,10 @@
     {
       "id": "bug-041",
       "timestamp": "2026-05-05T00:00:00Z",
-      "error_message": "Per-session `cli: claude` overrides silently passed an OpenCode-style model id to the Claude CLI when the global run was `--cli opencode --model sonnet`. Claude rejects `--model opencode/claude-sonnet-4` (unknown model), and the session fails with no obvious link to the cli swap. Reverse direction (claude→opencode) worked because the global MODEL was still in shorthand form.",
+      "error_message": "Per-session `cli: claude` overrides silently passed an OpenCode-style model id to the Claude CLI when the global run was `--cli opencode --model sonnet`. Claude rejects `--model opencode/claude-sonnet-4` (unknown model), and the session fails with no obvious link to the cli swap. Reverse direction (claude\u2192opencode) worked because the global MODEL was still in shorthand form.",
       "file": "scripts/run-sessions.sh, scripts/lib/epic-session.sh",
       "root_cause": "run-sessions.sh:247 mutated MODEL in place via `MODEL=\"$(map_model_shorthand \"$MODEL\" \"$CLI_CMD\")\"`, so by the time run_cli's per-session remap ran, the user-supplied shorthand was already gone. The bug-016 fallback `${SESSION_MODEL_BY_ID[$sid]:-$MODEL}` then handed the already-mapped `opencode/claude-sonnet-4` to map_model_shorthand for cli=claude, which is a no-op for non-opencode targets. The mapping function is one-way once the model contains a `/`.",
-      "fix": "Applied. Snapshot the un-mapped value into MODEL_RAW before the global remap, and use `${SESSION_MODEL_BY_ID[$sid]:-${MODEL_RAW:-$MODEL}}` in the per-session cli-override branch so the shorthand is re-mapped against the new cli. Verified with five fixtures covering both directions, model-only override, cli-only override, and the no-override baseline — every case now produces a cli-correct model id.",
+      "fix": "Applied. Snapshot the un-mapped value into MODEL_RAW before the global remap, and use `${SESSION_MODEL_BY_ID[$sid]:-${MODEL_RAW:-$MODEL}}` in the per-session cli-override branch so the shorthand is re-mapped against the new cli. Verified with five fixtures covering both directions, model-only override, cli-only override, and the no-override baseline \u2014 every case now produces a cli-correct model id.",
       "tags": [
         "model-mapping",
         "cli-override",
@@ -765,7 +765,7 @@
       "error_message": "epic-dag.py --strict false-positives on sibling directories whose names share a prefix. Two sessions declaring `touches: [src/foo/**]` and `touches: [src/foo-extra/**]` are flagged as overlapping and (with --strict) the run aborts with exit 2, even though no path is reachable from both globs. Same class as the bug-022 / bug-033 literal-prefix glob bugs in the bash side.",
       "file": "scripts/epic-dag.py",
       "root_cause": "globs_overlap()'s _stem comparison used `ap.startswith(bp) or bp.startswith(ap)` against directory stems with no separator anchoring. `src/foo-extra`.startswith(`src/foo`) returns True, so the stems are deemed overlapping despite living in disjoint dirs.",
-      "fix": "Applied. Replaced the bare startswith with `_is_under(child, parent)` that requires either equality or `child.startswith(parent + '/')` — anchored on the path separator. Verified with five fixtures: prefix-shared siblings (now NO overlap), real subdir (still overlaps), exact match (still overlaps), unrelated dirs (no overlap), and `api/**` vs `api-v2/**` regression (no overlap).",
+      "fix": "Applied. Replaced the bare startswith with `_is_under(child, parent)` that requires either equality or `child.startswith(parent + '/')` \u2014 anchored on the path separator. Verified with five fixtures: prefix-shared siblings (now NO overlap), real subdir (still overlaps), exact match (still overlaps), unrelated dirs (no overlap), and `api/**` vs `api-v2/**` regression (no overlap).",
       "tags": [
         "strict-mode",
         "touches-overlap",
@@ -868,7 +868,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/wolf-merge/merge-wolf-json.py",
       "root_cause": "3 lines replaced/restructured",
-      "fix": "Rewrote 9→16 lines (3 removed)",
+      "fix": "Rewrote 9\u219216 lines (3 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -884,7 +884,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-result.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 9→13 lines (2 removed)",
+      "fix": "Rewrote 9\u219213 lines (2 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -897,10 +897,10 @@
     {
       "id": "bug-049",
       "timestamp": "2026-05-06T00:00:00Z",
-      "error_message": "merge-wolf-json.py crashes with UnicodeDecodeError mid-merge on Windows (cp1252) and any POSIX shell with LC_ALL=C / PYTHONUTF8=0 whenever .wolf/buglog.json contains an em-dash, smart quote, or accented character — extremely common because buglog entries paraphrase AI-authored prose. Git records the file as unresolvable and the user sees an opaque merge failure with no obvious link to encoding. Same class as bug-035, which the cerebrum specifically flagged with 'audit every open( site, not just the ones in the file you're editing — sibling helpers often have the same bug'. This sibling helper was missed.",
+      "error_message": "merge-wolf-json.py crashes with UnicodeDecodeError mid-merge on Windows (cp1252) and any POSIX shell with LC_ALL=C / PYTHONUTF8=0 whenever .wolf/buglog.json contains an em-dash, smart quote, or accented character \u2014 extremely common because buglog entries paraphrase AI-authored prose. Git records the file as unresolvable and the user sees an opaque merge failure with no obvious link to encoding. Same class as bug-035, which the cerebrum specifically flagged with 'audit every open( site, not just the ones in the file you're editing \u2014 sibling helpers often have the same bug'. This sibling helper was missed.",
       "file": "scripts/wolf-merge/merge-wolf-json.py",
       "root_cause": "load() called Path(path).read_text() and write() called Path(path).write_text(...) with no `encoding=` argument. pathlib falls back to locale.getpreferredencoding(False), which is cp1252 on Windows and ASCII when LC_ALL=C / PYTHONUTF8=0. Any non-ASCII byte in the file (or in data being written) raises UnicodeDecodeError / UnicodeEncodeError before merge_buglog can run.",
-      "fix": "Applied. Pinned encoding='utf-8' on both Path.read_text and Path.write_text in scripts/wolf-merge/merge-wolf-json.py. Added UnicodeDecodeError to the load() except clause so a non-utf-8 file is treated as 'unreadable' (returning None) rather than crashing the whole driver. Verified end-to-end: merge driver invoked under PYTHONUTF8=0 LC_ALL=C LANG=C with ours.fix='Café — résumé' and theirs.fix='naïve façade ☃' now returns 0 and produces a merged buglog with both entries' utf-8 bytes preserved.",
+      "fix": "Applied. Pinned encoding='utf-8' on both Path.read_text and Path.write_text in scripts/wolf-merge/merge-wolf-json.py. Added UnicodeDecodeError to the load() except clause so a non-utf-8 file is treated as 'unreadable' (returning None) rather than crashing the whole driver. Verified end-to-end: merge driver invoked under PYTHONUTF8=0 LC_ALL=C LANG=C with ours.fix='Caf\u00e9 \u2014 r\u00e9sum\u00e9' and theirs.fix='na\u00efve fa\u00e7ade \u2603' now returns 0 and produces a merged buglog with both entries' utf-8 bytes preserved.",
       "tags": [
         "unicode",
         "encoding",
@@ -921,7 +921,7 @@
     {
       "id": "bug-050",
       "timestamp": "2026-05-06T00:00:00Z",
-      "error_message": "Every CLI error surfaced through the [EPIC_RESULT_START]/[END] block and the result JSON's sessions[].error_detail field shows visible literal backslashes — e.g. an error like 'Bad input: \"foo\"' renders as 'Bad input: \\\\\"foo\\\\\"' when the user reads the JSON, and a path with a single backslash gets doubled. Cosmetic but confusing; it leaks into anything that re-emits error_detail (CI dashboards, the orchestrator's failure summary, on-call playbooks).",
+      "error_message": "Every CLI error surfaced through the [EPIC_RESULT_START]/[END] block and the result JSON's sessions[].error_detail field shows visible literal backslashes \u2014 e.g. an error like 'Bad input: \"foo\"' renders as 'Bad input: \\\\\"foo\\\\\"' when the user reads the JSON, and a path with a single backslash gets doubled. Cosmetic but confusing; it leaks into anything that re-emits error_detail (CI dashboards, the orchestrator's failure summary, on-call playbooks).",
       "file": "scripts/lib/epic-result.sh",
       "root_cause": "classify_error pre-escaped the captured grep -oE error message with `sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g; s/\\t/\\\\t/g'` before writing to .errtype. write_epic_result then opens that file in Python and stores the contents in entry['error_detail']; json.dump escapes them AGAIN. Net effect: every literal backslash and double quote in the original error is doubled in the JSON-encoded output, and round-tripping the JSON yields '\\\"' instead of '\"'. The bash escaping was redundant from the start because Python is the only consumer and json.dump already escapes for JSON.",
       "fix": "Applied. Removed the sed pre-escape in classify_error and switched the redirection to printf '%s\\n' so .errtype contains the raw single-line error verbatim. write_epic_result's existing json.dump now performs the only escaping, producing well-formed JSON that round-trips cleanly. Verified with a fixture log containing 'Bad input: \"foo\" said the parser': .errtype now holds the unescaped string and json.dumps encodes it as 'Bad input: \\\"foo\\\" said the parser' (one backslash, the JSON escape).",
@@ -944,7 +944,7 @@
       "timestamp": "2026-05-06T00:00:00Z",
       "error_message": "On Windows where `python3` is the Microsoft Store stub (passes `command -v` but errors on actual invocation) and on systems where only `python` is installed, every wolf-json merge silently fails. Git invokes the registered driver, the interpreter doesn't run, the file is left unresolved, and the user sees a 'merge conflict' on .wolf/buglog.json / hooks/_session.json with no obvious link to the missing interpreter. run-sessions.sh already detects this exact scenario for its own python invocations (probing python3 then python with --version), but install-merge-driver.sh hard-codes `python3` in the registered git config string.",
       "file": "scripts/wolf-merge/install-merge-driver.sh",
-      "root_cause": "The script wrote `git config merge.wolf-json.driver \"python3 \\\"$DRIVER\\\" %O %A %B %P\"` unconditionally. It never probed whether `python3` could actually run, and the git config value persists across invocations — so even if the user later installs a real python3 on a different PATH, the registered driver still points to whatever `python3` resolves to at merge time (and on Windows that's typically the Store stub that errors with no helpful message).",
+      "root_cause": "The script wrote `git config merge.wolf-json.driver \"python3 \\\"$DRIVER\\\" %O %A %B %P\"` unconditionally. It never probed whether `python3` could actually run, and the git config value persists across invocations \u2014 so even if the user later installs a real python3 on a different PATH, the registered driver still points to whatever `python3` resolves to at merge time (and on Windows that's typically the Store stub that errors with no helpful message).",
       "fix": "Applied. Added the same probe used in run-sessions.sh: try `python3 --version` first, fall back to `python --version`, exit 0 (no registration) if neither runs. Stored the chosen interpreter in PY_CMD and substituted it into the driver config string. Verified end-to-end with PATH limited to a tempdir that exposes only `python` (no `python3`): registered driver is now `python \"...\" %O %A %B %P` instead of the broken `python3` form. Re-running on macOS with python3 present preserves the python3 selection.",
       "tags": [
         "windows",
@@ -979,10 +979,10 @@
     {
       "id": "bug-053",
       "timestamp": "2026-05-06T00:00:00Z",
-      "error_message": "Three open() sites in scripts/lib/epic-result.sh and scripts/run-sessions.sh still relied on locale.getpreferredencoding(False), so the same UnicodeDecodeError class that took down epic-dag.py (bug-035) and merge-wolf-json.py (bug-049) lived on in the result-reporting and status-init paths. Reproduced under PYTHONUTF8=0 LC_ALL=C LANG=C against a tmp_merged file containing 'session-01-café-résumé.md' / 'session-02-naïve-façade-☃.md': the bare open() at epic-result.sh:150 crashed mid write_epic_result with `UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3`, the [EPIC_RESULT_START]/[END] block was never emitted, and external watchers polling RESULT_FILE never saw a sentinel. Sibling-helper bug — exactly the audit that the cerebrum 2026-05-05 entry for bug-035 said to do across every open( site, not just the file being edited.",
+      "error_message": "Three open() sites in scripts/lib/epic-result.sh and scripts/run-sessions.sh still relied on locale.getpreferredencoding(False), so the same UnicodeDecodeError class that took down epic-dag.py (bug-035) and merge-wolf-json.py (bug-049) lived on in the result-reporting and status-init paths. Reproduced under PYTHONUTF8=0 LC_ALL=C LANG=C against a tmp_merged file containing 'session-01-caf\u00e9-r\u00e9sum\u00e9.md' / 'session-02-na\u00efve-fa\u00e7ade-\u2603.md': the bare open() at epic-result.sh:150 crashed mid write_epic_result with `UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3`, the [EPIC_RESULT_START]/[END] block was never emitted, and external watchers polling RESULT_FILE never saw a sentinel. Sibling-helper bug \u2014 exactly the audit that the cerebrum 2026-05-05 entry for bug-035 said to do across every open( site, not just the file being edited.",
       "file": "scripts/lib/epic-result.sh, scripts/run-sessions.sh",
-      "root_cause": "Three places opened text files without encoding='utf-8', falling back to platform default (cp1252 on Windows, ASCII under LC_ALL=C / PYTHONUTF8=0): (a) epic-result.sh:150 read the bash-written tmp_merged file (lines like '1 session-01-foo.md' — filenames are user-supplied and frequently carry em-dashes / accents in AI-named sessions), this is the active-crash site; (b) epic-result.sh:204 read back the just-written result.json for terminal pretty-printing — latent because json.dump defaults to ensure_ascii=True so the file is pure ASCII today, but a future ensure_ascii=False would surface it; (c) run-sessions.sh:682 wrote the initial .epic-status.json — also latent for the same ensure_ascii reason. The audit cerebrum entry warned 'sibling helpers often have the same bug' after bug-035 (and again after bug-049 in merge-wolf-json.py); these three sites in the result/status path were missed both times.",
-      "fix": "Applied. Pinned encoding='utf-8' on all three sites: `open(sys.argv[3], encoding='utf-8')` for the merged-sessions read (epic-result.sh:150), `json.load(open(sys.argv[1], encoding='utf-8'))` for the result-print read (epic-result.sh:204), and `open(sf, 'w', encoding='utf-8')` for the status-init write (run-sessions.sh:682). Verified the active-crash site by writing a tmp_merged fixture from bash with 'café-résumé' / 'naïve-façade-☃' filenames and reading it under PYTHONUTF8=0 LC_ALL=C LANG=C: pre-fix raised UnicodeDecodeError on byte 0xc3 mid-read, post-fix returned `read OK, count = 2 byte-len of first = 27`. Verified bash -n on all three modified shell scripts.",
+      "root_cause": "Three places opened text files without encoding='utf-8', falling back to platform default (cp1252 on Windows, ASCII under LC_ALL=C / PYTHONUTF8=0): (a) epic-result.sh:150 read the bash-written tmp_merged file (lines like '1 session-01-foo.md' \u2014 filenames are user-supplied and frequently carry em-dashes / accents in AI-named sessions), this is the active-crash site; (b) epic-result.sh:204 read back the just-written result.json for terminal pretty-printing \u2014 latent because json.dump defaults to ensure_ascii=True so the file is pure ASCII today, but a future ensure_ascii=False would surface it; (c) run-sessions.sh:682 wrote the initial .epic-status.json \u2014 also latent for the same ensure_ascii reason. The audit cerebrum entry warned 'sibling helpers often have the same bug' after bug-035 (and again after bug-049 in merge-wolf-json.py); these three sites in the result/status path were missed both times.",
+      "fix": "Applied. Pinned encoding='utf-8' on all three sites: `open(sys.argv[3], encoding='utf-8')` for the merged-sessions read (epic-result.sh:150), `json.load(open(sys.argv[1], encoding='utf-8'))` for the result-print read (epic-result.sh:204), and `open(sf, 'w', encoding='utf-8')` for the status-init write (run-sessions.sh:682). Verified the active-crash site by writing a tmp_merged fixture from bash with 'caf\u00e9-r\u00e9sum\u00e9' / 'na\u00efve-fa\u00e7ade-\u2603' filenames and reading it under PYTHONUTF8=0 LC_ALL=C LANG=C: pre-fix raised UnicodeDecodeError on byte 0xc3 mid-read, post-fix returned `read OK, count = 2 byte-len of first = 27`. Verified bash -n on all three modified shell scripts.",
       "tags": [
         "unicode",
         "encoding",
@@ -1005,9 +1005,9 @@
     {
       "id": "bug-054",
       "timestamp": "2026-05-06T00:00:00Z",
-      "error_message": "cleanup_merged_epic_branches never deletes a stale `epic/*` branch that has no PR but is fully merged on the remote, whenever the user's local default branch lags origin. After `git fetch --prune origin` updates origin/main but does NOT fast-forward local main (the common case in a worktree-based workflow where main is rarely checked out), the no-PR fallback runs `git merge-base --is-ancestor \"$br\" \"$default_branch\"` against the LOCAL ref, gets a false negative, and silently keeps the branch forever. Stale `epic/*` branches accumulate across runs with no surfaced error. Reproduced with a scratch bare-remote / clone fixture: origin/main fast-forwarded to epic/foo's tip, local main left at the original commit, fetch+prune run, then the guard checked — pre-fix `WOULD KEEP (stale!)`, post-fix `WOULD DELETE`.",
+      "error_message": "cleanup_merged_epic_branches never deletes a stale `epic/*` branch that has no PR but is fully merged on the remote, whenever the user's local default branch lags origin. After `git fetch --prune origin` updates origin/main but does NOT fast-forward local main (the common case in a worktree-based workflow where main is rarely checked out), the no-PR fallback runs `git merge-base --is-ancestor \"$br\" \"$default_branch\"` against the LOCAL ref, gets a false negative, and silently keeps the branch forever. Stale `epic/*` branches accumulate across runs with no surfaced error. Reproduced with a scratch bare-remote / clone fixture: origin/main fast-forwarded to epic/foo's tip, local main left at the original commit, fetch+prune run, then the guard checked \u2014 pre-fix `WOULD KEEP (stale!)`, post-fix `WOULD DELETE`.",
       "file": "scripts/lib/epic-git.sh",
-      "root_cause": "Line 218 used `merge-base --is-ancestor \"$br\" \"$default_branch\"` where `$default_branch` is the bare branch name returned by `gh repo view --json defaultBranchRef -q '.defaultBranchRef.name'` (e.g. 'main'). Bare names resolve to the LOCAL ref refs/heads/main, but the only ref this code path can rely on being current is `origin/<default_branch>` — that's what the `git fetch --prune origin` immediately above just updated. The mismatch was invisible whenever the user's local main happened to be up-to-date, which is rare in a worktree workflow.",
+      "root_cause": "Line 218 used `merge-base --is-ancestor \"$br\" \"$default_branch\"` where `$default_branch` is the bare branch name returned by `gh repo view --json defaultBranchRef -q '.defaultBranchRef.name'` (e.g. 'main'). Bare names resolve to the LOCAL ref refs/heads/main, but the only ref this code path can rely on being current is `origin/<default_branch>` \u2014 that's what the `git fetch --prune origin` immediately above just updated. The mismatch was invisible whenever the user's local main happened to be up-to-date, which is rare in a worktree workflow.",
       "fix": "Applied. Resolve a `default_ref` that prefers `origin/$default_branch` when that ref exists (verified via `git rev-parse --verify --quiet`), falling back to the bare local name only if no remote-tracking ref is present (e.g. detached/no-origin repos). The is-ancestor guard now compares against the same ref `git fetch --prune` just updated. Verified with a scratch bare-remote/local-clone fixture (origin/main fast-forwarded but local main left behind): pre-fix the guard answered 'keep stale!', post-fix 'delete'. bash -n clean.",
       "tags": [
         "git",
@@ -1050,8 +1050,8 @@
       "timestamp": "2026-05-06T13:43:29Z",
       "error_message": ".epic-config.json silently overrides user CLI flags when the user explicitly passes the default value",
       "file": "scripts/run-sessions.sh",
-      "root_cause": "Lines 162-188 use each variable's default value as a sentinel for 'the user did not pass this CLI flag': `[[ \"$TIMEOUT\" -eq 0 ]]`, `[[ \"$RETRY\" -eq 0 ]]`, `[[ \"$MAX_PARALLEL\" -eq 4 ]]`, `[[ \"$MODEL\" == \"sonnet\" ]]`, `[[ \"$AUTO_COMMIT\" == \"true\" ]]`, `[[ \"$AUTO_PR\" == \"true\" ]]`, `[[ \"$SKIP_PLAN\" == \"false\" ]]`, `[[ \"$KEEP_WORKTREE\" == \"false\" ]]`. When a user explicitly passes the same value as the script default — most notably `--timeout 0` (intent: disable timeout), `--max-parallel 4`, or `--model sonnet` — the parse-args loop assigns that value, and these checks can no longer distinguish 'user typed it' from 'user omitted the flag'. The config file's value silently wins, contradicting the user's explicit intent. Worst case: a repo with `\"timeout\": 30` in config will enforce a 30-minute per-session timeout even when the user passed `--timeout 0` to disable it. The CLI_OVERRIDE check at line 168 escapes this trap because its default is the empty string, which the user can't realistically pass.",
-      "fix": "Either (a) introduce per-flag *_USER_SET booleans set to true inside the parse-args case branch and gate the config override on `! $*_USER_SET`, or (b) load the config block BEFORE the CLI parse loop so CLI flags override config rather than the other way around. Option (b) is cleaner — the parse loop already overwrites whatever defaults are in scope, so config-loaded values just become the new defaults.",
+      "root_cause": "Lines 162-188 use each variable's default value as a sentinel for 'the user did not pass this CLI flag': `[[ \"$TIMEOUT\" -eq 0 ]]`, `[[ \"$RETRY\" -eq 0 ]]`, `[[ \"$MAX_PARALLEL\" -eq 4 ]]`, `[[ \"$MODEL\" == \"sonnet\" ]]`, `[[ \"$AUTO_COMMIT\" == \"true\" ]]`, `[[ \"$AUTO_PR\" == \"true\" ]]`, `[[ \"$SKIP_PLAN\" == \"false\" ]]`, `[[ \"$KEEP_WORKTREE\" == \"false\" ]]`. When a user explicitly passes the same value as the script default \u2014 most notably `--timeout 0` (intent: disable timeout), `--max-parallel 4`, or `--model sonnet` \u2014 the parse-args loop assigns that value, and these checks can no longer distinguish 'user typed it' from 'user omitted the flag'. The config file's value silently wins, contradicting the user's explicit intent. Worst case: a repo with `\"timeout\": 30` in config will enforce a 30-minute per-session timeout even when the user passed `--timeout 0` to disable it. The CLI_OVERRIDE check at line 168 escapes this trap because its default is the empty string, which the user can't realistically pass.",
+      "fix": "Either (a) introduce per-flag *_USER_SET booleans set to true inside the parse-args case branch and gate the config override on `! $*_USER_SET`, or (b) load the config block BEFORE the CLI parse loop so CLI flags override config rather than the other way around. Option (b) is cleaner \u2014 the parse loop already overwrites whatever defaults are in scope, so config-loaded values just become the new defaults.",
       "tags": [
         "config-loading",
         "argument-parsing",
@@ -1067,7 +1067,7 @@
       "timestamp": "2026-05-06T13:43:29Z",
       "error_message": "epic-poll-progress.py is documented in CLAUDE.md, AGENTS.md, README.md, and anatomy.md as the OpenCode fallback but is never invoked",
       "file": "scripts/epic-poll-progress.py",
-      "root_cause": "scripts/run-sessions.sh:333 unconditionally sets `PROGRESS_SCRIPT=\"$(dirname \"$0\")/epic-progress.py\"` and never references epic-poll-progress.py. scripts/lib/epic-session.sh:204-247 only ever pipes into `$PROGRESS_SCRIPT`, so the polling fallback is dead code. The OpenCode branch in run_cli (lines 232-251) uses the same stream-json-style epic-progress.py — fine in practice because OpenCode's `--format json` output is also newline-delimited JSON that epic-progress.py recognises via its `step_start` / `tool_use` / `text` / `step_finish` event handlers — but the README and CLAUDE.md still describe the polling script as the OpenCode fallback, which misleads anyone reading the architecture overview and confuses anyone trying to extend the progress display for a CLI that *genuinely* lacks streaming output.",
+      "root_cause": "scripts/run-sessions.sh:333 unconditionally sets `PROGRESS_SCRIPT=\"$(dirname \"$0\")/epic-progress.py\"` and never references epic-poll-progress.py. scripts/lib/epic-session.sh:204-247 only ever pipes into `$PROGRESS_SCRIPT`, so the polling fallback is dead code. The OpenCode branch in run_cli (lines 232-251) uses the same stream-json-style epic-progress.py \u2014 fine in practice because OpenCode's `--format json` output is also newline-delimited JSON that epic-progress.py recognises via its `step_start` / `tool_use` / `text` / `step_finish` event handlers \u2014 but the README and CLAUDE.md still describe the polling script as the OpenCode fallback, which misleads anyone reading the architecture overview and confuses anyone trying to extend the progress display for a CLI that *genuinely* lacks streaming output.",
       "fix": "Pick one: (a) delete scripts/epic-poll-progress.py and remove its mentions from CLAUDE.md, AGENTS.md, README.md, and .wolf/anatomy.md if the polling fallback is genuinely obsolete; or (b) wire it back in for a real stream-json-incapable CLI by selecting between PROGRESS_SCRIPT variants in run_cli based on `session_cli`. Option (a) matches current behaviour with no regression risk.",
       "tags": [
         "dead-code",
@@ -1084,7 +1084,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "4 lines replaced/restructured",
-      "fix": "Rewrote 20→27 lines (4 removed)",
+      "fix": "Rewrote 20\u219227 lines (4 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1113,7 +1113,7 @@
     {
       "id": "bug-060",
       "timestamp": "2026-05-06T00:00:00.000Z",
-      "error_message": "cleanup_merged_epic_branches silently does nothing — stale epic/* branches never cleaned up",
+      "error_message": "cleanup_merged_epic_branches silently does nothing \u2014 stale epic/* branches never cleaned up",
       "file": "scripts/run-sessions.sh",
       "root_cause": "REPO_ROOT is reassigned to TRUNK_WORKTREE_DIR at line 582 so it can be used throughout the run. The trunk worktree is physically deleted at line 1182. cleanup_merged_epic_branches is then called at line 1231 with REPO_ROOT (the deleted dir), so every git -C call inside it fails silently.",
       "fix": "Changed cleanup_merged_epic_branches \"$REPO_ROOT\" to cleanup_merged_epic_branches \"$ORIG_REPO_ROOT\" at line 1231. ORIG_REPO_ROOT is set once from the canonical repo root and never reassigned.",
@@ -1171,9 +1171,9 @@
     {
       "id": "bug-063",
       "timestamp": "2026-05-06T00:00:00.000Z",
-      "error_message": "Wave timeout (line 852) kills only the bash subshell PID; the claude CLI and python progress.py children are reparented to init and continue running — they can write into worktrees the orchestrator is about to delete, burn API tokens for sessions that were supposed to be cancelled, and survive across runs",
+      "error_message": "Wave timeout (line 852) kills only the bash subshell PID; the claude CLI and python progress.py children are reparented to init and continue running \u2014 they can write into worktrees the orchestrator is about to delete, burn API tokens for sessions that were supposed to be cancelled, and survive across runs",
       "file": "scripts/run-sessions.sh",
-      "root_cause": "The kill loop at lines 858-870 does `kill -9 \"$_tpid\"` where $_tpid is the PID of the `( run_one_session ... ) &` subshell. The subshell itself dies, but `kill -9 <pid>` (positive PID) does NOT propagate to children. Inside run_one_session → run_cli the actual workhorse processes are a pipeline (`claude -p ... | python3 epic-progress.py ...`), all of which are children of the subshell, not the orchestrator. With job control off (default in non-interactive bash) and no setsid wrapper, those children share the orchestrator's process group, so `kill -- -$pgid` would kill the orchestrator itself. After `kill -9 \"$_tpid\"` they are simply reparented to PID 1 and keep running.",
+      "root_cause": "The kill loop at lines 858-870 does `kill -9 \"$_tpid\"` where $_tpid is the PID of the `( run_one_session ... ) &` subshell. The subshell itself dies, but `kill -9 <pid>` (positive PID) does NOT propagate to children. Inside run_one_session \u2192 run_cli the actual workhorse processes are a pipeline (`claude -p ... | python3 epic-progress.py ...`), all of which are children of the subshell, not the orchestrator. With job control off (default in non-interactive bash) and no setsid wrapper, those children share the orchestrator's process group, so `kill -- -$pgid` would kill the orchestrator itself. After `kill -9 \"$_tpid\"` they are simply reparented to PID 1 and keep running.",
       "fix": "Before (or instead of) killing the subshell, walk and kill its descendants. Cheapest portable form: `pkill -9 -P \"$_tpid\" 2>/dev/null || true` immediately followed by `kill -9 \"$_tpid\"`. For bash 3.2/macOS without pkill, fall back to `pgrep -P \"$_tpid\" | xargs -r kill -9` or a recursive /proc walk. The cleaner fix is to launch each session subshell under its own process group via `setsid` and then `kill -9 -- -$pgid` on timeout, which also covers grandchildren.",
       "tags": [
         "process-management",
@@ -1191,7 +1191,7 @@
       "timestamp": "2026-05-06T00:00:00.000Z",
       "error_message": "epic-progress.py update_status_file leaks .epic-status.json.lock when the progress process is killed by SIGKILL (wave timeout, OOM); subsequent updates silently no-op for the rest of the run because the lock file is never reclaimed",
       "file": "scripts/epic-progress.py",
-      "root_cause": "update_status_file (lines 29-60) acquires the lock with O_CREAT|O_EXCL|O_WRONLY, releases it in `finally`, and retries 100×0.02s if it cannot acquire. The bug-061 fix added a STALE_SECS=60 age check to `mark_session` in epic-session.sh so a SIGKILL-leaked lock auto-recovers on the next call. update_status_file is the *exact same lock pattern on the exact same lock file* (`<status_file>.lock`) but never received that fix. SIGKILL bypasses `finally`; the lock survives indefinitely. After ~2s of retry the function returns silently, so the live UI dashboard freezes — every progress event from every later session disappears with no log line, no warning, and no exit code.",
+      "root_cause": "update_status_file (lines 29-60) acquires the lock with O_CREAT|O_EXCL|O_WRONLY, releases it in `finally`, and retries 100\u00d70.02s if it cannot acquire. The bug-061 fix added a STALE_SECS=60 age check to `mark_session` in epic-session.sh so a SIGKILL-leaked lock auto-recovers on the next call. update_status_file is the *exact same lock pattern on the exact same lock file* (`<status_file>.lock`) but never received that fix. SIGKILL bypasses `finally`; the lock survives indefinitely. After ~2s of retry the function returns silently, so the live UI dashboard freezes \u2014 every progress event from every later session disappears with no log line, no warning, and no exit code.",
       "fix": "Mirror the mark_session pattern: in the except branch, do `if time.time() - os.path.getmtime(lock) > STALE_SECS: os.unlink(lock)` (with try/except OSError) before the `time.sleep(0.02)`. Keep STALE_SECS aligned with mark_session (currently 60). This is the audit-every-site discipline cerebrum already calls out for bug-035; the same discipline applies to lock files, not just open() calls.",
       "tags": [
         "lock-file",
@@ -1211,7 +1211,7 @@
       "timestamp": "2026-05-06T00:00:00.000Z",
       "error_message": "UI dashboard process is leaked when the runner aborts at the per-session worktree pre-flight checks (worktree-in-use or unmerged-commits); the python TUI keeps redrawing on the user's terminal after the runner has exited, requiring a manual kill",
       "file": "scripts/run-sessions.sh",
-      "root_cause": "The live UI is launched at line 698-706 (UI_PID=$!), and explicitly killed only in the post-wave shutdown block at lines 974-978. Between those two points the script has two hard exits — `exit 1` at line 800 (worktree in use by another process) and `exit 1` at line 811 (per-session branch has unmerged commits ahead of trunk). Both exits run AFTER the UI was started but BEFORE the kill block, and the EXIT trap installed at line 347 only does `rm -f \"$DAG_TMP\"` — it does not touch UI_PID or any backgrounded job. Result: the orchestrator dies, the python TUI keeps running, and the terminal stays clobbered until the user finds the PID. Any future hard exits added between line 706 and 974 will inherit the same defect.",
+      "root_cause": "The live UI is launched at line 698-706 (UI_PID=$!), and explicitly killed only in the post-wave shutdown block at lines 974-978. Between those two points the script has two hard exits \u2014 `exit 1` at line 800 (worktree in use by another process) and `exit 1` at line 811 (per-session branch has unmerged commits ahead of trunk). Both exits run AFTER the UI was started but BEFORE the kill block, and the EXIT trap installed at line 347 only does `rm -f \"$DAG_TMP\"` \u2014 it does not touch UI_PID or any backgrounded job. Result: the orchestrator dies, the python TUI keeps running, and the terminal stays clobbered until the user finds the PID. Any future hard exits added between line 706 and 974 will inherit the same defect.",
       "fix": "Expand the EXIT trap to also clean up the UI and any spawned jobs, e.g.: `trap '_rc=$?; [[ -n \"${UI_PID:-}\" ]] && kill \"$UI_PID\" 2>/dev/null; [[ ${#JOB_PIDS[@]:-0} -gt 0 ]] && { pkill -P $$ 2>/dev/null; }; rm -f \"$DAG_TMP\"; exit $_rc' EXIT`. This makes the cleanup defensive against any future exit path rather than relying on every author to remember to kill the UI manually before each new `exit 1`.",
       "tags": [
         "ui-leak",
@@ -1245,7 +1245,7 @@
       "timestamp": "2026-05-06T16:07:53.712Z",
       "error_message": "Missing error handling in unknown",
       "file": "scripts/run-sessions.sh",
-      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "root_cause": "Code path had no error handling \u2014 exceptions would propagate uncaught",
       "fix": "Added try/catch block",
       "tags": [
         "auto-detected",
@@ -1262,7 +1262,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-git.sh",
       "root_cause": "3 lines replaced/restructured",
-      "fix": "Rewrote 11→12 lines (3 removed)",
+      "fix": "Rewrote 11\u219212 lines (3 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1277,7 +1277,7 @@
       "timestamp": "2026-05-06T17:30:00.000Z",
       "error_message": "After wave timeout or runner abort with --timeout MINS set, claude/opencode child process is reparented to init and keeps running (orphan), continuing to burn API tokens and hold worktree handles.",
       "file": "scripts/run-sessions.sh, scripts/lib/epic-session.sh",
-      "root_cause": "When TIMEOUT > 0, run_cli builds the pipeline as `timeout DURATION env -u CLAUDECODE claude ... | python progress.py`. The session subshell forks `timeout` as a direct child; `timeout` in turn forks `claude` (env execs into claude inside that child). So claude is a GRANDCHILD of the subshell, not a direct child. `pkill -9 -P $subshell_pid` (used in both _on_exit at run-sessions.sh:357-368 and the wave-timeout cleanup at run-sessions.sh:879-896) only matches direct children. After SIGKILLing `timeout`, claude's parent dies and claude is reparented to PID 1 — it survives with no one waiting on it. Reproduced locally with `sh -c 'sleep 30 & wait' &; pkill -9 -P parent; kill -9 parent` — sleep persists with PPID=1. The bug-063 cerebrum entry described the symptom (orphaned children) but the fix only walks one process-tree level.",
+      "root_cause": "When TIMEOUT > 0, run_cli builds the pipeline as `timeout DURATION env -u CLAUDECODE claude ... | python progress.py`. The session subshell forks `timeout` as a direct child; `timeout` in turn forks `claude` (env execs into claude inside that child). So claude is a GRANDCHILD of the subshell, not a direct child. `pkill -9 -P $subshell_pid` (used in both _on_exit at run-sessions.sh:357-368 and the wave-timeout cleanup at run-sessions.sh:879-896) only matches direct children. After SIGKILLing `timeout`, claude's parent dies and claude is reparented to PID 1 \u2014 it survives with no one waiting on it. Reproduced locally with `sh -c 'sleep 30 & wait' &; pkill -9 -P parent; kill -9 parent` \u2014 sleep persists with PPID=1. The bug-063 cerebrum entry described the symptom (orphaned children) but the fix only walks one process-tree level.",
       "fix": "Walk the process tree before killing. Replace the single `pkill -9 -P` with a recursive helper, e.g.: `kill_tree(){ local p=$1; for c in $(pgrep -P $p 2>/dev/null); do kill_tree $c; done; kill -9 $p 2>/dev/null||true; }`. Apply at both call sites (EXIT trap and wave-timeout). Or: spawn each session subshell via `setsid` so the whole subshell tree is its own process group, and kill with `kill -9 -<pgid>` (negative pid). The setsid approach is cleaner but requires checking macOS behaviour.",
       "tags": [
         "found-by-bug-hunt",
@@ -1300,7 +1300,7 @@
       "timestamp": "2026-05-06T17:30:00.000Z",
       "error_message": "Pre-PR rebase reports REBASE_RESULT=ok and pushes the un-rebased branch when `git rebase` fails fast (dirty tree, missing target ref, etc.) without leaving rebase-merge/rebase-apply state.",
       "file": "scripts/lib/epic-git.sh",
-      "root_cause": "rebase_with_wolf_resolve() at epic-git.sh:146-191 has three return paths to 0: (1) already a descendant; (2) clean rebase succeeded; (3) the function falls off the end after the conflict-resolve while-loop. Path 3 is reached whenever the initial `git rebase ...; then return 0; fi` fails AND no rebase state directory exists for the while-loop to enter. That happens when git rebase rejects the operation early — verified locally: `git rebase nonexistent-branch` exits 128, prints `fatal: invalid upstream`, and leaves NO `.git/rebase-merge` or `.git/rebase-apply`. In that case the while loop body never runs and the function returns 0. The caller at run-sessions.sh:1115-1117 then sets REBASE_RESULT=ok, prints `Rebased onto origin/<default> — PR will be fast-forward-mergeable`, and force-pushes the un-rebased branch with --force-with-lease (line 1148). The PR shows the un-rebased history while the user is told it was rebased.",
+      "root_cause": "rebase_with_wolf_resolve() at epic-git.sh:146-191 has three return paths to 0: (1) already a descendant; (2) clean rebase succeeded; (3) the function falls off the end after the conflict-resolve while-loop. Path 3 is reached whenever the initial `git rebase ...; then return 0; fi` fails AND no rebase state directory exists for the while-loop to enter. That happens when git rebase rejects the operation early \u2014 verified locally: `git rebase nonexistent-branch` exits 128, prints `fatal: invalid upstream`, and leaves NO `.git/rebase-merge` or `.git/rebase-apply`. In that case the while loop body never runs and the function returns 0. The caller at run-sessions.sh:1115-1117 then sets REBASE_RESULT=ok, prints `Rebased onto origin/<default> \u2014 PR will be fast-forward-mergeable`, and force-pushes the un-rebased branch with --force-with-lease (line 1148). The PR shows the un-rebased history while the user is told it was rebased.",
       "fix": "Track whether a rebase was actually performed. After the initial `git rebase` attempt fails, check for rebase state BEFORE entering the while loop and treat 'no state' as a hard failure: `if ! git -C \"$workdir\" rev-parse --git-path rebase-merge | xargs test -d && ! git -C \"$workdir\" rev-parse --git-path rebase-apply | xargs test -d; then return 1; fi`. Or capture the initial rebase exit code and propagate it when no state dir exists. Either makes REBASE_RESULT=conflict and falls through to a non-force push, which is the safe behaviour.",
       "tags": [
         "found-by-bug-hunt",
@@ -1320,7 +1320,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-git.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 8→18 lines (2 removed)",
+      "fix": "Rewrote 8\u219218 lines (2 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1336,7 +1336,7 @@
       "error_message": "Wrong reference: 069 should be 073",
       "file": "scripts/lib/epic-wave.sh",
       "root_cause": "Used \"069\" instead of \"073\"",
-      "fix": "Changed 069 → 073",
+      "fix": "Changed 069 \u2192 073",
       "tags": [
         "auto-detected",
         "wrong-reference",
@@ -1352,7 +1352,7 @@
       "error_message": "Wrong reference: 069 should be 073",
       "file": "scripts/run-sessions.sh",
       "root_cause": "Used \"069\" instead of \"073\"",
-      "fix": "Changed 069 → 073",
+      "fix": "Changed 069 \u2192 073",
       "tags": [
         "auto-detected",
         "wrong-reference",
@@ -1368,7 +1368,7 @@
       "error_message": "Wrong reference: 070 should be 074",
       "file": "scripts/lib/epic-git.sh",
       "root_cause": "Used \"070\" instead of \"074\"",
-      "fix": "Changed 070 → 074",
+      "fix": "Changed 070 \u2192 074",
       "tags": [
         "auto-detected",
         "wrong-reference",
@@ -1451,7 +1451,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 11→17 lines (2 removed) | Also: git -C \"$TRUNK_WORKTREE_DIR\" commit -q \\; Co-Authored-By: AI <noreply@ai>\" 2>/dev/null",
+      "fix": "Rewrote 11\u219217 lines (2 removed) | Also: git -C \"$TRUNK_WORKTREE_DIR\" commit -q \\; Co-Authored-By: AI <noreply@ai>\" 2>/dev/null",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1467,7 +1467,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/lib/epic-git.sh",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 16→35 lines (2 removed) | Also: if [[ -n \"${BASE_BRANCH:-}\" ]] \\; && git -C \"$repo\" rev-parse --verify --quiet \"$BAS",
+      "fix": "Rewrote 16\u219235 lines (2 removed) | Also: if [[ -n \"${BASE_BRANCH:-}\" ]] \\; && git -C \"$repo\" rev-parse --verify --quiet \"$BAS",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1480,10 +1480,10 @@
     {
       "id": "bug-080",
       "timestamp": "2026-05-06T17:30:00.000Z",
-      "error_message": "User reported epic runner skipped all session execution: '✓ session 0N already committed on this branch — skipping (use --fresh to force re-run)' for every session on a fresh epic run, total runtime 18 seconds, no code produced. The epic created worktrees, synced session prompts, made the bootstrap commit, then immediately reported every session as 'already committed' and merged only the bootstrap before exiting. --fresh worked around it.",
+      "error_message": "User reported epic runner skipped all session execution: '\u2713 session 0N already committed on this branch \u2014 skipping (use --fresh to force re-run)' for every session on a fresh epic run, total runtime 18 seconds, no code produced. The epic created worktrees, synced session prompts, made the bootstrap commit, then immediately reported every session as 'already committed' and merged only the bootstrap before exiting. --fresh worked around it.",
       "file": "scripts/lib/epic-git.sh",
-      "root_cause": "session_completed_on_branch ran `git log --format='%s' \"$branch\"` over the entire branch history. The per-session worktree (created at run-sessions.sh:860 from $BRANCH, which was just branched off $BASE_BRANCH at line 611) inherits the full base-branch history. A single commit anywhere on main whose subject begins with 'feat: Session N' or 'Merge session NN (' — common when a previously-merged epic of the same family is in main, or any unrelated commit happens to use a session-style subject — falsely matched the resume-cache regex for every session, so every run_one_session call returned early before invoking Claude. The bug fires on the very first run with no prior epic state at all; nothing in the workflow signals to the user that the cache check is poisoned by inherited history.",
-      "fix": "Scope the subject scan to commits unique to the epic by using rev range `${BASE_BRANCH}..${branch}` instead of bare `$branch`. Falls back to `origin/$BASE_BRANCH..` when only the remote-tracking ref exists locally, and to the legacy unscoped scan when neither resolves so we never harden into a worse failure mode. Verified with two scenarios: (a) main carrying a poison `feat: Session 1 — old work` commit no longer triggers a false skip, and (b) a real `feat: Session 1` commit made on the epic branch is still detected as completed for legitimate resume.",
+      "root_cause": "session_completed_on_branch ran `git log --format='%s' \"$branch\"` over the entire branch history. The per-session worktree (created at run-sessions.sh:860 from $BRANCH, which was just branched off $BASE_BRANCH at line 611) inherits the full base-branch history. A single commit anywhere on main whose subject begins with 'feat: Session N' or 'Merge session NN (' \u2014 common when a previously-merged epic of the same family is in main, or any unrelated commit happens to use a session-style subject \u2014 falsely matched the resume-cache regex for every session, so every run_one_session call returned early before invoking Claude. The bug fires on the very first run with no prior epic state at all; nothing in the workflow signals to the user that the cache check is poisoned by inherited history.",
+      "fix": "Scope the subject scan to commits unique to the epic by using rev range `${BASE_BRANCH}..${branch}` instead of bare `$branch`. Falls back to `origin/$BASE_BRANCH..` when only the remote-tracking ref exists locally, and to the legacy unscoped scan when neither resolves so we never harden into a worse failure mode. Verified with two scenarios: (a) main carrying a poison `feat: Session 1 \u2014 old work` commit no longer triggers a false skip, and (b) a real `feat: Session 1` commit made on the epic branch is still detected as completed for legitimate resume.",
       "tags": [
         "user-reported",
         "found-by-bug-hunt",
@@ -1505,9 +1505,9 @@
     {
       "id": "bug-081",
       "timestamp": "2026-05-06T17:37:50Z",
-      "error_message": "UTF-8 BOM at the start of session-NN-*.md silently breaks YAML frontmatter parsing — parse_frontmatter returns {}, the session loses depends_on/parallel_safe/touches, and the entire DAG silently collapses to the implicit linear chain (one session per wave). No warning. Verified via /tmp/bom-test reproduction: two parallel_safe sessions with depends_on=[] produced 2 sequential waves instead of 1 parallel wave.",
+      "error_message": "UTF-8 BOM at the start of session-NN-*.md silently breaks YAML frontmatter parsing \u2014 parse_frontmatter returns {}, the session loses depends_on/parallel_safe/touches, and the entire DAG silently collapses to the implicit linear chain (one session per wave). No warning. Verified via /tmp/bom-test reproduction: two parallel_safe sessions with depends_on=[] produced 2 sequential waves instead of 1 parallel wave.",
       "file": "scripts/epic-dag.py",
-      "root_cause": "scripts/epic-dag.py:60 — `if not text.startswith('---\\n'):` fails when the file begins with the UTF-8 BOM (\\ufeff). The CRLF normalization above it (lines 58-59) handles \\r but not \\ufeff. Files saved by Windows editors with 'UTF-8 with BOM' (Notepad's default for some encodings, VS Code's optional setting) routinely include the BOM. Same family as bug-024 (CRLF) and bug-035 (encoding).",
+      "root_cause": "scripts/epic-dag.py:60 \u2014 `if not text.startswith('---\\n'):` fails when the file begins with the UTF-8 BOM (\\ufeff). The CRLF normalization above it (lines 58-59) handles \\r but not \\ufeff. Files saved by Windows editors with 'UTF-8 with BOM' (Notepad's default for some encodings, VS Code's optional setting) routinely include the BOM. Same family as bug-024 (CRLF) and bug-035 (encoding).",
       "fix": "Strip a leading \\ufeff before the startswith check, and mirror the same fix in extract_prompt's awk path in scripts/lib/epic-session.sh so prompt extraction also handles BOM'd files. Suggested patch in epic-dag.py: after CRLF normalization, add `if text.startswith('\\ufeff'): text = text[1:]`.",
       "tags": [
         "found-by-bug-hunt",
@@ -1527,9 +1527,9 @@
     {
       "id": "bug-082",
       "timestamp": "2026-05-06T17:37:50Z",
-      "error_message": "Session slug containing '|' (allowed by SESSION_RE — only spaces are rejected) corrupts the pipe-delimited result row in write_epic_result and crashes the json-emit step with `ValueError: invalid literal for int() with base 10: 'api'` (or similar). The entire result file fails to write, and external watchers polling the EPIC_RESULT_FILE sentinel hang indefinitely. Verified by simulating row construction with slug='auth|api'.",
+      "error_message": "Session slug containing '|' (allowed by SESSION_RE \u2014 only spaces are rejected) corrupts the pipe-delimited result row in write_epic_result and crashes the json-emit step with `ValueError: invalid literal for int() with base 10: 'api'` (or similar). The entire result file fails to write, and external watchers polling the EPIC_RESULT_FILE sentinel hang indefinitely. Verified by simulating row construction with slug='auth|api'.",
       "file": "scripts/lib/epic-result.sh",
-      "root_cause": "scripts/lib/epic-result.sh:112 encodes the session row as `${key}|${status}|${slug}|${elapsed}|${exit_code}|${error_type}|${log_path}|${stderr_path}` and the consuming Python script splits on '|' (lines 162-172). The slug regex in scripts/epic-dag.py:48 (`^session-(\\d+)-(.+)\\.md$`) and the validator at line 132 only reject space — '|' (and other shell/JSON-safe chars) slip through. With slug='foo|bar', parts[2]='foo', parts[3]='bar' (instead of elapsed seconds), and `int(parts[3])` raises ValueError.",
+      "root_cause": "scripts/lib/epic-result.sh:112 encodes the session row as `${key}|${status}|${slug}|${elapsed}|${exit_code}|${error_type}|${log_path}|${stderr_path}` and the consuming Python script splits on '|' (lines 162-172). The slug regex in scripts/epic-dag.py:48 (`^session-(\\d+)-(.+)\\.md$`) and the validator at line 132 only reject space \u2014 '|' (and other shell/JSON-safe chars) slip through. With slug='foo|bar', parts[2]='foo', parts[3]='bar' (instead of elapsed seconds), and `int(parts[3])` raises ValueError.",
       "fix": "Either (a) tighten the slug validator in epic-dag.py to reject '|' (and ideally restrict to [A-Za-z0-9._-]), or (b) switch the result-file row delimiter to TAB (\\t) or NUL (\\0) which can't appear in filenames on POSIX, or (c) shell-escape/JSON-encode the slug field before emitting. Option (a) is least invasive.",
       "tags": [
         "found-by-bug-hunt",
@@ -1570,7 +1570,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/epic-dag.py",
       "root_cause": "9 lines replaced/restructured",
-      "fix": "Rewrote 15→22 lines (9 removed)",
+      "fix": "Rewrote 15\u219222 lines (9 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1602,7 +1602,7 @@
       "error_message": "Significant refactor of ",
       "file": "scripts/run-sessions.sh",
       "root_cause": "3 lines replaced/restructured",
-      "fix": "Rewrote 4→19 lines (3 removed)",
+      "fix": "Rewrote 4\u219219 lines (3 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -1611,6 +1611,79 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T17:44:15.397Z"
+    },
+    {
+      "id": "bug-087",
+      "timestamp": "2026-05-06T18:10:44.570Z",
+      "error_message": "Incorrect value in code",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Had \"$(dirname \"",
+      "fix": "Changed to \"$CLAUDE_PLUGIN_ROOT/scripts/epic-dag.py\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T18:10:44.570Z"
+    },
+    {
+      "id": "bug-087",
+      "timestamp": "2026-05-06T18:11:37Z",
+      "error_message": "git merge fails for non-conflict reasons (index.lock, dirty tree); auto_resolve_wolf_conflicts returns 2 (no conflict markers), but the else branch runs merge --abort on a non-existent merge and reports false MERGE CONFLICT, aborting the epic",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "if auto_resolve_wolf_conflicts ... treats both return 1 (real conflicts) and return 2 (no markers) as failure. Return 2 means no merge-in-progress state exists, so merge --abort fails silently and the epic is aborted with a misleading error message",
+      "fix": "Capture return code via _resolve_rc=0; auto_resolve_wolf_conflicts || _resolve_rc=$?. Distinguish rc=2 (no conflict markers \u2192 no merge to abort, emit a different error) from rc=1 (real conflicts \u2192 merge --abort and fail). Only call merge --abort for rc=1.",
+      "tags": [
+        "merge",
+        "git",
+        "worktree",
+        "false-positive",
+        "error-handling"
+      ],
+      "related_bugs": [
+        "bug-045",
+        "bug-077"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T18:11:37Z"
+    },
+    {
+      "id": "bug-088",
+      "timestamp": "2026-05-06T18:11:37Z",
+      "error_message": "On retry after exec failure, plan phase re-runs from scratch even when a valid plan file already exists from the first attempt, wasting tokens and risking a plan-phase failure that blocks exec re-try",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "plan_cached is evaluated once before the retry loop from an mtime check; it is never re-checked inside the loop. A successful plan run on attempt 1 writes plan_file, but plan_cached stays false, so attempt 2 triggers a redundant plan phase",
+      "fix": "At the start of each retry iteration (attempt > 1), re-check [[ -s plan_file && plan_file -nt session_path ]] and set plan_cached=true if it passes, so subsequent attempts reuse the existing plan",
+      "tags": [
+        "retry",
+        "plan-cache",
+        "tokens",
+        "session"
+      ],
+      "related_bugs": [
+        "bug-036"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T18:11:37Z"
+    },
+    {
+      "id": "bug-089",
+      "timestamp": "2026-05-06T18:11:37Z",
+      "error_message": "PROGRESS_SCRIPT, DAG_SCRIPT, UI_SCRIPT built via $(dirname \"$0\") which is a relative path when run-sessions.sh is invoked with a relative path. After cd \"$TRUNK_WORKTREE_DIR\" and inside session subshells that cd \"$wt_dir\", PROGRESS_SCRIPT resolves to a non-existent path; [[ -f \"$PROGRESS_SCRIPT\" ]] silently returns false and run_cli falls back to no-progress mode for all sessions",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "dirname \"$0\" is not canonicalized; lib scripts use the already-absolute $CLAUDE_PLUGIN_ROOT but DAG_SCRIPT etc. were set independently via dirname",
+      "fix": "Replace $(dirname \"$0\") with $CLAUDE_PLUGIN_ROOT/scripts/ for DAG_SCRIPT, PROGRESS_SCRIPT, and UI_SCRIPT \u2014 CLAUDE_PLUGIN_ROOT is already computed as an absolute path at line 294",
+      "tags": [
+        "path",
+        "progress",
+        "relative-path",
+        "cd"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T18:11:37Z"
     }
   ]
 }

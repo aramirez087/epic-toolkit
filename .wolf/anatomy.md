@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T17:25:29.384Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T18:11:17.262Z
 > Files: 36 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -59,16 +59,16 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~4773 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~4944 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4488 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~14316 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~15046 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3902 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2333 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5682 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5859 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
 
 ## scripts/wolf-merge/

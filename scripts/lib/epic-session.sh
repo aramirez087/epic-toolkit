@@ -395,6 +395,15 @@ run_one_session() {
     rc=0
     if [[ $attempt -gt 1 ]]; then
       echo "Retry attempt $attempt of $max_attempts" >> "$exec_log"
+      # Re-check plan cache at the start of every retry. If the plan phase
+      # succeeded on a prior attempt (plan_file was written) but execution
+      # failed, reuse the existing plan rather than re-running the plan
+      # phase and wasting tokens — or worse, having the plan phase itself
+      # fail when a valid plan already exists. (bug-088)
+      if ! $plan_cached && ! $SKIP_PLAN && [[ -s "$plan_file" && "$plan_file" -nt "$session_path" ]]; then
+        plan_cached=true
+        log "  ↻ session ${padded_sid}: reusing plan from prior attempt on retry"
+      fi
     fi
 
     if $SKIP_PLAN; then

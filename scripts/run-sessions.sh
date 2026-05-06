@@ -347,9 +347,9 @@ if $SEQUENTIAL; then
   MAX_PARALLEL=1
 fi
 
-DAG_SCRIPT="$(dirname "$0")/epic-dag.py"
-PROGRESS_SCRIPT="$(dirname "$0")/epic-progress.py"
-UI_SCRIPT="$(dirname "$0")/epic-ui.py"
+DAG_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/epic-dag.py"
+PROGRESS_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/epic-progress.py"
+UI_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/epic-ui.py"
 
 # --- Build the DAG plan ---
 DAG_TMP="$(mktemp)"
@@ -981,7 +981,16 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
           else
             # Wave merge conflict. Try auto-resolving if conflicts are
             # .wolf/-only (append-only metadata; theirs = session = winner).
-            if auto_resolve_wolf_conflicts "$TRUNK_WORKTREE_DIR" "theirs"; then
+            # Capture return code explicitly: 0=all-wolf resolved,
+            # 1=non-wolf conflicts exist, 2=no conflict markers at all
+            # (git merge failed for a non-conflict reason such as an
+            # index.lock or dirty tree). Treating 2 the same as 1 used to
+            # run `merge --abort` on a merge that was never started, print
+            # a misleading "MERGE CONFLICT" message, and falsely abort the
+            # entire epic. (bug-087)
+            _resolve_rc=0
+            auto_resolve_wolf_conflicts "$TRUNK_WORKTREE_DIR" "theirs" || _resolve_rc=$?
+            if [[ $_resolve_rc -eq 0 ]]; then
               warn "  ⚠ auto-resolving .wolf/ conflicts for session $(printf '%02d' "$sid") (metadata files only)"
               # Wrap the auto-resolve commit in an `if` so a hook failure,
               # GPG signing failure, or index lock contention does not abort
@@ -1004,15 +1013,32 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
                 [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
                 break
               fi
+            elif [[ $_resolve_rc -eq 2 ]]; then
+              # No conflict markers found, but git merge still returned
+              # non-zero. Most likely cause: index.lock held by another
+              # process, or a dirty/staged state that prevented the merge
+              # from starting. A merge-in-progress state does not exist,
+              # so `merge --abort` must NOT be called here (it would fail
+              # on a non-existent merge and produce a confusing extra error).
+              err "  ⇢ MERGE FAILED for session $(printf '%02d' "$sid") — no conflict markers found"
+              err "      Likely cause: git index.lock contention or dirty working tree"
+              err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
+              err "      Inspect, then resume with --start $sid"
+              unset _resolve_rc
+              EPIC_FAILED=true
+              [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
+              break
             else
               err "  ⇢ MERGE CONFLICT merging session $(printf '%02d' "$sid") into trunk"
               err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
               err "      Resolve, commit, and resume with --start $((sid + 1))"
               git -C "$TRUNK_WORKTREE_DIR" merge --abort 2>/dev/null || true
+              unset _resolve_rc
               EPIC_FAILED=true
               [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
               break
             fi
+            unset _resolve_rc
           fi
         else
           # Session committed directly to trunk; no merge required.
