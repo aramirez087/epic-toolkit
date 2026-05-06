@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T19:34:25.545Z
-> Files: 39 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T19:51:19.321Z
+> Files: 40 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -9,6 +9,7 @@
 - `commit-msg.txt` (~308 tok)
 - `epic-fix-commit-msg.txt` (~453 tok)
 - `epic-toolkit-commit-msg.txt` (~413 tok)
+- `epic-toolkit-fix-msg-2.txt` (~311 tok)
 - `epic-toolkit-fix-msg.txt` (~353 tok)
 
 ## ../../.claude/
@@ -65,12 +66,12 @@
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4488 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~15793 tok)
-- `validate-session-deliverables.py` — validate-session-deliverables.py (~2103 tok)
+- `validate-session-deliverables.py` — validate-session-deliverables.py (~2288 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3902 tok)
-- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2356 tok)
+- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2524 tok)
 - `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~6255 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
 
@@ -78,5 +79,5 @@
 
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
 - `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
-- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~1608 tok)
+- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~1778 tok)
 - `resolve-wolf.sh` — Helper for resolving in-progress OpenWolf-only merge/rebase conflicts (~650 tok)

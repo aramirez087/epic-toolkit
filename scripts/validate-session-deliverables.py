@@ -83,8 +83,22 @@ def _is_metadata_only(changed_paths: list[str]) -> bool:
 
 def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
     """Return (changed_or_added, deleted) paths between base_ref and HEAD."""
+    # core.quotePath=false: git's default quotes any path with bytes >= 0x80
+    # (and whitespace/control chars) as `"src/T\303\253st.cs"`. The exact-match
+    # compare against the unquoted `produces:` entry then silently fails, so
+    # any session that produces a file containing a non-ASCII char (em-dash,
+    # accented letter, CJK) or a literal space gets flagged as "declared
+    # deliverable missing" even when the file is plainly in the diff. Force
+    # raw bytes so the comparison reflects real path identity. (bug-104)
     proc = subprocess.run(
-        ["git", "-C", worktree, "diff", "--name-status", f"{base_ref}..HEAD"],
+        [
+            "git",
+            "-C", worktree,
+            "-c", "core.quotePath=false",
+            "diff",
+            "--name-status",
+            f"{base_ref}..HEAD",
+        ],
         capture_output=True,
         text=True,
         check=False,

@@ -19,6 +19,17 @@ classify_error() {
   fi
 
   if [[ "$exit_code" -eq 97 ]]; then
+    # Surface the validator's first ERROR line as error_detail so the
+    # [EPIC_RESULT_START] block gets an `ERROR_DETAIL=...` line naming
+    # the missing deliverable. Without this, bug-102's classification fix
+    # ("error=deliverables_failure" instead of "error=unknown") tells the
+    # user *that* deliverables failed but not *which* ones — the actionable
+    # detail still requires opening the log file by hand. (bug-106)
+    local err_msg
+    err_msg="$(grep -m1 -E '^ERROR: ' "$log_file" 2>/dev/null | sed 's/^ERROR: //')"
+    if [[ -n "$err_msg" ]]; then
+      printf '%s\n' "$err_msg" > "${log_file}.errtype"
+    fi
     echo "deliverables_failure"
     return
   fi

@@ -87,6 +87,16 @@ def merge_buglog(ours, theirs):
         for bug in src.get("bugs", []):
             bid = bug.get("id")
             if not bid:
+                # Same data-loss class as bug-090's id-collision case: a
+                # bug entry without an id (malformed write, partially-flushed
+                # entry from a SIGKILL'd hook, schema drift) was previously
+                # dropped on the floor by `continue`. Allocate a fresh id
+                # and route through extras so the entry survives. (bug-105)
+                new_bid = _next_free_bug_id(used_ids)
+                used_ids.add(new_bid)
+                renumbered = dict(bug)
+                renumbered["id"] = new_bid
+                extras.append(renumbered)
                 continue
             existing = by_id.get(bid)
             if existing is None:
