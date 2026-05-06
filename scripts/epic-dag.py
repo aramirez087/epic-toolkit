@@ -110,8 +110,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 if inner
                 else []
             )
-        elif v.lower() in ("true", "false"):
-            result[k] = v.lower() == "true"
+        elif v.lower() in ("true", "false", "yes", "no", "on", "off", "y", "n"):
+            # YAML 1.1 boolean spellings (yes/no/on/off + y/n shorthand)
+            # join true/false in the parser whitelist. Without this, a
+            # frontmatter line like `parallel_safe: no` falls through to
+            # the string branch and load_sessions's `bool(...)` coerces
+            # the non-empty string to True — silently inverting the user's
+            # explicit "do not run me in parallel" intent. (bug-097)
+            result[k] = v.lower() in ("true", "yes", "on", "y")
         elif v.lstrip("-").isdigit():
             result[k] = int(v)
         else:
@@ -178,6 +184,19 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         touches = fm.get("touches", []) or []
         if not isinstance(touches, list):
             raise SystemExit(f"ERROR: {entry} touches must be a list of globs")
+        # Defence-in-depth alongside the bug-097 fix in parse_frontmatter:
+        # any string that survived the boolean-recognition whitelist (typo,
+        # capitalised brand-name like `parallel_safe: Maybe`, accidental
+        # quoting, etc.) would otherwise be silently coerced via bool()
+        # into True. Refuse those explicitly so the user sees a clear error
+        # at validation time instead of mysterious parallel-wave behavior.
+        ps_raw = fm.get("parallel_safe", True)
+        if isinstance(ps_raw, str):
+            raise SystemExit(
+                f"ERROR: {entry} parallel_safe must be a boolean "
+                f"(true/false/yes/no/on/off), got string {ps_raw!r}. "
+                f"Quote the value if you intend it as a literal string."
+            )
         sessions.append(
             {
                 "id": sid,
@@ -188,7 +207,7 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 "depends_on": deps,
                 "implicit_dep": implicit,
                 "touches": [str(t) for t in touches],
-                "parallel_safe": bool(fm.get("parallel_safe", True)),
+                "parallel_safe": bool(ps_raw),
                 "model": fm.get("model", ""),
                 "cli": fm.get("cli", ""),
                 "has_frontmatter": bool(fm),

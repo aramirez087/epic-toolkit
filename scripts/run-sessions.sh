@@ -584,25 +584,69 @@ if [[ -d "$WORKTREE_BASE" ]]; then
   done < "$DAG_TMP"
 
   cleaned_count=0
+  skipped_count=0
   for stale_wt in "$WORKTREE_BASE/${BRANCH_SANITIZED}--s"[0-9]*-*; do
     [[ ! -d "$stale_wt" ]] && continue
 
+    stale_basename="$(basename "$stale_wt")"
     # Extract session ID from worktree name; [0-9]+ matches 2- and 3-digit ids.
-    if [[ "$(basename "$stale_wt")" =~ --s([0-9]+)- ]]; then
+    if [[ "$stale_basename" =~ --s([0-9]+)- ]]; then
       stale_id="${BASH_REMATCH[1]}"
       # Remove leading zero for comparison
       stale_id="$((10#$stale_id))"
 
-      # Check if this session ID is in current DAG
-      if [[ ! " $current_session_ids " =~ " $stale_id " ]]; then
-        log "  ↻ removing stale worktree for session $stale_id: $(basename "$stale_wt")"
-        git worktree remove "$stale_wt" --force 2>/dev/null || rm -rf "$stale_wt"
-        cleaned_count=$((cleaned_count + 1))
+      # Skip session IDs that are still part of the current DAG — those are
+      # handled (with their own safety guards) by the per-wave cleanup loop.
+      [[ " $current_session_ids " =~ " $stale_id " ]] && continue
+
+      # Apply the same safety guards the per-wave cleanup uses (lines ~850-868).
+      # Without these, removing a session from the epic and re-running silently
+      # destroys uncommitted/unmerged work in that session's worktree, and a
+      # sibling concurrent runner can have its in-flight worktree ripped out
+      # from under it. The per-wave path exits 1 on guard failure (user
+      # explicitly opted into the run); the startup-stale path warns + skips
+      # so a leftover orphan never blocks subsequent epics. (bug-096)
+      if is_worktree_in_use "$stale_wt"; then
+        warn "  ⚠ stale worktree for session $stale_id is in use by another process — skipping: $stale_basename"
+        warn "    Stop the other runner or remove manually if truly orphaned."
+        skipped_count=$((skipped_count + 1))
+        continue
       fi
+
+      # Reconstruct the per-session branch name from the worktree dirname.
+      # The worktree was created as ${BRANCH_SANITIZED}--s${padded}-${slug};
+      # the matching branch was ${BRANCH}--s${padded}-${slug}. Replacing the
+      # sanitized prefix with the real branch name inverts the BRANCH_SANITIZED
+      # transformation without having to re-derive padding/slug separately.
+      stale_branch=""
+      if [[ "$stale_basename" == "${BRANCH_SANITIZED}"* ]]; then
+        stale_branch="${BRANCH}${stale_basename#${BRANCH_SANITIZED}}"
+      fi
+      stale_has_unmerged=false
+      if [[ -n "$stale_branch" ]] \
+         && git show-ref --verify --quiet "refs/heads/$stale_branch"; then
+        ahead="$(git rev-list --count "$BRANCH..$stale_branch" 2>/dev/null || echo 0)"
+        [[ "$ahead" -gt 0 ]] && stale_has_unmerged=true
+      fi
+      if $stale_has_unmerged; then
+        warn "  ⚠ stale worktree for session $stale_id has unmerged commits on '$stale_branch' — skipping: $stale_basename"
+        # Use ORIG_REPO_ROOT (set at startup) rather than TRUNK_WORKTREE_DIR;
+        # the trunk worktree isn't created until later in the script, so it
+        # is empty here on the very first run of an epic.
+        warn "    Inspect with: git -C $ORIG_REPO_ROOT log $BRANCH..$stale_branch --oneline"
+        warn "    Then delete manually if no longer needed."
+        skipped_count=$((skipped_count + 1))
+        continue
+      fi
+
+      log "  ↻ removing stale worktree for session $stale_id: $stale_basename"
+      git worktree remove "$stale_wt" --force 2>/dev/null || rm -rf "$stale_wt"
+      cleaned_count=$((cleaned_count + 1))
     fi
   done
 
   [[ $cleaned_count -gt 0 ]] && log "Cleaned $cleaned_count stale session worktrees"
+  [[ $skipped_count -gt 0 ]] && warn "Skipped $skipped_count stale worktree(s) for safety — see warnings above"
 fi
 
 if $USE_WORKTREE; then

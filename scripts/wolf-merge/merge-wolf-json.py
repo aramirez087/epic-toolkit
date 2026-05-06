@@ -34,8 +34,15 @@ def write(path: str, data) -> None:
 
 
 def _bug_signature(bug):
+    # Semantic identity of a bug = (what failed, where, why). Timestamp is
+    # intentionally NOT in the signature: two parallel sessions detecting
+    # the same root cause within sub-second of each other produce different
+    # ISO timestamps, and including it here would force the same-id branch
+    # in merge_buglog to treat them as distinct events and renumber one
+    # under a fresh id — duplicating the same bug across two log entries
+    # despite this driver existing precisely to dedupe parallel detections.
+    # (bug-098)
     return (
-        bug.get("timestamp", ""),
         bug.get("error_message", ""),
         bug.get("file", ""),
         bug.get("root_cause", ""),
@@ -86,8 +93,23 @@ def merge_buglog(ours, theirs):
                 by_id[bid] = bug
                 continue
             if _bug_signature(bug) == _bug_signature(existing):
+                # True duplicate: keep the newer entry's metadata but
+                # accumulate occurrences from both sides. The previous
+                # implementation replaced existing wholesale on a newer
+                # last_seen, silently discarding the older entry's
+                # occurrence count — and after bug-098's signature
+                # tightening, parallel detections that previously
+                # renumbered now correctly land here, so this branch is
+                # the one that has to preserve the count. (bug-098)
+                summed = (existing.get("occurrences", 1) or 1) + (
+                    bug.get("occurrences", 1) or 1
+                )
                 if bug.get("last_seen", "") > existing.get("last_seen", ""):
-                    by_id[bid] = bug
+                    winner = dict(bug)
+                else:
+                    winner = dict(existing)
+                winner["occurrences"] = summed
+                by_id[bid] = winner
                 continue
             new_bid = _next_free_bug_id(used_ids)
             used_ids.add(new_bid)
