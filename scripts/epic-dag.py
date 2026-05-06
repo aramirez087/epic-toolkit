@@ -132,7 +132,12 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         if sid == 0:
             operator = path
             continue
-        with open(path) as f:
+        # Force UTF-8: bare `open()` uses locale.getpreferredencoding(False),
+        # which is cp1252 on Windows and ASCII when LC_ALL=C. Session prompts
+        # routinely contain em-dashes, smart quotes, accented chars, etc.;
+        # without explicit encoding the parser crashes with UnicodeDecodeError
+        # before any session can run.
+        with open(path, encoding="utf-8") as f:
             text = f.read()
         fm, _ = parse_frontmatter(text)
         fm_session = fm.get("session")

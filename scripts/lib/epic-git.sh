@@ -197,8 +197,11 @@ cleanup_merged_epic_branches() {
   local removed=0 br pr_state
   while IFS= read -r br; do
     [[ -z "$br" ]] && continue
-    # Skip if branch is currently checked out somewhere
-    if git -C "$repo_root" worktree list --porcelain 2>/dev/null | grep -qF "branch refs/heads/$br"; then
+    # Skip if branch is currently checked out somewhere.
+    # Use -Fx (whole-line match): plain -F does substring matching, so
+    # `epic/foo` would falsely match `branch refs/heads/epic/foo-bar` and
+    # the legitimately-stale `epic/foo` would never be cleaned up.
+    if git -C "$repo_root" worktree list --porcelain 2>/dev/null | grep -qFx "branch refs/heads/$br"; then
       continue
     fi
     # Query PR state (MERGED or CLOSED is safe to delete; OPEN/DRAFT we keep)

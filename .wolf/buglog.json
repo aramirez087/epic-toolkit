@@ -484,8 +484,19 @@
       "file": "scripts/run-sessions.sh",
       "root_cause": "Line 438 globbed `\"$WORKTREE_BASE\"/*--s[0-9][0-9]-*` without scoping by the current epic's branch. No is_worktree_in_use or unmerged-commit check on this code path either.",
       "fix": "Tightened the glob to `\"$WORKTREE_BASE/${BRANCH_SANITIZED}--s\"[0-9][0-9]-*` so only the current epic's worktrees are eligible. Verified with a two-epic fixture: bar's pre-flight no longer touches foo's worktrees.",
-      "tags": ["worktree", "multi-epic", "destructive", "scope-leak", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-017", "bug-022", "bug-025"],
+      "tags": [
+        "worktree",
+        "multi-epic",
+        "destructive",
+        "scope-leak",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-017",
+        "bug-022",
+        "bug-025"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -496,8 +507,20 @@
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "Same class as bug-024 (CRLF-vs-LF) but in the bash/awk path. Bug-024 fixed parse_frontmatter in epic-dag.py; the awk-based extract_prompt was overlooked because a successful DAG made it look like prompt extraction would also succeed.",
       "fix": "Added `sub(/\\r$/, \"\")` as the first action in both awk programs so each record is normalised before any literal or anchored test. Verified four cases: CRLF md fence, CRLF frontmatter+title fallback, LF regression, and bug-023 nested-fence regression.",
-      "tags": ["crlf", "windows", "extract-prompt", "silent-failure", "awk", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-023", "bug-024", "bug-026"],
+      "tags": [
+        "crlf",
+        "windows",
+        "extract-prompt",
+        "silent-failure",
+        "awk",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-023",
+        "bug-024",
+        "bug-026"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -508,8 +531,85 @@
       "file": "scripts/lib/epic-session.sh",
       "root_cause": "Header and intro were appended to `out` unconditionally before the parent loop ran; entries were appended only when find_handoff_for returned a path. If every lookup missed, `out` still contained the header.",
       "fix": "Refactored to accumulate parent matches into a separate `entries` variable and early-return when empty. The header is now built only when at least one parent contributed a real handoff. Verified: zero-handoff deps → empty output; one-of-two parents has handoff → header plus only that entry; deps='-' regression unchanged.",
-      "tags": ["prompt-construction", "empty-state", "handoff", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-019", "bug-026"],
+      "tags": [
+        "prompt-construction",
+        "empty-state",
+        "handoff",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-019",
+        "bug-026"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-031",
+      "timestamp": "2026-05-06T04:10:10.145Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→7 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:10:10.145Z"
+    },
+    {
+      "id": "bug-032",
+      "timestamp": "2026-05-06T04:10:19.911Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 12→20 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T04:10:19.911Z"
+    },
+    {
+      "id": "bug-033",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "cleanup_merged_epic_branches refused to delete a stale epic branch whenever ANY sibling branch shared its name as a prefix and was checked out in a worktree. With epic/foo legitimately merged & closed, but epic/foo-bar checked out in another worktree, the in-use guard treated epic/foo as in-use and skipped it forever. Stale branches accumulate silently across runs.",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "Line 201 used `grep -qF \"branch refs/heads/$br\"` against the `git worktree list --porcelain` output. `grep -F` matches the fixed string ANYWHERE on the line, so the search for `branch refs/heads/epic/foo` succeeds against the line `branch refs/heads/epic/foo-bar` (substring containment). The guard intended whole-line equality but didn't anchor.",
+      "fix": "Applied. Changed to `grep -qFx`, which requires whole-line match. Verified with a porcelain fixture: epic/foo is no longer flagged when only epic/foo-bar is in the worktree; legitimate same-branch matches still detect correctly.",
+      "tags": ["worktree", "branch-cleanup", "grep", "substring-match", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-022", "bug-028", "bug-031"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-034",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "extract_prompt's frontmatter-fallback awk silently dropped the FIRST `# Heading` line found anywhere in the body when the body did not begin with a title. Files like `--- frontmatter --- / Description./ # Implementation Notes` lost the `# Implementation Notes` heading from the prompt. The model received the surrounding text but never the section header, leaving an apparent gap in instructions.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "The awk used a single `fm_done` flag set to 1 at the closing `---`, then `fm_done && /^# / { fm_done=0; next }` to swallow the title. Because intermediate non-`# ` content (description text, blank lines) didn't reset the flag, the swallow rule fired against the first `# ` heading encountered no matter how far into the body it appeared.",
+      "fix": "Applied. Replaced the single fm_done flag with `awaiting_title` that is true only between the closing `---` and the first non-blank body line. Blank lines within the window are preserved; a `# ` heading in the window is stripped (the title); any other content closes the window so later `# Heading` lines pass through unchanged. Verified with two fixtures: (a) no-title body keeps `# Implementation Notes`; (b) with-title body strips the title but keeps later `# Section A`.",
+      "tags": ["prompt-extraction", "awk", "title-strip", "silent-truncation", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-023", "bug-029", "bug-032"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-035",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "epic-dag.py opened each session-NN-*.md file with bare `open(path)`, relying on the platform default text encoding. On Windows (cp1252) and any POSIX shell with `LC_ALL=C`/`PYTHONUTF8=0`, reading a session prompt that contains an em-dash, smart quote, or accented character (very common in AI-authored prompts) crashes the DAG with `UnicodeDecodeError: 'ascii'/'cp1252' codec can't decode byte …`. The runner exits before any session has a chance to start, with a stack trace that doesn't obviously point at encoding.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Line 135 used `with open(path) as f:` — no explicit `encoding=` arg. Python 3.x picks `locale.getpreferredencoding(False)` for that mode, which is platform/locale dependent. Other open() sites in the script (the inline init in run-sessions.sh, mark_session, write_epic_result) already pass `encoding='utf-8'`; this one was missed.",
+      "fix": "Applied. Added `encoding=\"utf-8\"` to the `open(path)` call. Verified: `PYTHONUTF8=0 LANG=C LC_ALL=C python3 scripts/epic-dag.py <dir> --bash` now succeeds on a session file containing `Café — résumé`, where before it raised UnicodeDecodeError mid-parse.",
+      "tags": ["unicode", "encoding", "windows", "locale", "python", "found-by-bug-hunt"],
+      "related_bugs": ["bug-024", "bug-029"],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     }

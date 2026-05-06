@@ -38,13 +38,21 @@ extract_prompt() {
   ' "$file")"
   if [[ -z "$content" ]]; then
     # Strip frontmatter and the title line, return the rest.
+    # `awaiting_title` is true ONLY between the frontmatter close and the
+    # first non-blank body line. The title (`^# …`) is stripped only in
+    # that window; any later `# Heading` inside the body is left intact.
+    # The previous version used a single fm_done flag and stripped the
+    # FIRST `# ` heading anywhere after the frontmatter — so a file with
+    # no leading title silently lost its first body section header.
     content="$(awk '
-      BEGIN { in_fm=0; fm_done=0 }
+      BEGIN { in_fm=0; awaiting_title=0 }
       { sub(/\r$/, "") }
       NR==1 && /^---$/ { in_fm=1; next }
-      in_fm && /^---$/ { in_fm=0; fm_done=1; next }
+      in_fm && /^---$/ { in_fm=0; awaiting_title=1; next }
       in_fm { next }
-      fm_done && /^# / { fm_done=0; next }
+      awaiting_title && /^[[:space:]]*$/ { print; next }
+      awaiting_title && /^# / { awaiting_title=0; next }
+      awaiting_title { awaiting_title=0 }
       { print }
     ' "$file")"
   fi
