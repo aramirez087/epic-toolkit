@@ -83,6 +83,22 @@ has no frontmatter.
 | `depends_on` | yes | List of prior session numbers this depends on. Empty `[]` for the charter. Omitting it falls back to a linear chain (defeats parallelism) |
 | `touches` | recommended | List of file globs this session may modify. The runner uses these to detect overlaps between parallel siblings |
 | `parallel_safe` | yes | `false` forces a solo wave (charter, CI gate, anything mutating shared state). Default `true` |
+| `produces` | recommended | List of paths or `fnmatch` globs the session must create or modify. After the session commits, the runner verifies every entry shows up in its diff vs the wave-start commit; missing entries fail the session before it merges into trunk |
+| `skip_deliverables_check` | optional | Set to `true` only on docs-only / kickoff sessions whose only output is a handoff doc and `.wolf/*` updates. Without this opt-out a metadata-only commit fails the deliverables validator |
+
+### Deliverables validation
+
+After every session commits, the runner runs `scripts/validate-session-deliverables.py`
+inside the session's worktree. Two modes:
+
+1. **`produces:` declared** — every entry must appear in the session's diff vs the
+   wave-start commit (any status except deletion). Globs use `fnmatch` semantics.
+2. **No `produces:`** — metadata-only heuristic. If every changed path matches
+   `^.wolf/` or `^docs/roadmap/.*-handoff\.md$`, the session is rejected as
+   no-real-output. Set `skip_deliverables_check: true` to opt out.
+
+A failure marks the session failed (rc=97), halts the wave before merging into
+trunk, and writes a missing-paths summary to `.session-NN-exec.log`.
 
 ### Per-Session Overrides
 

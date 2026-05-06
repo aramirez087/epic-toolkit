@@ -375,3 +375,21 @@
 | 12:47 | Edited scripts/epic-dag.py | modified isinstance() | ~434 |
 | 12:47 | Edited scripts/run-sessions.sh | expanded (+41 lines) | ~841 |
 | 12:47 | Edited scripts/run-sessions.sh | 7→10 lines | ~159 |
+| 12:49 | Created ../../../../tmp/epic-fix-commit-msg.txt | — | ~484 |
+| 12:49 | Session end: 7 writes across 4 files (merge-wolf-json.py, epic-dag.py, run-sessions.sh, epic-fix-commit-msg.txt) | 11 reads | ~42598 tok |
+
+## Session: 2026-05-06 12:51
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:58 | Created scripts/validate-session-deliverables.py | — | ~1925 |
+| 12:58 | Edited scripts/lib/epic-session.sh | expanded (+32 lines) | ~684 |
+| 12:58 | Edited docs/epic-prompt-template.md | 17→22 lines | ~311 |
+| 12:59 | Edited docs/epic-prompt-template.md | 2→3 lines | ~98 |
+| 12:59 | Edited commands/epic.generate.md | added error handling | ~355 |
+| 12:59 | Edited commands/epic.generate.md | 1→3 lines | ~268 |
+| 12:59 | Edited commands/epic.generate.md | inline fix | ~101 |
+| 12:59 | Edited .opencode/commands/epic.generate.md | added error handling | ~356 |
+| 13:00 | Edited .opencode/commands/epic.generate.md | 1→3 lines | ~268 |
+| 13:00 | Edited .opencode/commands/epic.generate.md | inline fix | ~101 |
+| 13:00 | Edited docs/epic-guide.md | expanded (+16 lines) | ~440 |

@@ -573,6 +573,38 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
     fi
   fi
 
+  # Deliverables validation. Stronger sibling of the no-op guard above: that
+  # guard only fires when HEAD is unchanged AND the tree is clean, so a
+  # session that committed ONLY its handoff doc + .wolf/* metadata sailed
+  # through. Now we ask the validator whether the session's diff actually
+  # contains real deliverables — either the paths the session declared via
+  # `produces:` frontmatter, or, when nothing was declared, anything
+  # outside .wolf/* and docs/roadmap/*-handoff.md. Authors can opt out per
+  # session with `skip_deliverables_check: true`.
+  if [[ $rc -eq 0 && -n "$baseline_head" ]]; then
+    local current_head_v
+    current_head_v="$(git rev-parse HEAD 2>/dev/null || echo "")"
+    if [[ -n "$current_head_v" && "$current_head_v" != "$baseline_head" ]]; then
+      local validator="$CLAUDE_PLUGIN_ROOT/scripts/validate-session-deliverables.py"
+      if [[ -f "$validator" ]]; then
+        local validate_err; validate_err="$(mktemp)"
+        local vrc=0
+        "$PYTHON_CMD" "$validator" "$session_path" "$wt_dir" "$baseline_head" \
+            >>"$exec_log" 2>"$validate_err" || vrc=$?
+        if [[ $vrc -ne 0 ]]; then
+          {
+            echo ""
+            echo "=== deliverables validation failed (rc=$vrc) ==="
+            cat "$validate_err"
+          } >> "$exec_log"
+          warn "  ⚠ session $sid deliverables validation failed (see ${exec_log/#$REPO_ROOT\//})"
+          rc=97
+        fi
+        rm -f "$validate_err"
+      fi
+    fi
+  fi
+
   cd "$prev_cwd"
   return $rc
 }

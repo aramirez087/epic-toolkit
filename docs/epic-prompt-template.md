@@ -64,10 +64,12 @@ Numbers zero-padded to two digits. Session 00 is always operator rules.
 
 Sessions 01+ MUST start with YAML frontmatter, then a markdown body, then a fenced ` ```md ``` ` prompt. Session 00 has no frontmatter.
 
-Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Two optional overrides:
+Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Optional fields:
 
 - `model` — overrides the `--model` CLI arg for this session. Common values: `"opus"`, `"sonnet"`, `"haiku"`, or provider-prefixed IDs like `"gpt5"`, `"gemini"`, `"glm"`.
 - `cli` — overrides the CLI for this session. Use `"claude"` or `"opencode"`. Omit to auto-detect.
+- `produces` — list of paths or `fnmatch` globs the session must emit. The runner fails the session if any declared entry is missing from its diff. Recommended for any session that produces code; the toolkit can't enforce delivery without it.
+- `skip_deliverables_check` — `true` to opt out of post-session validation. Use only for kickoff or docs-only sessions; without this, a session that commits only `.wolf/*` and a handoff doc will fail.
 
 Example with all fields:
 
@@ -78,6 +80,9 @@ Example with all fields:
     touches:
       - <glob this session may modify>
     parallel_safe: true
+    produces:
+      - <exact file path the session creates or modifies>
+      - <glob, e.g. "src/feature/**/*.ts">
     model: "opus"
     cli: "claude"
     ---
@@ -143,7 +148,8 @@ Each prompt inside the fence must have:
 - Never reference other sessions as if Claude remembers them — use file paths.
 - Keep prompts under 60 lines.
 - Frontmatter is mandatory on every session 01+ (`session`, `title`, `depends_on`, `touches`, `parallel_safe`).
-- Optional frontmatter fields: `model`, `cli`.
+- Optional frontmatter fields: `model`, `cli`, `produces`, `skip_deliverables_check`.
+- Declare `produces:` on every session that creates code so the runner can verify delivery; only docs-only/kickoff sessions should rely on the metadata-only fallback.
 
 ## Validate
 

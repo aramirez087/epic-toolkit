@@ -75,10 +75,12 @@ Use zero-padded two-digit numbers. Session 00 is always operator rules.
 
 Sessions 01+ MUST start with YAML frontmatter declaring DAG metadata, then the markdown body, then a fenced ` ```md ... ``` ` block containing the prompt. Session 00 has no frontmatter.
 
-Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Two optional overrides can also appear in the frontmatter:
+Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Optional fields:
 
 - `model` — overrides the `--model` CLI arg for this session. Common values: `"opus"` (complex reasoning), `"sonnet"` (balanced), `"haiku"` (fast/simple). Also supports provider-prefixed IDs like `"gpt5"`, `"gemini"`, `"glm"`.
 - `cli` — overrides the CLI for this session. Use `"claude"` or `"opencode"`. Omit to auto-detect.
+- `produces` — list of paths or `fnmatch` globs the session must add or modify. The runner fails the session if any declared entry is missing from its diff. Always declare this for sessions that produce code; without it the runner can only catch fully-empty or metadata-only sessions, not "session wrote some code but missed a file."
+- `skip_deliverables_check` — `true` to opt out of the deliverables validator. Use only for kickoff or docs-only sessions. Without this, a session that commits only `.wolf/*` and a handoff doc will fail.
 
 Example with all fields:
 
@@ -90,6 +92,9 @@ Example with all fields:
       - <glob this session may modify>
       - <another glob>
     parallel_safe: true
+    produces:
+      - <exact file the session creates or modifies>
+      - <glob, e.g. "src/feature/**/*.ts">
     model: "opus"
     cli: "opencode"
     ---
@@ -132,6 +137,8 @@ When splitting into multiple epics (per the Complexity Assessment above), treat 
 - `depends_on` — list of prior session numbers (empty for session 01). Required. Omitting it implicitly chains the session linearly to the prior number, which defeats parallelism — always declare it explicitly.
 - `touches` — list of file globs this session may modify. The runner uses these to detect overlaps between siblings in the same wave. Required for any session that writes code; empty list `[]` is fine for pure-validation sessions.
 - `parallel_safe` — boolean. `false` forces solo-wave (charter, CI gate, anything with side effects on shared state). Default `true` for feature work.
+- `produces` — optional. List of file paths or `fnmatch` globs (e.g. `"src/users/*.ts"`) that the session must produce or modify. After the session commits, the runner verifies every declared entry appears in the session's diff vs the wave-start commit; if any are missing the session is marked failed and the wave halts before merging into trunk. Declare this for any session that emits code — without it the runner only rejects fully-empty or pure-metadata sessions, so a session that writes some code but misses a deliverable will silently ship.
+- `skip_deliverables_check` — optional. `true` to opt out of the deliverables validator entirely. Use only for kickoff/docs-only sessions whose only output is a handoff doc and `.wolf/*` updates; otherwise omit and let the validator either match `produces:` or fall back to the metadata-only heuristic.
 - `model` — optional. Overrides the `--model` argument passed to `run-sessions.sh`. Use to assign different models to different sessions within the same epic. Common values: `opus` (complex reasoning), `sonnet` (balanced), `haiku` (fast/simple tasks). Also supports provider prefixes like `gpt5`, `gemini`, `glm`.
 - `cli` — optional. Overrides the `--cli` argument. Use `opencode` or `claude` to force a specific CLI for this session.
 
@@ -186,7 +193,7 @@ Inside each fenced prompt for sessions 01 and above, include:
 - No `TBD`, `TODO`, or deferred-decision placeholders in prompts.
 - Never write prompts that assume the agent remembers prior sessions — use file paths.
 - Keep each prompt under 60 lines.
-- Every session 01+ MUST include valid frontmatter with at minimum `session`, `title`, `depends_on`, `touches`, `parallel_safe`.
+- Every session 01+ MUST include valid frontmatter with at minimum `session`, `title`, `depends_on`, `touches`, `parallel_safe`. Add `produces:` for any session that creates or modifies code; without it the runner cannot catch a session that writes the wrong files (only fully-empty or pure-metadata sessions). Use `skip_deliverables_check: true` for genuine docs-only sessions.
 
 ## Execution instructions
 

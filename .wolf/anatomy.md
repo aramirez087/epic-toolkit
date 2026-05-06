@@ -1,12 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T18:47:47.711Z
-> Files: 36 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T19:00:31.560Z
+> Files: 38 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
 - `bughunt-tests.sh` (~1187 tok)
 - `commit-msg.txt` (~308 tok)
+- `epic-fix-commit-msg.txt` (~453 tok)
 - `epic-toolkit-commit-msg.txt` (~413 tok)
 
 ## ../../.claude/
@@ -38,7 +39,7 @@
 
 ## .opencode/commands/
 
-- `epic.generate.md` — OpenCode /epic.generate command (~2477 tok)
+- `epic.generate.md` — /epic.generate - Generate session files (~4037 tok)
 - `epic.md` — Validate (~769 tok)
 
 ## .wolf/
@@ -49,13 +50,13 @@
 
 ## commands/
 
-- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~2477 tok)
+- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4113 tok)
 - `epic.md` — Validate (~807 tok)
 
 ## docs/
 
-- `epic-guide.md` — Epic Sessions Guide (~1640 tok)
-- `epic-prompt-template.md` — Epic Prompt Template (~1136 tok)
+- `epic-guide.md` — Epic Sessions Guide (~3362 tok)
+- `epic-prompt-template.md` — Epic Prompt Template (~2170 tok)
 
 ## scripts/
 
@@ -63,12 +64,13 @@
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4488 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~15793 tok)
+- `validate-session-deliverables.py` — validate-session-deliverables.py (~1925 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3902 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2333 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5859 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~6255 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
 
 ## scripts/wolf-merge/
