@@ -144,7 +144,9 @@
         "claude-code",
         "opencode"
       ],
-      "related_bugs": ["bug-008"],
+      "related_bugs": [
+        "bug-008"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T20:44:00Z"
     },
@@ -162,9 +164,86 @@
         "sparse-arrays",
         "sh"
       ],
-      "related_bugs": ["bug-009"],
+      "related_bugs": [
+        "bug-009"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T20:44:00Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "epic-progress.py loops forever (spinning at ~5Hz on stderr) when the upstream stream-json producer ends with a partial line that has no trailing newline. Reproduced with a Python snippet that fed chunks ending in '...{\"text\":\"hi\"}' followed by EOF — the script never exits the main while.",
+      "file": "scripts/epic-progress.py",
+      "root_cause": "The break condition at the bottom of the main loop is `if eof and not line_buf.strip(): break`. The line-splitting loop only runs while `chunk is not None`, so on every post-EOF iteration `chunk_q.get` raises queue.Empty, chunk=None, the split block is skipped, and line_buf with non-empty trailing content is never drained. The break test stays false forever. Practically triggered when (a) a producer crashes / is killed mid-line (run-sessions.sh wave-timeout SIGKILL is one source — see bug-013), or (b) the final NDJSON line lacks a trailing newline. Combined with the orphaning behavior of `kill -9 $subshell_pid`, the python child can survive into the next epic run, burning CPU.",
+      "fix": "Applied. On EOF (chunk is empty bytes), append a synthetic '\\n' to line_buf before the parse-while-newline loop runs, so any trailing partial line is drained on the same iteration that sets eof=True. The existing `if eof and not line_buf.strip(): break` test then fires correctly. Verified by re-running the original Python repro: now exits at iteration 2 instead of looping forever.",
+      "tags": [
+        "infinite-loop",
+        "stream-json",
+        "eof-handling",
+        "python",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-013"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "run-sessions.sh truncates META values whenever the path or value contains a space. With a repo at /Users/Foo Bar/Code/myproj the META line emitted by epic-dag.py is `META operator_path=/Users/Foo Bar/Code/...`; after parsing OPERATOR_PATH becomes `/Users/Foo` and extract_prompt then aborts with `Could not extract operator prompt`. Reproduced with a 5-line bash snippet.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The DAG-plan parser at line ~421 uses `set -- $line` (intentionally unquoted to word-split into positional params) to tokenize each line, then reads $2 / $3 / $4 etc. That word-split is space-delimited, so any field containing a space is silently broken across multiple positional params. Also affects SESSION rows (file, slug) and any other META key=value where the value may legitimately contain whitespace. epic-dag.py emits paths via `os.path.abspath(...).replace('\\\\', '/')` with no quoting/escaping, so it's fully on the bash side to handle.",
+      "fix": "Applied. Replaced `set -- $line` with case/prefix-strip parsing in run-sessions.sh: META lines use `${line#META operator_path=}` etc. so values containing spaces are preserved verbatim. SESSION rows still word-split via `set -- ${line#SESSION }` because their fields (numeric ids, comma-separated deps, regex-derived slug, 0/1 flags, bare model/cli identifiers) are space-free by construction. Verified end-to-end with a fixture using `/Users/Foo Bar/Code/...` as operator_path — value now flows through to OPERATOR_PATH unmangled.",
+      "tags": [
+        "path-with-spaces",
+        "word-splitting",
+        "macos",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "When a wave hits WAVE_TIMEOUT_MINUTES (default 240m), run-sessions.sh kills the in-flight session pids with `kill -9` and breaks out of the wait loop — but never reaps them, never sets SESSION_STATUS to failed, and never sets EPIC_FAILED. The merge phase finds status='running', falls through both `done` and `failed` cases silently, the outer wave for-loop continues to the next wave, and at the end the script logs `Epic completed successfully` and tries to open a PR. Reproduced by simulating the kill-and-break flow in a standalone bash script.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The wave wait loop (line ~1732) handles timeout by iterating JOB_PIDS, sending SIGKILL, and `break`ing. There is no call to reap_finished_jobs after the kill, no manual SESSION_STATUS[$sid]='failed' update, and no `EPIC_FAILED=true`. Compounded by the fact that `kill -9 $pid` sends to a single PID; the run_one_session subshell's children (claude/opencode + the python progress pipeline) become orphans rather than being cleaned up, which interacts badly with bug-011 (the progress python can then spin forever).",
+      "fix": "Applied. After SIGKILL, the timeout branch now iterates JOB_PIDS / JOB_SIDS, calls `wait` to reap each zombie, sets SESSION_STATUS=failed / SESSION_EXIT_BY_ID=137 / SESSION_ELAPSED_BY_ID, calls mark_session 'failed', updates FIRST_FAILED_ID, and finally sets EPIC_FAILED=true before breaking. Verified with a standalone bash fixture: two sleep-60 children → SIGKILL → both end up with status=failed/exit=137, EPIC_FAILED=true, FIRST_FAILED_ID=1. Did NOT switch to negative-pid (process-group) kill because the subshell was not started in its own pgid; orphan-child cleanup remains a separate issue (would need `setsid` or job-control mode).",
+      "tags": [
+        "wave-timeout",
+        "false-success",
+        "session-reaping",
+        "kill-9",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-011"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-05-06T02:58:00.274Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "13 lines replaced/restructured",
+      "fix": "Rewrote 29→30 lines (13 removed) | Also: for pid in \"${JOB_PIDS[@]}\"; do; kill -9 \"$pid\" 2>/dev/null || true",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T02:58:15.245Z"
     }
   ]
 }

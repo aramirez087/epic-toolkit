@@ -216,6 +216,13 @@ def main():
             if chunk is not None:
                 if not chunk:
                     eof = True
+                    # Force-flush any trailing partial line (no final newline)
+                    # so the parse loop drains it before the outer break test
+                    # fires. Without this, a producer that crashes / is killed
+                    # mid-line leaves line_buf non-empty forever and the loop
+                    # spins at REFRESH Hz on stderr indefinitely.
+                    if line_buf and not line_buf.endswith("\n"):
+                        line_buf += "\n"
                 else:
                     line_buf += chunk.decode("utf-8", errors="replace")
 

@@ -104,3 +104,21 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-05-06 20:48
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-05-05 bug-hunt
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| now | Bug hunt — read DAG, progress, poll-progress, ui, and run-sessions.sh end-to-end | scripts/* | found 3 bugs (bug-011..013) | ~9k |
+| 20:57 | Edited scripts/epic-progress.py | modified endswith() | ~205 |
+| 20:58 | Edited scripts/run-sessions.sh | 29→30 lines | ~371 |
+| 20:58 | Edited scripts/run-sessions.sh | expanded (+18 lines) | ~356 |
+| now | Patched bug-011 (EOF flush in epic-progress.py) | scripts/epic-progress.py | infinite-loop fix; repro now exits clean | ~2k |
+| now | Patched bug-012 (META prefix-strip parser) | scripts/run-sessions.sh | path-with-spaces preserved end-to-end | ~3k |
+| now | Patched bug-013 (reap on wave timeout) | scripts/run-sessions.sh | timed-out sessions now mark failed/137 + EPIC_FAILED=true | ~3k |
+| 21:00 | Session end: 3 writes across 2 files (epic-progress.py, run-sessions.sh) | 5 reads | ~34393 tok |

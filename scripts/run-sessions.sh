@@ -418,24 +418,24 @@ declare -a SESSION_CLI_BY_ID     # by id
 
 WAVE_COUNT=0
 
+# META values can legitimately contain spaces (operator_path is an absolute
+# filesystem path), so they must NOT be tokenized via `set -- $line`. Strip
+# the "META <key>=" prefix and take the rest verbatim. SESSION rows continue
+# to use word-splitting because their fields are space-free by construction
+# (numeric ids, comma-separated deps, regex-derived slug, 0/1 flags).
 while IFS= read -r line; do
-  set -- $line
-  case "$1" in
-    META)
-      case "$2" in
-        operator_path=*) OPERATOR_PATH="${2#*=}" ;;
-        any_frontmatter=*) ANY_FRONTMATTER="${2#*=}" ;;
-        wave_count=*) WAVE_COUNT="${2#*=}" ;;
-      esac
-      ;;
-    WAVE)
-      # WAVE <num> <size>
-      :
-      ;;
-    SESSION)
+  case "$line" in
+    "META operator_path="*)   OPERATOR_PATH="${line#META operator_path=}" ;;
+    "META any_frontmatter="*) ANY_FRONTMATTER="${line#META any_frontmatter=}" ;;
+    "META wave_count="*)      WAVE_COUNT="${line#META wave_count=}" ;;
+    "META "*) : ;;  # unrecognised META key — ignore
+    "WAVE "*) : ;;  # WAVE <num> <size> — informational only
+    "SESSION "*)
       # SESSION <wave> <id> <file> <deps> <slug> <parallel> [<model> <cli>]
-      sw="$2"; sid="$3"; sfile="$4"; sdeps="$5"; sslug="$6"; sparallel="$7"
-      smodel="${8:-}"; scli="${9:-}"
+      _rest="${line#SESSION }"
+      set -- $_rest
+      sw="$1"; sid="$2"; sfile="$3"; sdeps="$4"; sslug="$5"; sparallel="$6"
+      smodel="${7:-}"; scli="${8:-}"
       WAVE_IDS[$sw]="${WAVE_IDS[$sw]:-} $sid"
       SESSION_FILE_BASENAME[$sid]="$sfile"
       SESSION_SLUG_BY_ID[$sid]="$sslug"
@@ -447,6 +447,7 @@ while IFS= read -r line; do
       ;;
   esac
 done < "$DAG_TMP"
+unset _rest
 
 if [[ -z "$OPERATOR_PATH" || "$WAVE_COUNT" -eq 0 ]]; then
   err "DAG plan is empty or malformed"
@@ -1733,9 +1734,27 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     wave_elapsed=$(($(date +%s) - wave_start))
     if [[ $wave_elapsed -gt $wave_timeout ]]; then
       err "Wave timeout after $((wave_elapsed / 60)) minutes; killing hung jobs"
-      for pid in "${JOB_PIDS[@]}"; do
-        kill -9 "$pid" 2>/dev/null || true
+      # Kill, reap, and mark each in-flight session as failed. Without this
+      # the merge phase finds status='running' (neither 'done' nor 'failed'),
+      # falls through silently, EPIC_FAILED stays false, and the epic is
+      # falsely reported as successful at end-of-run.
+      for _ti in "${!JOB_PIDS[@]}"; do
+        _tpid="${JOB_PIDS[$_ti]}"
+        _tsid="${JOB_SIDS[$_ti]}"
+        kill -9 "$_tpid" 2>/dev/null || true
+        wait "$_tpid" 2>/dev/null || true
+        _telapsed=$(( $(date +%s) - ${SESSION_START_TS[$_tsid]:-0} ))
+        SESSION_STATUS[$_tsid]="failed"
+        SESSION_ELAPSED_BY_ID[$_tsid]=$_telapsed
+        SESSION_EXIT_BY_ID[$_tsid]=137
+        mark_session "${STATUS_FILE:-}" "$_tsid" "failed" "$_telapsed"
+        ! $LIVE_UI && err "  ✗ session $(printf '%02d' "$_tsid") (${SESSION_SLUG_BY_ID[$_tsid]}) KILLED by wave timeout after $(format_elapsed "$_telapsed")"
+        [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$_tsid"
       done
+      JOB_PIDS=()
+      JOB_SIDS=()
+      EPIC_FAILED=true
+      unset _ti _tpid _tsid _telapsed
       break
     fi
     reap_finished_jobs
