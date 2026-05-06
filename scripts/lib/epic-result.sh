@@ -36,10 +36,14 @@ classify_error() {
   # Check for error markers in the log
   if grep -qE '^\[ERROR\]' "$log_file" 2>/dev/null; then
     local err_msg
+    # Write the raw single-line error verbatim. write_epic_result later reads
+    # this file and hands it to json.dump, which performs the only escaping
+    # required. The previous sed pre-escape (\ → \\, " → \") double-encoded
+    # against json.dump and surfaced visible literal backslashes in the
+    # user-facing error_detail field.
     err_msg="$(grep -oE '^\[ERROR\] .+' "$log_file" | head -1 | sed 's/^\[ERROR\] //')"
-    err_msg="$(echo "$err_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g')"
     echo "cli_error"
-    echo "$err_msg" > "${log_file}.errtype"
+    printf '%s\n' "$err_msg" > "${log_file}.errtype"
     return
   fi
 

@@ -788,7 +788,14 @@
       "file": "scripts/lib/epic-wave.sh",
       "root_cause": "reap_finished_jobs intends an empty ps result to mean the child vanished and should be waited, but the command substitution is a bare assignment under `set -e`. When `ps` returns nonzero, the shell exits before the subsequent `[[ -z \"$pstate\" || \"$pstate\" == Z* ]]` check can run.",
       "fix": "Applied. Guarded the ps pipeline with `|| true` so vanished children fall through to the existing wait/reap path. Verified with a minimal `set -euo pipefail` repro and a disposable fast-finishing --no-worktree epic run.",
-      "tags": ["reap", "set-e", "ps", "fast-session", "sh", "found-by-bug-hunt"],
+      "tags": [
+        "reap",
+        "set-e",
+        "ps",
+        "fast-session",
+        "sh",
+        "found-by-bug-hunt"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:45:00Z"
@@ -800,8 +807,17 @@
       "file": "scripts/run-sessions.sh",
       "root_cause": "REPO_ROOT is resolved from the current working directory, not from the sessions directory. The only under-repo guard is inside trunk worktree setup after provisioning side effects, and that guard prints `err` without exiting.",
       "fix": "Applied. Resolve and validate `ORIG_SESSIONS_DIR` under `ORIG_REPO_ROOT` before OpenWolf provisioning, branch creation, or worktree setup; exit nonzero on mismatch. Also added a defensive exit to the later canonicalization guard. Verified an external sessions path exits rc=1 and leaves the branch unchanged.",
-      "tags": ["wrong-repo", "sessions-dir", "side-effects", "openwolf", "sh", "found-by-bug-hunt"],
-      "related_bugs": ["bug-039"],
+      "tags": [
+        "wrong-repo",
+        "sessions-dir",
+        "side-effects",
+        "openwolf",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-039"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:45:00Z"
     },
@@ -812,7 +828,14 @@
       "file": "scripts/run-sessions.sh",
       "root_cause": "The merge-conflict branch sets `EPIC_FAILED=true` and `FIRST_FAILED_ID`, then falls out of the case block without breaking the `for sid in IN_RANGE` loop. The halt check runs only after every sibling has been considered.",
       "fix": "Applied. Added an immediate `break` after a non-auto-resolved merge conflict sets EPIC_FAILED, preventing later siblings in the same wave from being merged after the first conflict. Verified shell syntax.",
-      "tags": ["merge-conflict", "wave", "sibling-merge", "resume", "sh", "found-by-bug-hunt"],
+      "tags": [
+        "merge-conflict",
+        "wave",
+        "sibling-merge",
+        "resume",
+        "sh",
+        "found-by-bug-hunt"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:45:00Z"
@@ -824,10 +847,88 @@
       "file": "scripts/run-sessions.sh",
       "root_cause": "TRUNK_SESSIONS_REL was assigned only inside the worktree setup branch. The --no-worktree branch set TRUNK_SESSIONS_DIR but never populated the relative path later used by cleanup for `_EPIC_SLUG`, git rm, and rm -rf.",
       "fix": "Applied. Compute ORIG_SESSIONS_REL once after validating the sessions directory and assign TRUNK_SESSIONS_REL in both worktree and --no-worktree paths. Verified a disposable --no-worktree run completes rc=0 and performs cleanup.",
-      "tags": ["no-worktree", "cleanup", "set-u", "sessions-dir", "sh", "found-during-fix"],
-      "related_bugs": ["bug-043", "bug-044"],
+      "tags": [
+        "no-worktree",
+        "cleanup",
+        "set-u",
+        "sessions-dir",
+        "sh",
+        "found-during-fix"
+      ],
+      "related_bugs": [
+        "bug-043",
+        "bug-044"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-06T04:45:00Z"
+    },
+    {
+      "id": "bug-047",
+      "timestamp": "2026-05-06T12:59:31.429Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9→16 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T12:59:31.429Z"
+    },
+    {
+      "id": "bug-048",
+      "timestamp": "2026-05-06T12:59:40.030Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-result.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9→13 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T12:59:40.030Z"
+    },
+    {
+      "id": "bug-049",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "merge-wolf-json.py crashes with UnicodeDecodeError mid-merge on Windows (cp1252) and any POSIX shell with LC_ALL=C / PYTHONUTF8=0 whenever .wolf/buglog.json contains an em-dash, smart quote, or accented character — extremely common because buglog entries paraphrase AI-authored prose. Git records the file as unresolvable and the user sees an opaque merge failure with no obvious link to encoding. Same class as bug-035, which the cerebrum specifically flagged with 'audit every open( site, not just the ones in the file you're editing — sibling helpers often have the same bug'. This sibling helper was missed.",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "load() called Path(path).read_text() and write() called Path(path).write_text(...) with no `encoding=` argument. pathlib falls back to locale.getpreferredencoding(False), which is cp1252 on Windows and ASCII when LC_ALL=C / PYTHONUTF8=0. Any non-ASCII byte in the file (or in data being written) raises UnicodeDecodeError / UnicodeEncodeError before merge_buglog can run.",
+      "fix": "Applied. Pinned encoding='utf-8' on both Path.read_text and Path.write_text in scripts/wolf-merge/merge-wolf-json.py. Added UnicodeDecodeError to the load() except clause so a non-utf-8 file is treated as 'unreadable' (returning None) rather than crashing the whole driver. Verified end-to-end: merge driver invoked under PYTHONUTF8=0 LC_ALL=C LANG=C with ours.fix='Café — résumé' and theirs.fix='naïve façade ☃' now returns 0 and produces a merged buglog with both entries' utf-8 bytes preserved.",
+      "tags": ["unicode", "encoding", "windows", "locale", "wolf-merge", "merge-driver", "python", "found-by-bug-hunt"],
+      "related_bugs": ["bug-035", "bug-024"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-050",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "Every CLI error surfaced through the [EPIC_RESULT_START]/[END] block and the result JSON's sessions[].error_detail field shows visible literal backslashes — e.g. an error like 'Bad input: \"foo\"' renders as 'Bad input: \\\\\"foo\\\\\"' when the user reads the JSON, and a path with a single backslash gets doubled. Cosmetic but confusing; it leaks into anything that re-emits error_detail (CI dashboards, the orchestrator's failure summary, on-call playbooks).",
+      "file": "scripts/lib/epic-result.sh",
+      "root_cause": "classify_error pre-escaped the captured grep -oE error message with `sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g; s/\\t/\\\\t/g'` before writing to .errtype. write_epic_result then opens that file in Python and stores the contents in entry['error_detail']; json.dump escapes them AGAIN. Net effect: every literal backslash and double quote in the original error is doubled in the JSON-encoded output, and round-tripping the JSON yields '\\\"' instead of '\"'. The bash escaping was redundant from the start because Python is the only consumer and json.dump already escapes for JSON.",
+      "fix": "Applied. Removed the sed pre-escape in classify_error and switched the redirection to printf '%s\\n' so .errtype contains the raw single-line error verbatim. write_epic_result's existing json.dump now performs the only escaping, producing well-formed JSON that round-trips cleanly. Verified with a fixture log containing 'Bad input: \"foo\" said the parser': .errtype now holds the unescaped string and json.dumps encodes it as 'Bad input: \\\"foo\\\" said the parser' (one backslash, the JSON escape).",
+      "tags": ["error-reporting", "double-escape", "json-encoding", "result-file", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-009"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-051",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "On Windows where `python3` is the Microsoft Store stub (passes `command -v` but errors on actual invocation) and on systems where only `python` is installed, every wolf-json merge silently fails. Git invokes the registered driver, the interpreter doesn't run, the file is left unresolved, and the user sees a 'merge conflict' on .wolf/buglog.json / hooks/_session.json with no obvious link to the missing interpreter. run-sessions.sh already detects this exact scenario for its own python invocations (probing python3 then python with --version), but install-merge-driver.sh hard-codes `python3` in the registered git config string.",
+      "file": "scripts/wolf-merge/install-merge-driver.sh",
+      "root_cause": "The script wrote `git config merge.wolf-json.driver \"python3 \\\"$DRIVER\\\" %O %A %B %P\"` unconditionally. It never probed whether `python3` could actually run, and the git config value persists across invocations — so even if the user later installs a real python3 on a different PATH, the registered driver still points to whatever `python3` resolves to at merge time (and on Windows that's typically the Store stub that errors with no helpful message).",
+      "fix": "Applied. Added the same probe used in run-sessions.sh: try `python3 --version` first, fall back to `python --version`, exit 0 (no registration) if neither runs. Stored the chosen interpreter in PY_CMD and substituted it into the driver config string. Verified end-to-end with PATH limited to a tempdir that exposes only `python` (no `python3`): registered driver is now `python \"...\" %O %A %B %P` instead of the broken `python3` form. Re-running on macOS with python3 present preserves the python3 selection.",
+      "tags": ["windows", "python-detection", "merge-driver", "wolf-merge", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-049"],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
     }
   ]
 }

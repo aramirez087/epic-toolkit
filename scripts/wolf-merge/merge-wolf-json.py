@@ -16,14 +16,21 @@ from pathlib import Path
 
 
 def load(path: str):
+    # Force UTF-8: bare read_text() falls back to locale.getpreferredencoding(False),
+    # which is cp1252 on Windows / ASCII under LC_ALL=C. buglog.json entries
+    # routinely contain em-dashes, smart quotes, and accented chars in error
+    # messages and file paths — without explicit encoding the merge driver
+    # crashes mid-merge (UnicodeDecodeError) and git records the file as
+    # unresolvable. Same class as bug-035; cerebrum flagged this as
+    # "audit every open( site, not just the ones in the file you're editing".
     try:
-        return json.loads(Path(path).read_text())
-    except (json.JSONDecodeError, OSError):
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
 
 
 def write(path: str, data) -> None:
-    Path(path).write_text(json.dumps(data, indent=2) + "\n")
+    Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def merge_buglog(ours, theirs):

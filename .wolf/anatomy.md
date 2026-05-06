@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T04:35:26.534Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T12:59:52.318Z
 > Files: 36 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -67,13 +67,13 @@
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3021 tok)
-- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2251 tok)
+- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2324 tok)
 - `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5623 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~650 tok)
 
 ## scripts/wolf-merge/
 
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
-- `install-merge-driver.sh` — Installs local git merge driver for OpenWolf JSON metadata (~400 tok)
-- `merge-wolf-json.py` — Custom JSON merge driver for OpenWolf metadata files (~850 tok)
+- `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
+- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~773 tok)
 - `resolve-wolf.sh` — Helper for resolving in-progress OpenWolf-only merge/rebase conflicts (~650 tok)
