@@ -76,23 +76,36 @@ REFRESH = 0.2  # seconds between spinner frames
 
 def parse_target(tool_name, buf):
     """Extract a human-readable target from accumulated input_json_delta (Claude)."""
+    # `(?:[^"\\]|\\.)*` matches any sequence of non-quote/non-backslash chars OR
+    # an escape pair (backslash + any char). The previous `[^"]*` stopped at the
+    # FIRST '"' byte, including escaped `\"` inside the value — so a Bash command
+    # like `echo "hello world"` (streamed as `"command": "echo \"hello world\""`)
+    # captured only `echo \\` and the UI showed a truncated, garbled target. This
+    # form respects JSON escapes; the json.loads round-trip below converts them
+    # back to the user-visible characters. (bug-116)
     patterns = {
-        "Read": r'"file_path"\s*:\s*"([^"]*)"',
-        "Edit": r'"file_path"\s*:\s*"([^"]*)"',
-        "Write": r'"file_path"\s*:\s*"([^"]*)"',
-        "NotebookEdit": r'"notebook_path"\s*:\s*"([^"]*)"',
-        "Glob": r'"pattern"\s*:\s*"([^"]*)"',
-        "Grep": r'"pattern"\s*:\s*"([^"]*)"',
-        "Bash": r'"command"\s*:\s*"([^"]*)"',
-        "Task": r'"description"\s*:\s*"([^"]*)"',
-        "WebFetch": r'"url"\s*:\s*"([^"]*)"',
-        "WebSearch": r'"query"\s*:\s*"([^"]*)"',
+        "Read": r'"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "Edit": r'"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "Write": r'"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "NotebookEdit": r'"notebook_path"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "Glob": r'"pattern"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "Grep": r'"pattern"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "Bash": r'"command"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "Task": r'"description"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "WebFetch": r'"url"\s*:\s*"((?:[^"\\]|\\.)*)"',
+        "WebSearch": r'"query"\s*:\s*"((?:[^"\\]|\\.)*)"',
     }
     pat = patterns.get(tool_name)
     if pat:
         m = re.search(pat, buf)
         if m:
-            return m.group(1)
+            raw = m.group(1)
+            # Decode JSON escapes so the display reads naturally; fall back to
+            # the raw capture when the streaming buffer ends mid-escape.
+            try:
+                return json.loads('"' + raw + '"')
+            except (ValueError, json.JSONDecodeError):
+                return raw
     return ""
 
 

@@ -1,11 +1,12 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T21:11:47.031Z
-> Files: 40 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T22:41:22.604Z
+> Files: 41 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
 - `bughunt-tests.sh` (~1187 tok)
+- `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` (~308 tok)
 - `epic-fix-commit-msg.txt` (~453 tok)
 - `epic-toolkit-commit-msg.txt` (~413 tok)
@@ -62,16 +63,16 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~5405 tok)
-- `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4488 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~5806 tok)
+- `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4761 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~15793 tok)
-- `validate-session-deliverables.py` — validate-session-deliverables.py (~2288 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16121 tok)
+- `validate-session-deliverables.py` — validate-session-deliverables.py (~2560 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3902 tok)
-- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2524 tok)
+- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2847 tok)
 - `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~6565 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
 

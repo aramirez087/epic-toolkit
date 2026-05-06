@@ -71,15 +71,38 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     body = text[body_start:]
 
     def _strip_inline_comment(line: str) -> str:
-        """Remove YAML inline comments ( # ...) while preserving # inside quotes."""
+        """Remove YAML inline comments ( # ...) while preserving # inside quoted values.
+
+        A quote character only opens a string when it sits at the FIRST non-space
+        position of a value (right after `:` or `- `). Mid-token quotes — most
+        commonly an apostrophe in an unquoted scalar like `title: It's a test` —
+        are treated as ordinary characters, so a trailing `# comment` is still
+        stripped instead of being preserved as part of the value. (bug-117)
+        """
+        stripped = line.lstrip()
+        leading_ws = len(line) - len(stripped)
+
+        value_start = -1
+        if stripped.startswith("- "):
+            value_start = leading_ws + 2
+        elif ":" in stripped:
+            value_start = line.find(":") + 1
+
+        while 0 <= value_start < len(line) and line[value_start] == " ":
+            value_start += 1
+
         in_quote: str | None = None
-        for i, ch in enumerate(line):
-            if ch in ('"', "'") and (i == 0 or line[i - 1] != "\\"):
-                if in_quote == ch:
+        scan_start = max(value_start, 1)
+        if 0 <= value_start < len(line) and line[value_start] in ('"', "'"):
+            in_quote = line[value_start]
+            scan_start = value_start + 1
+
+        for i in range(scan_start, len(line)):
+            ch = line[i]
+            if in_quote is not None:
+                if ch == in_quote and line[i - 1] != "\\":
                     in_quote = None
-                elif in_quote is None:
-                    in_quote = ch
-            elif ch == "#" and in_quote is None and i > 0 and line[i - 1] == " ":
+            elif ch == "#" and line[i - 1] == " ":
                 return line[:i].rstrip()
         return line
 

@@ -64,9 +64,19 @@ def _load_dag_module():
 
 
 def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
+    # Try literal equality first so paths containing literal `[` survive — e.g.
+    # Next.js / Remix / Nuxt dynamic-route segments (`app/[id]/page.tsx`),
+    # scaffolded `[generated]` directories, NSwag/OpenAPI output dirs. Without
+    # the literal probe, a bare `[` in the declared path puts us in fnmatch
+    # mode and `[generated]` is interpreted as a character class — the file
+    # ends up flagged as a missing deliverable even though it is plainly in
+    # the diff, failing the session with rc=97. (bug-118)
+    literal = [p for p in changed_paths if p == declared]
+    if literal:
+        return literal
     if any(c in declared for c in "*?["):
         return [p for p in changed_paths if fnmatch.fnmatchcase(p, declared)]
-    return [p for p in changed_paths if p == declared]
+    return []
 
 
 def _is_metadata_only(changed_paths: list[str]) -> bool:
