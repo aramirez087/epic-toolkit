@@ -1,11 +1,12 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T03:38:46.655Z
-> Files: 25 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T03:57:01.635Z
+> Files: 26 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
-- `commit-msg.txt` — Declares avoids (~583 tok)
+- `bughunt-tests.sh` (~1187 tok)
+- `commit-msg.txt` (~308 tok)
 
 ## ../../.claude/
 
@@ -13,8 +14,8 @@
 
 ## ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/
 
-- `MEMORY.md` — Memory Index (~54 tok)
-- `openwolf_auto_hooks.md` (~550 tok)
+- `MEMORY.md` — Memory Index (~60 tok)
+- `openwolf_auto_hooks.md` (~718 tok)
 
 ## ./
 
@@ -49,11 +50,11 @@
 - `epic-poll-progress.py` — Polling-based progress fallback (~2076 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4344 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~12278 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~12379 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~2964 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2251 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5006 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5279 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~650 tok)

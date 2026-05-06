@@ -421,7 +421,12 @@ fi
 WORKTREE_BASE="$(dirname "$ORIG_REPO_ROOT")/.epic-worktrees/$(basename "$ORIG_REPO_ROOT")"
 TRUNK_WORKTREE_DIR=""
 
-# Clean up stale session worktrees from previous runs
+# Clean up stale session worktrees from previous runs.
+# IMPORTANT: scope by ${BRANCH_SANITIZED}-- so multi-epic repos don't
+# cross-purge each other's worktrees. WORKTREE_BASE is shared across all
+# epics in a repo, so an unscoped `*--sNN-*` glob would match (and delete)
+# sibling epics' per-session worktrees whose ids happen not to be in the
+# *current* epic's DAG — including ones holding uncommitted work.
 if [[ -d "$WORKTREE_BASE" ]]; then
   log "Scanning for stale session worktrees..."
 
@@ -435,7 +440,7 @@ if [[ -d "$WORKTREE_BASE" ]]; then
   done < "$DAG_TMP"
 
   cleaned_count=0
-  for stale_wt in "$WORKTREE_BASE"/*--s[0-9][0-9]-*; do
+  for stale_wt in "$WORKTREE_BASE/${BRANCH_SANITIZED}--s"[0-9][0-9]-*; do
     [[ ! -d "$stale_wt" ]] && continue
 
     # Extract session ID from worktree name

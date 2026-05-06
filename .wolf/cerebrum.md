@@ -29,6 +29,9 @@
 - [2026-05-05] Do not use literal-prefix glob `[[ "$path" == "$dir"* ]]` to test "is path under dir" — it matches sibling directories that share a name prefix (e.g., `…/s01-foo` matches `…/s01-foo-extra`). Always anchor the separator: `[[ "$path" == "$dir" || "$path" == "$dir"/* ]]`. (bug-022)
 - [2026-05-05] Do not parse markdown fenced code blocks with `^```$` as the only terminator — language-tagged inner blocks (```bash, ```python, ```diff) are common and their bare closing ``` will silently truncate the outer capture. Track fence depth: `/^```[A-Za-z]/` opens an inner block; bare `^```$` only closes when depth==0. (bug-023)
 - [2026-05-05] Do not anchor text-file searches to LF-only separators (`text.startswith("---\n")`, `text.find("\n---\n")`). Normalise CRLF→LF first, or all Windows/Git-Bash users see the parser silently return empty. (bug-024)
+- [2026-05-05] Do not glob `WORKTREE_BASE/*--sNN-*` unscoped — that base is shared across every epic in the repo, so any unfiltered scan can match (and delete) sibling epics' per-session worktrees, including ones holding uncommitted work. Always scope by `${BRANCH_SANITIZED}--s` so cleanup only sees the *current* epic's children.
+- [2026-05-05] Do not parse markdown / frontmatter with awk using bare `$0 == "..."` or anchored `/^...$/` regexes — awk strips `\n` between records but keeps trailing `\r`, so CRLF files (Windows / `core.autocrlf=true`) silently fail every literal/anchored test. Strip CR with `sub(/\r$/, "")` as the first action in the awk block. Same class of bug as #024 but in the bash/awk path; both must be normalised.
+- [2026-05-05] Do not write boilerplate header or intro into the prompt-section accumulator before checking whether any entries exist. Build entries first; emit the header only when the entries variable is non-empty. Otherwise the model receives a confident "## Section" header followed by nothing and can hallucinate to fill the perceived gap.
 
 ## Decision Log
 

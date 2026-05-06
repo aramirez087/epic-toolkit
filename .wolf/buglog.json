@@ -380,7 +380,10 @@
         "sh",
         "found-by-bug-hunt"
       ],
-      "related_bugs": ["bug-017", "bug-020"],
+      "related_bugs": [
+        "bug-017",
+        "bug-020"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -399,7 +402,9 @@
         "sh",
         "found-by-bug-hunt"
       ],
-      "related_bugs": ["bug-020"],
+      "related_bugs": [
+        "bug-020"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     },
@@ -418,7 +423,93 @@
         "python",
         "found-by-bug-hunt"
       ],
-      "related_bugs": ["bug-021"],
+      "related_bugs": [
+        "bug-021"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-05-06T03:51:27.555Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 34→39 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T03:51:27.555Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-05-06T03:51:53.646Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 26→32 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T03:51:53.646Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-05-06T03:55:07.720Z",
+      "error_message": "Incorrect value in code",
+      "file": "../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/MEMORY.md",
+      "root_cause": "Had 't duplicate `",
+      "fix": "Changed to `.wolf/memory.md`",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T03:55:07.720Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "Pre-flight stale-worktree cleanup deleted per-session worktrees from OTHER epics in the same repo. WORKTREE_BASE is keyed only by repo basename, so it is shared across every epic; the unscoped glob matched any sibling epic's worktree whose session id was not in the current DAG, including ones holding uncommitted work.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Line 438 globbed `\"$WORKTREE_BASE\"/*--s[0-9][0-9]-*` without scoping by the current epic's branch. No is_worktree_in_use or unmerged-commit check on this code path either.",
+      "fix": "Tightened the glob to `\"$WORKTREE_BASE/${BRANCH_SANITIZED}--s\"[0-9][0-9]-*` so only the current epic's worktrees are eligible. Verified with a two-epic fixture: bar's pre-flight no longer touches foo's worktrees.",
+      "tags": ["worktree", "multi-epic", "destructive", "scope-leak", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-017", "bug-022", "bug-025"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "extract_prompt returned empty for any session/operator file with CRLF line endings. Both the primary `$0 == \"```md\"` capture and the `/^---$/` frontmatter-stripping fallback failed because awk strips `\\n` between records but keeps trailing `\\r`. run-sessions.sh then exited with `Could not extract operator prompt` before any session ran on Windows / `core.autocrlf=true` checkouts.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "Same class as bug-024 (CRLF-vs-LF) but in the bash/awk path. Bug-024 fixed parse_frontmatter in epic-dag.py; the awk-based extract_prompt was overlooked because a successful DAG made it look like prompt extraction would also succeed.",
+      "fix": "Added `sub(/\\r$/, \"\")` as the first action in both awk programs so each record is normalised before any literal or anchored test. Verified four cases: CRLF md fence, CRLF frontmatter+title fallback, LF regression, and bug-023 nested-fence regression.",
+      "tags": ["crlf", "windows", "extract-prompt", "silent-failure", "awk", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-023", "bug-024", "bug-026"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-030",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "build_handoff_section emitted a `## Previous Session Handoffs` header plus the `Treat their file paths as the only memory of prior work` intro paragraph with zero entries when none of the parents had a handoff file on disk. The model received a confident header followed by nothing, inviting it to hallucinate the missing context.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "Header and intro were appended to `out` unconditionally before the parent loop ran; entries were appended only when find_handoff_for returned a path. If every lookup missed, `out` still contained the header.",
+      "fix": "Refactored to accumulate parent matches into a separate `entries` variable and early-return when empty. The header is now built only when at least one parent contributed a real handoff. Verified: zero-handoff deps → empty output; one-of-two parents has handoff → header plus only that entry; deps='-' regression unchanged.",
+      "tags": ["prompt-construction", "empty-state", "handoff", "sh", "found-by-bug-hunt"],
+      "related_bugs": ["bug-019", "bug-026"],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
     }

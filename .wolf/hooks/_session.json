@@ -1,70 +1,12 @@
 {
-  "session_id": "session-2026-05-06-2130",
-  "started": "2026-05-06T03:30:43.416Z",
-  "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
-      "count": 1,
-      "tokens": 2964,
-      "first_read": "2026-05-06T03:31:21.733Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
-      "count": 1,
-      "tokens": 2251,
-      "first_read": "2026-05-06T03:31:22.510Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 1,
-      "tokens": 4764,
-      "first_read": "2026-05-06T03:31:22.887Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
-      "count": 1,
-      "tokens": 650,
-      "first_read": "2026-05-06T03:31:23.124Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 1,
-      "tokens": 12278,
-      "first_read": "2026-05-06T03:32:24.358Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/docs/epic-prompt-template.md": {
-      "count": 1,
-      "tokens": 1136,
-      "first_read": "2026-05-06T03:33:36.869Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
-      "count": 1,
-      "tokens": 3793,
-      "first_read": "2026-05-06T03:33:43.536Z"
-    }
-  },
-  "files_written": [
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
-      "action": "edit",
-      "tokens": 177,
-      "at": "2026-05-06T03:36:40.728Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
-      "action": "edit",
-      "tokens": 250,
-      "at": "2026-05-06T03:38:35.507Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 173,
-      "at": "2026-05-06T03:38:46.660Z"
-    }
-  ],
-  "edit_counts": {
-    "scripts/lib/epic-session.sh": 2,
-    "scripts/epic-dag.py": 1
-  },
-  "anatomy_hits": 7,
+  "session_id": "session-2026-05-06-2157",
+  "started": "2026-05-06T03:57:58.220Z",
+  "files_read": {},
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 0,
   "anatomy_misses": 0,
   "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
-  "stop_count": 1
+  "stop_count": 0
 }

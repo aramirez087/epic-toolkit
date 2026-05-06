@@ -166,3 +166,25 @@
 | 21:36 | Edited scripts/lib/epic-session.sh | 11→14 lines | ~165 |
 | 21:38 | Edited scripts/lib/epic-session.sh | added 4 condition(s) | ~234 |
 | 21:38 | Edited scripts/epic-dag.py | modified parse_frontmatter() | ~173 |
+| 21:42 | Created ../../../../tmp/commit-msg.txt | — | ~328 |
+| 21:43 | Session end: 4 writes across 3 files (epic-session.sh, epic-dag.py, commit-msg.txt) | 7 reads | ~28788 tok |
+
+## Session: 2026-05-06 21:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:51 | Edited scripts/run-sessions.sh | 34→39 lines | ~407 |
+| 21:51 | Edited scripts/lib/epic-session.sh | modified extract_prompt() | ~344 |
+| 21:51 | Edited scripts/lib/epic-session.sh | modified build_handoff_section() | ~296 |
+| 21:52 | Created ../../../../tmp/bughunt-tests.sh | — | ~1187 |
+| 21:55 | Created ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/openwolf_auto_hooks.md | — | ~672 |
+| 21:55 | Edited ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/MEMORY.md | "t duplicate " → ".wolf/memory.md" | ~61 |
+| 21:55 | Session end: 6 writes across 5 files (run-sessions.sh, epic-session.sh, bughunt-tests.sh, openwolf_auto_hooks.md, MEMORY.md) | 11 reads | ~40407 tok |
+| 21:56 | Created ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/openwolf_auto_hooks.md | — | ~766 |
+| 21:57 | Edited ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/MEMORY.md | inline fix | ~60 |
+| 21:57 | Session end: 8 writes across 5 files (run-sessions.sh, epic-session.sh, bughunt-tests.sh, openwolf_auto_hooks.md, MEMORY.md) | 11 reads | ~41291 tok |
+
+## Session: 2026-05-06 21:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

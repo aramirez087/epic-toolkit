@@ -12,9 +12,18 @@
 # examples instead.
 extract_prompt() {
   local file="$1" content
+  # `sub(/\r$/, "")` normalises CRLF line endings before any anchored
+  # comparison. Without it, awk sees `$0 == "```md\r"` and the literal
+  # match against "```md" fails on Windows/Git-Bash checkouts where
+  # core.autocrlf=true converts session files to CRLF — both this
+  # primary path and the fallback below silently returned empty,
+  # which made run-sessions.sh exit with "Could not extract operator
+  # prompt" before any session ran. Mirrors the bug-024 fix in
+  # epic-dag.py for the Python parser.
   content="$(awk '
     BEGIN { capture=0; depth=0 }
     {
+      sub(/\r$/, "")
       if (!capture) {
         if ($0 == "```md") { capture=1 }
         next
@@ -31,6 +40,7 @@ extract_prompt() {
     # Strip frontmatter and the title line, return the rest.
     content="$(awk '
       BEGIN { in_fm=0; fm_done=0 }
+      { sub(/\r$/, "") }
       NR==1 && /^---$/ { in_fm=1; next }
       in_fm && /^---$/ { in_fm=0; fm_done=1; next }
       in_fm { next }
@@ -98,31 +108,37 @@ find_handoff_for() {
   done
 }
 
-# Build the multi-parent handoff section for a session
+# Build the multi-parent handoff section for a session.
+# Emits the "## Previous Session Handoffs" header ONLY when at least one
+# parent has a handoff file on disk. Without this guard, sessions whose
+# parents declined to write a handoff (or whose handoff lives at a path
+# find_handoff_for doesn't probe) saw an orphan header followed by the
+# intro paragraph and no entries — a misleading prompt fragment that
+# hinted at "memory of prior work" the model could not actually access.
 build_handoff_section() {
   local deps_csv="$1"
-  local out="" pid path
+  local entries="" pid path
   [[ "$deps_csv" == "-" || -z "$deps_csv" ]] && return
-  out="
----
-
-## Previous Session Handoffs
-
-These handoff documents come from your DAG parents. Treat their file paths as
-the only memory of prior work — you have no other recollection.
-"
   IFS=',' read -ra parents <<< "$deps_csv"
   for pid in "${parents[@]}"; do
     path="$(find_handoff_for "$pid")"
     if [[ -n "$path" ]]; then
-      out+="
+      entries+="
 ### From session $(printf '%02d' "$pid")  →  ${path/#$REPO_ROOT\//}
 
 $(cat "$path")
 "
     fi
   done
-  echo "$out"
+  [[ -z "$entries" ]] && return
+  echo "
+---
+
+## Previous Session Handoffs
+
+These handoff documents come from your DAG parents. Treat their file paths as
+the only memory of prior work — you have no other recollection.
+${entries}"
 }
 
 # Run a single AI-CLI pipe-invocation with optional progress stream.
