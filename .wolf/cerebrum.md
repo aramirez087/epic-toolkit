@@ -26,6 +26,9 @@
 - [2026-05-05] Do not use single-method process detection (e.g., only lsof) for concurrent safety checks — if the tool is unavailable, the check silently fails and data corruption results. Use multiple methods (/proc, lsof, fuser) with fallback to conservative error. (bugs 017)
 - [2026-05-05] Do not directly access sparse associative arrays without validation (e.g., `${arr[$id]}` when some IDs may not be in the array). Validate with `${arr[$id]:-}` and handle empty case. Use helper functions to enforce consistency. (bug-018)
 - [2026-05-05] Do not build PR descriptions with empty arrays silently — always check `${#array[@]} -gt 0` before assuming entries, or provide a fallback message for the empty case. (bug-019)
+- [2026-05-05] Do not use literal-prefix glob `[[ "$path" == "$dir"* ]]` to test "is path under dir" — it matches sibling directories that share a name prefix (e.g., `…/s01-foo` matches `…/s01-foo-extra`). Always anchor the separator: `[[ "$path" == "$dir" || "$path" == "$dir"/* ]]`. (bug-022)
+- [2026-05-05] Do not parse markdown fenced code blocks with `^```$` as the only terminator — language-tagged inner blocks (```bash, ```python, ```diff) are common and their bare closing ``` will silently truncate the outer capture. Track fence depth: `/^```[A-Za-z]/` opens an inner block; bare `^```$` only closes when depth==0. (bug-023)
+- [2026-05-05] Do not anchor text-file searches to LF-only separators (`text.startswith("---\n")`, `text.find("\n---\n")`). Normalise CRLF→LF first, or all Windows/Git-Bash users see the parser silently return empty. (bug-024)
 
 ## Decision Log
 

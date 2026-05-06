@@ -332,6 +332,95 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-020",
+      "timestamp": "2026-05-06T03:36:40.729Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 11→14 lines (2 removed) | Also: /^```md$/ { capture=1; next }; /^```$/   { if (capture) exit }",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T03:38:35.507Z"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-05-06T03:38:46.660Z",
+      "error_message": "Wrong return value",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Was returning: {}, text",
+      "fix": "Now returns: {} — every session",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T03:38:46.660Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "is_worktree_in_use returns false-positive 'in use' when an unrelated process has a CWD inside a sibling directory whose path shares a prefix with the worktree (e.g., wt_dir=…/s01-foo, link_target=…/s01-foo-extra/src). The runner then refuses to clean up the legitimate stale worktree and exits 1, requiring manual intervention. Reproduced with a 5-line bash snippet.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "Line 44 used `[[ \"$link_target\" == \"$wt_dir\"* ]]` — a literal-prefix glob. Bash's pattern `\"$wt_dir\"*` matches `$wt_dir` followed by anything, so `…/s01-foo` matches both the real subdir `…/s01-foo/src` AND any sibling whose name starts with `…/s01-foo` such as `…/s01-foo-extra/src`. There was no separator anchoring on the boundary.",
+      "fix": "Applied. Replaced with `[[ \"$link_target\" == \"$wt_dir\" || \"$link_target\" == \"$wt_dir\"/* ]]` — exact match OR strictly-under match. Verified with a fixture covering: prefix-shared sibling (no longer flagged), real subdir (still flagged), exact match (still flagged), unrelated path (not flagged), no-separator extension `…fooz` (no longer flagged).",
+      "tags": [
+        "worktree",
+        "concurrent-safety",
+        "false-positive",
+        "glob-matching",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": ["bug-017", "bug-020"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "extract_prompt silently truncates session prompts at the first nested ``` fence. Any session prompt containing an inner code example (```bash, ```python, etc.) had its content cut off at the inner closing ``` line. The model then received a partial prompt with no error, producing confusing failures attributable to 'the model didn't follow instructions' when it actually never saw them. Reproduced with a sample session file containing one inner code block.",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "The awk script used `/^```$/ { if (capture) exit }` — any bare-triple-backtick line inside the captured region terminated capture. There was no fence-depth tracking, so an inner code block's closing ``` was indistinguishable from the outer prompt's closing fence. The template at docs/epic-prompt-template.md:93 documents the constraint, but the failure was silent (no warning, no error, just a truncated prompt).",
+      "fix": "Applied. Rewrote the awk to track fence depth: lines matching `/^```[A-Za-z]/` (info-string openers like ```bash, ```python, ```diff) increment depth; bare `^```$` decrements depth if >0, else exits. Verified with three fixtures: language-tagged inner block, plain prompt (regression), multiple inner blocks. Bare-``` inner blocks remain ambiguous in CommonMark — template guidance to indent-instead still applies.",
+      "tags": [
+        "prompt-extraction",
+        "awk",
+        "silent-truncation",
+        "fence-depth",
+        "sh",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": ["bug-020"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
+    },
+    {
+      "id": "bug-024",
+      "timestamp": "2026-05-05T00:00:00Z",
+      "error_message": "parse_frontmatter silently returns {} for any session file with CRLF line endings. The user's depends_on, parallel_safe, model, cli, and touches fields are all dropped. load_sessions then flags the file as no-frontmatter and falls back to the implicit linear chain, collapsing the entire parallel DAG into one-session-per-wave with no warning. Affects Windows/Git-Bash users and anyone whose checkout has core.autocrlf=true. Reproduced via direct call to parse_frontmatter with CRLF content.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Line 53 (`text.startswith(\"---\\n\")`) and line 55 (`text.find(\"\\n---\\n\", 4)`) hard-code LF separators. CRLF text starts with `---\\r\\n`, so the startswith check fails and the function returns {} immediately. Cerebrum already calls Git Bash on Windows a target platform.",
+      "fix": "Applied. At the top of parse_frontmatter, normalise: `if '\\r' in text: text = text.replace('\\r\\n', '\\n').replace('\\r', '\\n')`. One-line guard, runs only when CR is present. Verified parse output is identical for LF, CRLF, and mixed line endings.",
+      "tags": [
+        "crlf",
+        "windows",
+        "frontmatter",
+        "silent-failure",
+        "python",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": ["bug-021"],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T00:00:00Z"
     }
   ]
 }

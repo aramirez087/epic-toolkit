@@ -50,6 +50,13 @@ SESSION_RE = re.compile(r"^session-(\d+)-(.+)\.md$")
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Minimal YAML-frontmatter parser. Stdlib only."""
+    # Normalise line endings before any anchored search. CRLF-encoded files
+    # (Windows checkouts, or anything committed without core.autocrlf) used
+    # to silently fail the `\n---\n` look-ups and return {} — every session
+    # then collapsed to the implicit linear-chain fallback, killing the
+    # user's parallel DAG with no error.
+    if "\r" in text:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
     if not text.startswith("---\n"):
         return {}, text
     end = text.find("\n---\n", 4)

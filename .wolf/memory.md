@@ -157,3 +157,12 @@
 | 21:28 | Created scripts/run-sessions.sh | — | ~12278 |
 | 21:29 | refactor: split run-sessions.sh (2183→1146 lines) into scripts/lib/{epic-git,epic-session,epic-result,epic-wave}.sh | scripts/run-sessions.sh scripts/lib/ | syntax OK, all 19 functions extracted | ~14000 tok |
 | 21:29 | Session end: 5 writes across 5 files (epic-git.sh, epic-wave.sh, epic-result.sh, epic-session.sh, run-sessions.sh) | 1 reads | ~47341 tok |
+| 21:30 | Session end: 5 writes across 5 files (epic-git.sh, epic-wave.sh, epic-result.sh, epic-session.sh, run-sessions.sh) | 1 reads | ~47341 tok |
+
+## Session: 2026-05-06 21:30
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:36 | Edited scripts/lib/epic-session.sh | 11→14 lines | ~165 |
+| 21:38 | Edited scripts/lib/epic-session.sh | added 4 condition(s) | ~234 |
+| 21:38 | Edited scripts/epic-dag.py | modified parse_frontmatter() | ~173 |

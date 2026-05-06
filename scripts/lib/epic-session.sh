@@ -3,12 +3,29 @@
 # Sourced by run-sessions.sh; all functions share its global scope.
 
 # --- Extract prompt from markdown code fence ---
+# Capture between the first ```md fence and its matching closer. Inner
+# language-tagged code blocks (```bash, ```python, ```diff, …) inside the
+# prompt are tracked via a depth counter so their closing ``` does NOT
+# silently terminate the outer capture — that previously truncated prompts
+# at the first inner code fence with no error. Bare-``` inner blocks are
+# still ambiguous in CommonMark; the template tells users to indent code
+# examples instead.
 extract_prompt() {
   local file="$1" content
   content="$(awk '
-    /^```md$/ { capture=1; next }
-    /^```$/   { if (capture) exit }
-    capture   { print }
+    BEGIN { capture=0; depth=0 }
+    {
+      if (!capture) {
+        if ($0 == "```md") { capture=1 }
+        next
+      }
+      if ($0 ~ /^```[A-Za-z]/) { depth++; print; next }
+      if ($0 == "```") {
+        if (depth > 0) { depth--; print; next }
+        exit
+      }
+      print
+    }
   ' "$file")"
   if [[ -z "$content" ]]; then
     # Strip frontmatter and the title line, return the rest.
@@ -35,13 +52,16 @@ is_worktree_in_use() {
   local wt_dir="$1"
   [[ -d "$wt_dir" ]] || return 1
 
-  # Method 1: Check /proc (Linux/Unix) for any process with CWD in this directory
+  # Method 1: Check /proc (Linux/Unix) for any process with CWD in this directory.
+  # Match exact dir OR a path strictly under it ("$wt_dir"/*) — never a bare
+  # prefix glob like "$wt_dir"*, which would match unrelated siblings such as
+  # `…--s01-foo-extra` and falsely block cleanup of `…--s01-foo`.
   if [[ -d /proc ]]; then
     for proc_dir in /proc/*/cwd; do
       [[ -L "$proc_dir" ]] || continue
       local link_target
       link_target="$(readlink "$proc_dir" 2>/dev/null)" || continue
-      if [[ "$link_target" == "$wt_dir"* ]]; then
+      if [[ "$link_target" == "$wt_dir" || "$link_target" == "$wt_dir"/* ]]; then
         return 0
       fi
     done
