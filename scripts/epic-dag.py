@@ -129,20 +129,27 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         path = os.path.join(sessions_dir, entry)
         sid = int(m.group(1))
         slug = m.group(2)
-        if " " in slug:
-            raise SystemExit(
-                f"ERROR: {entry} — slug contains a space. "
-                f"Rename the file using hyphens only (e.g. session-{sid:02d}-{slug.replace(' ', '-')}.md)"
-            )
+        # Reject characters that break field-delimited parsers downstream.
+        # Space:  breaks `set -- $_rest` in bash SESSION-line parsing (bug-062).
+        # Pipe:   breaks `|`-delimited result rows in epic-result.sh (bug-082).
+        # Tab:    breaks IFS word-splitting of SESSION lines in run-sessions.sh.
+        for _bad_char, _bad_name in ((" ", "a space"), ("|", "a pipe '|'"), ("\t", "a tab")):
+            if _bad_char in slug:
+                raise SystemExit(
+                    f"ERROR: {entry} — slug contains {_bad_name}. "
+                    f"Rename the file using hyphens only "
+                    f"(e.g. session-{sid:02d}-{slug.replace(_bad_char, '-')}.md)"
+                )
         if sid == 0:
             operator = path
             continue
-        # Force UTF-8: bare `open()` uses locale.getpreferredencoding(False),
-        # which is cp1252 on Windows and ASCII when LC_ALL=C. Session prompts
-        # routinely contain em-dashes, smart quotes, accented chars, etc.;
-        # without explicit encoding the parser crashes with UnicodeDecodeError
-        # before any session can run.
-        with open(path, encoding="utf-8") as f:
+        # `utf-8-sig` strips an optional leading UTF-8 BOM (﻿) on read.
+        # Files saved by Windows editors (Notepad, some VS Code configs) with
+        # "UTF-8 with BOM" prepend \xef\xbb\xbf; `encoding="utf-8"` leaves it
+        # in `text`, causing `text.startswith("---\n")` to fail and returning {}
+        # — the session silently loses depends_on/parallel_safe and the whole DAG
+        # collapses to the implicit linear chain with no error. (bug-081)
+        with open(path, encoding="utf-8-sig") as f:
             text = f.read()
         fm, _ = parse_frontmatter(text)
         fm_session = fm.get("session")

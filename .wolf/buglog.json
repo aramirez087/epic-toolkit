@@ -1501,6 +1501,116 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-06T17:30:00.000Z"
+    },
+    {
+      "id": "bug-081",
+      "timestamp": "2026-05-06T17:37:50Z",
+      "error_message": "UTF-8 BOM at the start of session-NN-*.md silently breaks YAML frontmatter parsing — parse_frontmatter returns {}, the session loses depends_on/parallel_safe/touches, and the entire DAG silently collapses to the implicit linear chain (one session per wave). No warning. Verified via /tmp/bom-test reproduction: two parallel_safe sessions with depends_on=[] produced 2 sequential waves instead of 1 parallel wave.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "scripts/epic-dag.py:60 — `if not text.startswith('---\\n'):` fails when the file begins with the UTF-8 BOM (\\ufeff). The CRLF normalization above it (lines 58-59) handles \\r but not \\ufeff. Files saved by Windows editors with 'UTF-8 with BOM' (Notepad's default for some encodings, VS Code's optional setting) routinely include the BOM. Same family as bug-024 (CRLF) and bug-035 (encoding).",
+      "fix": "Strip a leading \\ufeff before the startswith check, and mirror the same fix in extract_prompt's awk path in scripts/lib/epic-session.sh so prompt extraction also handles BOM'd files. Suggested patch in epic-dag.py: after CRLF normalization, add `if text.startswith('\\ufeff'): text = text[1:]`.",
+      "tags": [
+        "found-by-bug-hunt",
+        "silent-failure",
+        "encoding",
+        "windows",
+        "dag-parser",
+        "frontmatter"
+      ],
+      "related_bugs": [
+        "bug-024",
+        "bug-035"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:37:50Z"
+    },
+    {
+      "id": "bug-082",
+      "timestamp": "2026-05-06T17:37:50Z",
+      "error_message": "Session slug containing '|' (allowed by SESSION_RE — only spaces are rejected) corrupts the pipe-delimited result row in write_epic_result and crashes the json-emit step with `ValueError: invalid literal for int() with base 10: 'api'` (or similar). The entire result file fails to write, and external watchers polling the EPIC_RESULT_FILE sentinel hang indefinitely. Verified by simulating row construction with slug='auth|api'.",
+      "file": "scripts/lib/epic-result.sh",
+      "root_cause": "scripts/lib/epic-result.sh:112 encodes the session row as `${key}|${status}|${slug}|${elapsed}|${exit_code}|${error_type}|${log_path}|${stderr_path}` and the consuming Python script splits on '|' (lines 162-172). The slug regex in scripts/epic-dag.py:48 (`^session-(\\d+)-(.+)\\.md$`) and the validator at line 132 only reject space — '|' (and other shell/JSON-safe chars) slip through. With slug='foo|bar', parts[2]='foo', parts[3]='bar' (instead of elapsed seconds), and `int(parts[3])` raises ValueError.",
+      "fix": "Either (a) tighten the slug validator in epic-dag.py to reject '|' (and ideally restrict to [A-Za-z0-9._-]), or (b) switch the result-file row delimiter to TAB (\\t) or NUL (\\0) which can't appear in filenames on POSIX, or (c) shell-escape/JSON-encode the slug field before emitting. Option (a) is least invasive.",
+      "tags": [
+        "found-by-bug-hunt",
+        "silent-failure",
+        "validation",
+        "result-file",
+        "delimiter-injection"
+      ],
+      "related_bugs": [
+        "bug-062"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:37:50Z"
+    },
+    {
+      "id": "bug-083",
+      "timestamp": "2026-05-06T17:37:50Z",
+      "error_message": "Hardcoded WAVE_TIMEOUT_MINUTES=240 silently overrides --timeout when --timeout > 240, or when a wave has many sequential sessions whose total run time exceeds 4 hours. The wave-level timeout fires first, kills sessions via kill_tree, and marks them failed/exit-137 even though their per-session --timeout hadn't elapsed. The user thinks they configured a 5-hour session timeout, but their sessions get killed at 4 hours.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "scripts/run-sessions.sh:94 sets WAVE_TIMEOUT_MINUTES=240 with no CLI flag, no .epic-config.json override, and no auto-derivation. The wave loop at line 888 (`wave_timeout=$((WAVE_TIMEOUT_MINUTES * 60))`) and line 893 (`if [[ $wave_elapsed -gt $wave_timeout ]]`) enforces the cap unconditionally. Sequential sessions within a wave (MAX_PARALLEL=1, or --sequential which only flattens to single-session waves but still each per-session bounded by wave timeout) are most affected. A 4-session sequential wave with --timeout 90 needs up to 360m, but the 240m wave ceiling kills the last sessions.",
+      "fix": "Add a --wave-timeout flag and config-file key (`waveTimeout`), AND/OR auto-derive a sensible default such as `max(WAVE_TIMEOUT_MINUTES, TIMEOUT * len(IN_RANGE) / MAX_PARALLEL + buffer)` per-wave inside the loop. At minimum, log a warning when TIMEOUT > WAVE_TIMEOUT_MINUTES at startup so users aren't surprised.",
+      "tags": [
+        "found-by-bug-hunt",
+        "silent-cap",
+        "timeout",
+        "wave-loop",
+        "ux"
+      ],
+      "related_bugs": [
+        "bug-073"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:37:50Z"
+    },
+    {
+      "id": "bug-084",
+      "timestamp": "2026-05-06T17:43:20.646Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 15→22 lines (9 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:43:20.646Z"
+    },
+    {
+      "id": "bug-085",
+      "timestamp": "2026-05-06T17:43:26.289Z",
+      "error_message": "Wrong condition in logic",
+      "file": "scripts/lib/epic-session.sh",
+      "root_cause": "Condition was: if (!capture)",
+      "fix": "Changed to: if (NR == 1)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:43:26.289Z"
+    },
+    {
+      "id": "bug-086",
+      "timestamp": "2026-05-06T17:44:15.397Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 4→19 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:44:15.397Z"
     }
   ]
 }

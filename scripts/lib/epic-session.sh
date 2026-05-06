@@ -24,6 +24,7 @@ extract_prompt() {
     BEGIN { capture=0; depth=0 }
     {
       sub(/\r$/, "")
+      if (NR == 1) sub(/^\357\273\277/, "")
       if (!capture) {
         if ($0 == "```md") { capture=1 }
         next
@@ -47,6 +48,7 @@ extract_prompt() {
     content="$(awk '
       BEGIN { in_fm=0; awaiting_title=0 }
       { sub(/\r$/, "") }
+      NR==1 { sub(/^\357\273\277/, "") }
       NR==1 && /^---$/ { in_fm=1; next }
       in_fm && /^---$/ { in_fm=0; awaiting_title=1; next }
       in_fm { next }

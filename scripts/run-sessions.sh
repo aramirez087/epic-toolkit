@@ -41,6 +41,7 @@
 #   --no-worktree        Run trunk in CWD (forces --max-parallel 1)
 #   --keep-worktree      Retain trunk worktree on success
 #   --keep-session-worktrees  Retain per-session worktrees on success
+#   --wave-timeout MINS  Max minutes before the entire wave is killed (default: auto)
 #   --fresh              Disable resume: ignore cached plans and re-run already-committed sessions
 #   -h, --help           Show this help
 
@@ -91,7 +92,10 @@ FRESH=false  # When true, ignore cached plans and previously-committed sessions
 CLI_OVERRIDE=""
 TIMEOUT=0
 RETRY=0
-WAVE_TIMEOUT_MINUTES=240  # Max 4 hours per wave before killing hung jobs
+# Wave-level ceiling. 0 = auto-derive per-wave (see wave loop).
+# Explicit --wave-timeout overrides auto-derive.
+WAVE_TIMEOUT_MINUTES=0
+WAVE_TIMEOUT_USER_SET=false
 
 # Track which flags were explicitly set by the user so config loading
 # can distinguish "user passed the default value" from "user didn't pass it".
@@ -123,6 +127,7 @@ while [[ $# -gt 0 ]]; do
     --keep-worktree)            KEEP_WORKTREE=true; shift ;;
     --keep-session-worktrees)   KEEP_SESSION_WORKTREES=true; shift ;;
     --keep-session-docs)        KEEP_SESSION_DOCS=true; shift ;;
+    --wave-timeout)             WAVE_TIMEOUT_MINUTES="$2"; WAVE_TIMEOUT_USER_SET=true; shift 2 ;;
     --fresh)                    FRESH=true; shift ;;
     --help|-h)                  usage ;;
     *)
@@ -133,7 +138,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate numeric arguments
-for _arg_name in "START_FROM" "END_AT" "MAX_PARALLEL" "TIMEOUT" "RETRY"; do
+for _arg_name in "START_FROM" "END_AT" "MAX_PARALLEL" "TIMEOUT" "RETRY" "WAVE_TIMEOUT_MINUTES"; do
   _val="${!_arg_name}"
   if ! [[ "$_val" =~ ^[0-9]+$ ]]; then
     err "$_arg_name must be a non-negative integer (got '$_val')"
@@ -194,6 +199,10 @@ if [[ -f "$CONFIG_FILE" ]]; then
     fi
     if [[ "$KEEP_WORKTREE" == "false" && "$config_content" =~ \"keepWorktree\"[[:space:]]*:[[:space:]]*true ]]; then
       KEEP_WORKTREE=true
+    fi
+    if ! $WAVE_TIMEOUT_USER_SET && [[ "$config_content" =~ \"waveTimeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+      WAVE_TIMEOUT_MINUTES="${BASH_REMATCH[1]}"
+      WAVE_TIMEOUT_USER_SET=true
     fi
   else
     warn "Could not read configuration file: $CONFIG_FILE"
@@ -883,10 +892,25 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     JOB_SIDS+=("$sid")
   done
 
-  # Wait for all jobs in this wave with timeout protection
+  # Wait for all jobs in this wave with timeout protection.
+  # Compute effective wave ceiling per-wave so --timeout is never silently
+  # overridden by a hardcoded global. When --wave-timeout was not explicitly
+  # set, auto-derive: ceil(wave_size / MAX_PARALLEL) serial batches × per-session
+  # timeout + 10 min buffer, with a 240-min floor. (bug-083)
   wave_start=$(date +%s)
-  wave_timeout=$((WAVE_TIMEOUT_MINUTES * 60))  # Default 240 min per wave
-  ! $LIVE_UI && log "  ⏳ Wave $wn: awaiting ${#JOB_PIDS[@]} session(s) (timeout ${WAVE_TIMEOUT_MINUTES}m)"
+  _wave_size="${#IN_RANGE[@]}"
+  if $WAVE_TIMEOUT_USER_SET; then
+    _effective_wtm="$WAVE_TIMEOUT_MINUTES"
+  else
+    _effective_wtm=240
+    if [[ "$TIMEOUT" -gt 0 ]]; then
+      _batches=$(( (_wave_size + MAX_PARALLEL - 1) / MAX_PARALLEL ))
+      _needed=$(( _batches * TIMEOUT + 10 ))
+      [[ "$_needed" -gt "$_effective_wtm" ]] && _effective_wtm="$_needed"
+    fi
+  fi
+  wave_timeout=$((_effective_wtm * 60))
+  ! $LIVE_UI && log "  ⏳ Wave $wn: awaiting ${#JOB_PIDS[@]} session(s) (timeout ${_effective_wtm}m)"
   heartbeat_iters=0
   while [[ ${#JOB_PIDS[@]} -gt 0 ]]; do
     wave_elapsed=$(($(date +%s) - wave_start))
