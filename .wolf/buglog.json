@@ -1684,6 +1684,62 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T18:11:37Z"
+    },
+    {
+      "id": "bug-090",
+      "timestamp": "2026-05-06T19:00:00Z",
+      "error_message": "Wolf-json merge driver silently drops one entry on bug-id collision. Two parallel sessions in the same wave can both append a bug with the same id (each hook computes 'next free id' from its local view of buglog.json, unaware of the sibling's addition). When trunk merges the second session, merge_buglog dedupes by id and keeps only the entry with the later last_seen — the other session's real, distinct bug entry is silently lost. Reproduced with two synthetic 'bug-090' entries: only one survives the merge.",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "merge_buglog (lines 36-51) treats id collisions as duplicates rather than as concurrent allocations. The dedup loop unconditionally overwrites by_id[bid] when last_seen comparison favors the newer entry; when the two entries are not duplicates of the same event but are independent additions that happened to pick the same id, the older one is dropped without warning. The merge driver is the only safety net for the parallel-wave scenario the runner explicitly enables.",
+      "fix": "Detect non-duplicate id collisions and re-id one side instead of dropping it. When both ours[bid] and theirs[bid] exist and differ on substantive fields (timestamp, error_message, file, root_cause), keep both: assign the newer one the next free id past max(all-ids). Alternatively, switch the bug id allocator to a content-addressable form (hash of timestamp+file+error) so two concurrent additions naturally hash to different ids.",
+      "tags": [
+        "found-by-bug-hunt",
+        "silent-data-loss",
+        "merge-driver",
+        "concurrency",
+        "parallel-waves"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T19:00:00Z"
+    },
+    {
+      "id": "bug-091",
+      "timestamp": "2026-05-06T19:00:00Z",
+      "error_message": "BRANCH_SANITIZED produces single-dash output instead of the documented double-dash. The header docstring (lines 14-18) advertises layout '.epic-worktrees/<repo>/epic--<name>/' for the trunk worktree, but a branch name 'epic/foo' actually produces directory 'epic-foo' (single dash). The downstream '--s' separator that distinguishes trunk from per-session worktree dirs still works, but the trunk dir name disagrees with documentation and any external tooling that scans the worktree base for 'epic--*' will miss the trunk.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Line 339: BRANCH_SANITIZED=\"$(echo \"$BRANCH\" | tr '/' '--')\". tr maps SET1 chars to SET2 chars positionally; with SET1='/' (one char) and SET2='--' (two chars), only SET2[0]='-' is used. SET2[1] is silently discarded. The author appears to have expected tr to substitute each '/' with the literal two-char string '--', which is sed's behavior, not tr's. Verified: 'epic/foo/bar' produces 'epic-foo-bar' instead of the intended 'epic--foo--bar'.",
+      "fix": "Replace with sed: BRANCH_SANITIZED=\"$(echo \"$BRANCH\" | sed 's|/|--|g')\". Mostly cosmetic since the only place BRANCH_SANITIZED is used as a glob anchor (lines 583, 1326) and a directory name (lines 610, 838) is consistent with itself, but the divergence from the docstring is real and any future tool that searches '$WORKTREE_BASE/epic--*' for trunk worktrees will find nothing.",
+      "tags": [
+        "found-by-bug-hunt",
+        "documentation-drift",
+        "tr-misuse",
+        "cosmetic"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T19:00:00Z"
+    },
+    {
+      "id": "bug-092",
+      "timestamp": "2026-05-06T19:00:00Z",
+      "error_message": "set -- $_rest in the SESSION-line parser glob-expands tokens before they are consumed, silently corrupting session metadata when a slug contains '*', '?', '[', or ']' AND the cwd happens to have files matching that pattern. Reproduced: with cwd containing foo-thing.txt and foo-other.txt, parsing a SESSION line whose slug field is 'foo*' produced $5='foo-other.txt', $6='foo-thing.txt', shifting model and cli into the wrong slots. The slug becomes a filename, parallel-safe becomes another filename, model becomes '1', cli becomes '-' — none of the downstream consumers detect the corruption.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Line 423: set -- $_rest deliberately leaves _rest unquoted to enable word-splitting on whitespace, but bash's default behavior also performs pathname (glob) expansion on each unquoted word. The slug validator in scripts/epic-dag.py (lines 132-142) only rejects space, pipe, and tab — characters that break field-delimited parsers — and explicitly lists 'space breaks set -- $_rest' as the rationale, but missed that the SAME parser is also vulnerable to glob expansion. Same class as bug-082 (pipe-in-slug) but for a different breaking character.",
+      "fix": "Either disable globbing locally before the parser ('set -f' before set --, 'set +f' after) so that '*', '?', '[' are treated as literals; or tighten the slug validator in epic-dag.py to also reject '*', '?', '[', ']', and any other shell-meta or filesystem-fragile characters (effectively whitelist [A-Za-z0-9._-] for slugs). Validator-tightening is the safer fix because it also protects sess_branch and sess_wt_dir_name construction at lines 837-838.",
+      "tags": [
+        "found-by-bug-hunt",
+        "silent-corruption",
+        "glob-expansion",
+        "validation",
+        "low-probability"
+      ],
+      "related_bugs": [
+        "bug-062",
+        "bug-082"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T19:00:00Z"
     }
   ]
 }

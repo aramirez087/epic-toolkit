@@ -1,70 +1,73 @@
 {
-  "session_id": "session-2026-05-06-1145",
-  "started": "2026-05-06T17:45:41.404Z",
+  "session_id": "session-2026-05-06-1213",
+  "started": "2026-05-06T18:13:32.368Z",
   "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 2,
-      "tokens": 14618,
-      "first_read": "2026-05-06T17:46:11.333Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 2,
-      "tokens": 5705,
-      "first_read": "2026-05-06T17:46:15.133Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+    "/Users/aramirez/.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/openwolf_auto_hooks.md": {
       "count": 1,
-      "tokens": 839,
-      "first_read": "2026-05-06T17:46:15.398Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
-      "count": 1,
-      "tokens": 3902,
-      "first_read": "2026-05-06T17:46:15.727Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
-      "count": 1,
-      "tokens": 2333,
-      "first_read": "2026-05-06T17:46:15.756Z"
+      "tokens": 0,
+      "first_read": "2026-05-06T18:13:45.334Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
       "count": 1,
       "tokens": 4944,
-      "first_read": "2026-05-06T17:51:30.645Z"
+      "first_read": "2026-05-06T18:14:15.925Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
+      "count": 1,
+      "tokens": 2333,
+      "first_read": "2026-05-06T18:14:33.746Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
+      "count": 1,
+      "tokens": 3902,
+      "first_read": "2026-05-06T18:14:33.791Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
       "count": 1,
       "tokens": 4488,
-      "first_read": "2026-05-06T18:06:41.414Z"
+      "first_read": "2026-05-06T18:14:59.518Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
+      "count": 1,
+      "tokens": 3346,
+      "first_read": "2026-05-06T18:15:11.651Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
+      "count": 5,
+      "tokens": 15046,
+      "first_read": "2026-05-06T18:15:43.701Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
+      "count": 1,
+      "tokens": 5859,
+      "first_read": "2026-05-06T18:15:52.620Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+      "count": 1,
+      "tokens": 839,
+      "first_read": "2026-05-06T18:15:53.011Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
+      "count": 1,
+      "tokens": 773,
+      "first_read": "2026-05-06T18:22:06.619Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
+      "count": 1,
+      "tokens": 341,
+      "first_read": "2026-05-06T18:22:07.379Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/resolve-wolf.sh": {
+      "count": 1,
+      "tokens": 650,
+      "first_read": "2026-05-06T18:22:07.673Z"
     }
   },
-  "files_written": [
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 48,
-      "at": "2026-05-06T18:10:44.569Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 1014,
-      "at": "2026-05-06T18:11:07.432Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
-      "action": "edit",
-      "tokens": 211,
-      "at": "2026-05-06T18:11:17.267Z"
-    }
-  ],
-  "edit_counts": {
-    "scripts/run-sessions.sh": 2,
-    "scripts/lib/epic-session.sh": 1
-  },
-  "anatomy_hits": 7,
-  "anatomy_misses": 0,
-  "repeated_reads_warned": 2,
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 11,
+  "anatomy_misses": 1,
+  "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
   "stop_count": 1
 }
