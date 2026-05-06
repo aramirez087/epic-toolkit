@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 32897,
-    "total_reads": 5,
-    "total_writes": 12,
+    "total_tokens_estimated": 55255,
+    "total_reads": 6,
+    "total_writes": 19,
     "total_sessions": 8,
-    "anatomy_hits": 4,
+    "anatomy_hits": 5,
     "anatomy_misses": 1,
-    "repeated_reads_blocked": 5,
-    "estimated_savings_vs_bare_cli": 92653
+    "repeated_reads_blocked": 17,
+    "estimated_savings_vs_bare_cli": 335805
   },
   "sessions": [
     {
@@ -182,6 +182,64 @@
         "reads_count": 1,
         "writes_count": 2,
         "repeated_reads_blocked": 4,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-06-1948",
+      "started": "2026-05-06T01:48:28.533Z",
+      "ended": "2026-05-06T01:56:30.872Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 20246,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 930,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 44,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 130,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 340,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 76,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 171,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 421,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 20246,
+        "output_tokens_estimated": 2112,
+        "reads_count": 1,
+        "writes_count": 7,
+        "repeated_reads_blocked": 12,
         "anatomy_lookups": 1
       }
     }

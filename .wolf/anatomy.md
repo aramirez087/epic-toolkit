@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T01:55:18.436Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T02:26:28.051Z
 > Files: 18 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../.claude/
@@ -40,4 +40,4 @@
 - `epic-poll-progress.py` — Polling-based progress fallback (~2076 tok)
 - `epic-progress.py` — Live progress display for Claude stream-json & OpenCode JSON (~2226 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~20535 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~20944 tok)

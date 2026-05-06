@@ -1822,48 +1822,79 @@ if ! $EPIC_FAILED; then
   fi
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # --- Cleanup: orchestrator artifacts + session scaffolding ---
-  # Remove everything that isn't actual product code from the epic branch so
-  # the final PR diff is clean: dotfile artefacts, session prompt files, and
-  # the per-epic roadmap/handoff directory. Use --keep-session-docs to skip.
-  log "Cleaning up session scaffolding..."
-  cd "$REPO_ROOT"
-
-  # 1. Dotfile artefacts (.session-*-plan.md, .epic-*.json, etc.)
-  CLEANED=0
-  for f in "$TRUNK_SESSIONS_DIR"/.session-* \
-            "${STATUS_FILE:-}" "${DAG_PLAN_FILE:-}" \
-            "${STATUS_FILE:-}.lock" "${STATUS_FILE:-}.tmp"; do
-    [[ -f "$f" ]] && rm -f "$f" && CLEANED=$((CLEANED + 1))
+  # --- Verify the epic *actually* succeeded across every session ---
+  # `! $EPIC_FAILED` only confirms no session FAILED in this run — it stays
+  # false when sessions are skipped via --start/--end (partial run) or when
+  # the user resumed a prior run. Cleanup deletes the session prompt files
+  # and roadmap handoffs, so doing it on a partial epic destroys scaffolding
+  # the user still needs. Verify every session has its successful commit on
+  # the branch before any destructive step runs.
+  ALL_SESSIONS_DONE=true
+  INCOMPLETE_SESSIONS=()
+  BRANCH_SUBJECTS="$(git -C "$TRUNK_WORKTREE_DIR" log --format='%s' "$BRANCH" 2>/dev/null || true)"
+  for sid in "${!SESSION_SLUG_BY_ID[@]}"; do
+    _slug="${SESSION_SLUG_BY_ID[$sid]}"
+    _friendly="${_slug//-/ }"
+    _done_subject="feat: Session ${sid} — ${_friendly}"
+    if ! grep -qxF -- "$_done_subject" <<<"$BRANCH_SUBJECTS"; then
+      ALL_SESSIONS_DONE=false
+      INCOMPLETE_SESSIONS+=("session-$(printf '%02d' "$sid") (${SESSION_STATUS[$sid]:-not-run})")
+    fi
   done
-  [[ $CLEANED -gt 0 ]] && git add -A 2>/dev/null || true
+  unset _slug _friendly _done_subject
 
-  # 2. Session prompt files and handoffs (scaffolding, not product code)
-  _EPIC_SLUG="$(basename "$TRUNK_SESSIONS_REL")"
-  if ! $KEEP_SESSION_DOCS; then
-    # Remove docs/claude-sessions/<epic-name>/ entirely
-    if git ls-files --error-unmatch "$TRUNK_SESSIONS_REL" &>/dev/null 2>&1; then
-      git rm -r -q "$TRUNK_SESSIONS_REL" 2>/dev/null || true
-    fi
-    # Remove docs/roadmap/<epic-name>/ if sessions wrote handoffs there
-    _ROADMAP_REL="docs/roadmap/$_EPIC_SLUG"
-    if git ls-files --error-unmatch "$_ROADMAP_REL" &>/dev/null 2>&1; then
-      git rm -r -q "$_ROADMAP_REL" 2>/dev/null || true
-    fi
-  fi
+  if ! $ALL_SESSIONS_DONE; then
+    warn "Skipping scaffolding cleanup — ${#INCOMPLETE_SESSIONS[@]} session(s) without a success commit on $BRANCH:"
+    for _s in "${INCOMPLETE_SESSIONS[@]}"; do
+      warn "  - $_s"
+    done
+    unset _s
+    warn "Re-run to finish the remaining sessions; cleanup runs only when every session has its 'feat: Session N — slug' commit."
+    AUTO_PR=false
+  else
+    # --- Cleanup: orchestrator artifacts + session scaffolding ---
+    # Remove everything that isn't actual product code from the epic branch so
+    # the final PR diff is clean: dotfile artefacts, session prompt files, and
+    # the per-epic roadmap/handoff directory. Use --keep-session-docs to skip.
+    log "Cleaning up session scaffolding..."
+    cd "$REPO_ROOT"
 
-  if ! git diff --cached --quiet 2>/dev/null; then
-    git commit -q -m "chore: remove epic session scaffolding
+    # 1. Dotfile artefacts (.session-*-plan.md, .epic-*.json, etc.)
+    CLEANED=0
+    for f in "$TRUNK_SESSIONS_DIR"/.session-* \
+              "${STATUS_FILE:-}" "${DAG_PLAN_FILE:-}" \
+              "${STATUS_FILE:-}.lock" "${STATUS_FILE:-}.tmp"; do
+      [[ -f "$f" ]] && rm -f "$f" && CLEANED=$((CLEANED + 1))
+    done
+    [[ $CLEANED -gt 0 ]] && git add -A 2>/dev/null || true
+
+    # 2. Session prompt files and handoffs (scaffolding, not product code)
+    _EPIC_SLUG="$(basename "$TRUNK_SESSIONS_REL")"
+    if ! $KEEP_SESSION_DOCS; then
+      # Remove docs/claude-sessions/<epic-name>/ entirely
+      if git ls-files --error-unmatch "$TRUNK_SESSIONS_REL" &>/dev/null 2>&1; then
+        git rm -r -q "$TRUNK_SESSIONS_REL" 2>/dev/null || true
+      fi
+      # Remove docs/roadmap/<epic-name>/ if sessions wrote handoffs there
+      _ROADMAP_REL="docs/roadmap/$_EPIC_SLUG"
+      if git ls-files --error-unmatch "$_ROADMAP_REL" &>/dev/null 2>&1; then
+        git rm -r -q "$_ROADMAP_REL" 2>/dev/null || true
+      fi
+    fi
+
+    if ! git diff --cached --quiet 2>/dev/null; then
+      git commit -q -m "chore: remove epic session scaffolding
 
 Removes docs/claude-sessions/${_EPIC_SLUG}/ and any per-epic roadmap
 handoffs. These files served as AI orchestration scaffolding during the
 run; they do not belong in the final PR diff or repository history.
 
 Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
-    if $KEEP_SESSION_DOCS; then
-      ok "Cleaned orchestrator artefacts (session docs preserved via --keep-session-docs)"
-    else
-      ok "Cleaned session scaffolding — PR diff contains only product code"
+      if $KEEP_SESSION_DOCS; then
+        ok "Cleaned orchestrator artefacts (session docs preserved via --keep-session-docs)"
+      else
+        ok "Cleaned session scaffolding — PR diff contains only product code"
+      fi
     fi
   fi
 
