@@ -93,21 +93,28 @@ TIMEOUT=0
 RETRY=0
 WAVE_TIMEOUT_MINUTES=240  # Max 4 hours per wave before killing hung jobs
 
+# Track which flags were explicitly set by the user so config loading
+# can distinguish "user passed the default value" from "user didn't pass it".
+TIMEOUT_USER_SET=false
+RETRY_USER_SET=false
+MODEL_USER_SET=false
+MAX_PARALLEL_USER_SET=false
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --start)                    START_FROM="$2"; shift 2 ;;
     --end)                      END_AT="$2"; shift 2 ;;
-    --max-parallel)             MAX_PARALLEL="$2"; shift 2 ;;
+    --max-parallel)             MAX_PARALLEL="$2"; MAX_PARALLEL_USER_SET=true; shift 2 ;;
     --strict)                   STRICT=true; shift ;;
     --sequential)               SEQUENTIAL=true; shift ;;
     --show-dag)                 SHOW_DAG=true; shift ;;
     --dry-run)                  DRY_RUN=true; shift ;;
     --branch)                   BRANCH="$2"; shift 2 ;;
     --base)                     BASE_BRANCH="$2"; shift 2 ;;
-    --model)                    MODEL="$2"; shift 2 ;;
+    --model)                    MODEL="$2"; MODEL_USER_SET=true; shift 2 ;;
     --cli)                      CLI_OVERRIDE="$2"; shift 2 ;;
-    --timeout)                  TIMEOUT="$2"; shift 2 ;;
-    --retry)                    RETRY="$2"; shift 2 ;;
+    --timeout)                  TIMEOUT="$2"; TIMEOUT_USER_SET=true; shift 2 ;;
+    --retry)                    RETRY="$2"; RETRY_USER_SET=true; shift 2 ;;
     --no-commit)                AUTO_COMMIT=false; shift ;;
     --no-pr)                    AUTO_PR=false; shift ;;
     --no-rebase)                AUTO_REBASE=false; shift ;;
@@ -158,20 +165,22 @@ if [[ -f "$CONFIG_FILE" ]]; then
 
   # Extract config values using bash regex (Bash 3.2+ compatible)
   if config_content="$(cat "$CONFIG_FILE" 2>/dev/null)"; then
-    # Only override defaults if CLI didn't specify the value
-    if [[ "$TIMEOUT" -eq 0 && "$config_content" =~ \"timeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+    # Only override defaults if CLI didn't specify the value. Use _USER_SET
+    # flags (not sentinel comparisons) for flags whose default value is also
+    # a valid explicit user choice (e.g. --timeout 0, --model sonnet).
+    if ! $TIMEOUT_USER_SET && [[ "$config_content" =~ \"timeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
       TIMEOUT="${BASH_REMATCH[1]}"
     fi
-    if [[ "$RETRY" -eq 0 && "$config_content" =~ \"retry\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+    if ! $RETRY_USER_SET && [[ "$config_content" =~ \"retry\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
       RETRY="${BASH_REMATCH[1]}"
     fi
     if [[ -z "$CLI_OVERRIDE" && "$config_content" =~ \"cli\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
       CLI_OVERRIDE="${BASH_REMATCH[1]}"
     fi
-    if [[ "$MODEL" == "sonnet" && "$config_content" =~ \"model\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+    if ! $MODEL_USER_SET && [[ "$config_content" =~ \"model\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
       MODEL="${BASH_REMATCH[1]}"
     fi
-    if [[ "$MAX_PARALLEL" -eq 4 && "$config_content" =~ \"maxParallel\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+    if ! $MAX_PARALLEL_USER_SET && [[ "$config_content" =~ \"maxParallel\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
       MAX_PARALLEL="${BASH_REMATCH[1]}"
     fi
     if [[ "$AUTO_COMMIT" == "true" && "$config_content" =~ \"autoCommit\"[[:space:]]*:[[:space:]]*false ]]; then

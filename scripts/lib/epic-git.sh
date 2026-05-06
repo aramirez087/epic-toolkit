@@ -17,7 +17,13 @@ _realpath() {
   elif command -v grealpath >/dev/null 2>&1; then
     grealpath "$1" 2>/dev/null || echo "$1"
   else
-    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1" 2>/dev/null || echo "$1"
+    if command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1; then
+      python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1" 2>/dev/null || echo "$1"
+    elif command -v python >/dev/null 2>&1 && python --version >/dev/null 2>&1; then
+      python -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1" 2>/dev/null || echo "$1"
+    else
+      echo "$1"
+    fi
   fi
 }
 

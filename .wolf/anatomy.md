@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T13:11:34.830Z
-> Files: 36 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T13:52:42.318Z
+> Files: 37 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -21,9 +21,10 @@
 ## ./
 
 - `.gitignore` — Git ignore rules (~15 tok)
-- `CLAUDE.md` — OpenWolf (~57 tok)
+- `AGENTS.md` — OpenWolf (~519 tok)
+- `CLAUDE.md` — OpenWolf (~521 tok)
 - `LICENSE` — Project license (~290 tok)
-- `README.md` — Project documentation (~1005 tok)
+- `README.md` — Project documentation (~1668 tok)
 
 ## .claude-plugin/
 
@@ -59,14 +60,13 @@
 ## scripts/
 
 - `epic-dag.py` — - supabase/migrations/*auth* (~4533 tok)
-- `epic-poll-progress.py` — Polling-based progress fallback (~2076 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4344 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~13334 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~13468 tok)
 
 ## scripts/lib/
 
-- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3198 tok)
+- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3279 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2333 tok)
 - `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5623 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~650 tok)

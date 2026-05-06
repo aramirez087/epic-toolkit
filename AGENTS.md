@@ -23,8 +23,7 @@ commands/epic.md               → Claude Code /epic-toolkit:epic command
 .opencode/commands/            → OpenCode equivalents (tool-neutral wording)
 scripts/run-sessions.sh         → wave orchestrator; spawns CLI per session (claude or opencode)
 scripts/epic-dag.py             → builds DAG from session frontmatter, computes Kahn-style waves
-scripts/epic-progress.py        → stream-json progress display (Claude Code)
-scripts/epic-poll-progress.py   → polling progress display (OpenCode fallback)
+scripts/epic-progress.py        → stream-json progress display (claude and opencode)
 scripts/epic-ui.py              → live terminal dashboard (used by run-sessions.sh)
 ```
 

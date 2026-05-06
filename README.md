@@ -181,8 +181,7 @@ commands/
 scripts/
   run-sessions.sh          # wave orchestrator (dual-tool: claude or opencode)
   epic-dag.py              # DAG builder + wave scheduler
-  epic-progress.py         # stream-json progress display (Claude Code)
-  epic-poll-progress.py     # polling progress display (OpenCode fallback)
+  epic-progress.py         # stream-json progress display (claude and opencode)
   epic-ui.py               # live terminal dashboard (used by run-sessions.sh)
 docs/
   epic-guide.md            # full user guide
