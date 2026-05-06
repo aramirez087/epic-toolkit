@@ -118,7 +118,13 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             # the non-empty string to True — silently inverting the user's
             # explicit "do not run me in parallel" intent. (bug-097)
             result[k] = v.lower() in ("true", "yes", "on", "y")
-        elif v.lstrip("-").isdigit():
+        elif (v.startswith("-") and v[1:].isdigit()) or v.isdigit():
+            # Accept at most one leading sign. The previous test
+            # `v.lstrip('-').isdigit()` strips ALL leading dashes, so values
+            # like `--3` or `---5` pass the predicate and then crash int() with
+            # an unhandled ValueError, which propagates out through main() and
+            # surfaces in run-sessions.sh as a bare 'DAG validation failed'
+            # with the actual cause hidden in stderr. (bug-114)
             result[k] = int(v)
         else:
             result[k] = v.strip("'\"")

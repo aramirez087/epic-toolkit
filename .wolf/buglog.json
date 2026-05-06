@@ -1996,7 +1996,7 @@
       "error_message": "validate-session-deliverables.py decodes `git diff --name-status` output via locale encoding (cp1252 on Windows / ASCII under LC_ALL=C), so paths containing non-ASCII bytes (em-dash, accented letters, CJK) become mojibake before reaching `_matches_declared`. A session that declares `produces: ['src/Tëst.cs']` and actually creates that file is still flagged 'declared deliverables missing from session diff' on any non-UTF-8 locale, defeating the bug-104 fix.",
       "file": "scripts/validate-session-deliverables.py",
       "root_cause": "The `_read_diff` helper invokes `subprocess.run(..., capture_output=True, text=True, ...)`. `text=True` opens the captured pipes in text mode using `locale.getpreferredencoding(False)` rather than UTF-8. bug-104 added `-c core.quotePath=false` so git emits *raw UTF-8 bytes* instead of `\\303\\253`-style escapes — but Python then decodes those raw bytes through cp1252/ASCII before splitting them. Same class as bug-024 / bug-035: every text-IO site has to pin encoding, not just the obvious open() calls. The session-md read at line 146 correctly uses `encoding='utf-8-sig'`, so the *declared* path stays UTF-8 while the *git output* path is mangled, and the comparison silently fails.",
-      "fix": "Replace `text=True` with `encoding='utf-8'` (or pass both `text=True, encoding='utf-8'`) on the subprocess.run call at scripts/validate-session-deliverables.py:103. After the change, `_matches_declared` compares two consistently-utf-8 strings on every locale and bug-104's intent — non-ASCII deliverables pass validation — actually holds on Windows / Git-Bash / LC_ALL=C runners. (Found by hunt; not yet patched.)",
+      "fix": "Replace `text=True` with `encoding='utf-8'` (or pass both `text=True, encoding='utf-8'`) on the subprocess.run call at scripts/validate-session-deliverables.py:103. After the change, `_matches_declared` compares two consistently-utf-8 strings on every locale and bug-104's intent — non-ASCII deliverables pass validation — actually holds on Windows / Git-Bash / LC_ALL=C runners. (Patched 2026-05-06T22:30:00Z.)",
       "tags": [
         "found-by-bug-hunt",
         "encoding",
@@ -2011,7 +2011,7 @@
         "bug-104"
       ],
       "occurrences": 1,
-      "last_seen": "2026-05-06T21:08:04Z"
+      "last_seen": "2026-05-06T22:30:00Z"
     },
     {
       "id": "bug-108",
@@ -2019,7 +2019,7 @@
       "error_message": "Passing `--max-parallel 0` (or setting `\"maxParallel\": 0` in `.epic-config.json`) makes run-sessions.sh silently hang forever the first time it tries to launch a session. No error, no progress, no timeout — just a frozen runner.",
       "file": "scripts/run-sessions.sh",
       "root_cause": "The numeric-arg validator at lines 141-147 only enforces `^[0-9]+$` (non-negative integer) so 0 slips through. The wave throttle at lines 874-877 then runs `while [[ ${#JOB_PIDS[@]} -ge $MAX_PARALLEL ]]; do reap_finished_jobs; ... sleep 1; done`. With MAX_PARALLEL=0, even an empty JOB_PIDS array satisfies `0 -ge 0`, so the loop spins forever before a single session is spawned. The `--sequential` clamp (line 351) and the `--no-worktree` clamp (line 346) only override values *>1* or only fire when SEQUENTIAL is true, so neither rescues `--max-parallel 0` on its own. Same defensive-numeric-input class as bug-062 / bug-092 (validator accepts something the consumer can't actually handle).",
-      "fix": "Tighten the validator: for MAX_PARALLEL specifically (or any 'must be ≥1' arg), reject 0 with a clear message ('--max-parallel must be at least 1'). Alternatively/additionally, clamp post-parse: `[[ \"$MAX_PARALLEL\" -lt 1 ]] && MAX_PARALLEL=1` after the existing --sequential / --no-worktree overrides. (Found by hunt; not yet patched.)",
+      "fix": "Tighten the validator: for MAX_PARALLEL specifically (or any 'must be ≥1' arg), reject 0 with a clear message ('--max-parallel must be at least 1'). Alternatively/additionally, clamp post-parse: `[[ \"$MAX_PARALLEL\" -lt 1 ]] && MAX_PARALLEL=1` after the existing --sequential / --no-worktree overrides. (Patched 2026-05-06T22:30:00Z.)",
       "tags": [
         "found-by-bug-hunt",
         "silent-hang",
@@ -2032,7 +2032,7 @@
         "bug-092"
       ],
       "occurrences": 1,
-      "last_seen": "2026-05-06T21:08:04Z"
+      "last_seen": "2026-05-06T22:30:00Z"
     },
     {
       "id": "bug-109",
@@ -2040,7 +2040,7 @@
       "error_message": "When deliverables validation fails (rc=97) and the upstream Claude/OpenCode session also produced any line starting with `ERROR: ` in its narrated text output (model prose, captured tool output, etc.), the `[EPIC_RESULT_START]` block reports the wrong message under `ERROR_DETAIL=...`. The orchestrator/user sees an unrelated error from the model's transcript instead of the validator's `declared deliverables missing from session diff:` summary — the very actionable detail bug-106 added.",
       "file": "scripts/lib/epic-result.sh",
       "root_cause": "classify_error's exit-97 branch (lines 28-34, added in bug-106) does `grep -m1 -E '^ERROR: ' \"$log_file\"` against the entire exec log. The log layout is: <Claude exec-phase text output> + <Claude stderr> + (validator stdout, normally empty) + blank line + `=== deliverables validation failed (rc=$vrc) ===` + <validator stderr containing the canonical `ERROR: ...` line>. Because the grep is unanchored to the validator marker and `-m1` returns the FIRST match, any line in Claude's prior text output that happens to begin with `ERROR: ` (the model narrating an error case, an embedded log excerpt, etc.) wins over the validator's line. The errtype sidecar then carries the wrong message, write_epic_result emits it as `ERROR_DETAIL=`, and bug-106's promise of 'name the missing deliverable' silently regresses on those sessions. Same family as bug-080 (unscoped `git log` matching unrelated commits) — operating on too wide a window when a narrower one is required.",
-      "fix": "Scope the grep to the validator's output range. Use awk to start matching only after the `=== deliverables validation failed (rc=` marker: e.g. `awk '/^=== deliverables validation failed \\(rc=/{f=1; next} f && /^ERROR: /{sub(/^ERROR: /, \"\"); print; exit}' \"$log_file\"`. Alternatively, capture the validator stderr to a side-file in run_one_session before deletion and have classify_error read it directly when the side-file exists. (Found by hunt; not yet patched.)",
+      "fix": "Scope the grep to the validator's output range. Use awk to start matching only after the `=== deliverables validation failed (rc=` marker: e.g. `awk '/^=== deliverables validation failed \\(rc=/{f=1; next} f && /^ERROR: /{sub(/^ERROR: /, \"\"); print; exit}' \"$log_file\"`. Alternatively, capture the validator stderr to a side-file in run_one_session before deletion and have classify_error read it directly when the side-file exists. (Patched 2026-05-06T22:30:00Z.)",
       "tags": [
         "found-by-bug-hunt",
         "classify-error",
@@ -2054,7 +2054,7 @@
         "bug-106"
       ],
       "occurrences": 1,
-      "last_seen": "2026-05-06T21:08:04Z"
+      "last_seen": "2026-05-06T22:30:00Z"
     },
     {
       "id": "bug-110",
@@ -2108,6 +2108,78 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-06T21:15:00Z"
+    },
+    {
+      "id": "bug-113",
+      "timestamp": "2026-05-06T22:00:00Z",
+      "error_message": "In --no-worktree mode without explicit --base, BASE_BRANCH is never defaulted, so session_completed_on_branch (epic-git.sh:300-312) skips its rev-range scoping and runs `git log HEAD` over the entire trunk history including main's commits. A pre-existing commit on main matching `feat: Session N` (e.g. from a previously-merged epic of the same family, or any unrelated commit using session-style subjects) silently makes that session skip Claude execution as 'already committed' on a fresh resume — exactly the bug-080 false-positive class that the cerebrum entry was supposed to prevent. Reproduced: created a repo with main commit `feat: Session 1 — leftover from prior epic`, branched test-epic, sourced epic-git.sh with empty BASE_BRANCH, called session_completed_on_branch 1 HEAD . — returns 0 (false positive). Setting BASE_BRANCH=main first, the same call correctly returns 1.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The auto-default of BASE_BRANCH (gh's defaultBranchRef → 'main' fallback) at run-sessions.sh:653-656 is gated inside `if $USE_WORKTREE; then ... fi`. The else-branch at lines 723-735 (the --no-worktree path) sets TRUNK_WORKTREE_DIR/TRUNK_SESSIONS_DIR but never touches BASE_BRANCH, so it stays at its argv default of \"\". Then session_completed_on_branch's `if [[ -n \"${BASE_BRANCH:-}\" ]]; then ... rev_range=\"${base_ref}..${branch}\" ... fi` block is skipped, leaving rev_range=\"$branch\" (=HEAD), and `git log HEAD` walks every ancestor including main. The bug-080 cerebrum note specifically calls out this scoping requirement but the fix in epic-git.sh only works when BASE_BRANCH is non-empty — there is no defensive fallback in the function itself. Same lift-the-default-out-of-mode pattern as bug-046.",
+      "fix": "Lift the BASE_BRANCH auto-default block out of the `if $USE_WORKTREE` guard so it runs in both modes. Either move lines 653-656 to immediately after argv parsing (a few lines after line 138), or duplicate the same default-resolution into the --no-worktree else-branch around line 724. As a defence-in-depth backup, session_completed_on_branch could fall back to `git merge-base --fork-point` or hard-code 'main'/'master' when BASE_BRANCH is empty, but pinning the default at run-sessions.sh layer is cleaner. (Patched 2026-05-06T22:30:00Z.)",
+      "tags": [
+        "found-by-bug-hunt",
+        "sh",
+        "regression",
+        "bug-080-class",
+        "no-worktree",
+        "false-positive",
+        "resume",
+        "scoping"
+      ],
+      "related_bugs": [
+        "bug-080",
+        "bug-046"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T22:30:00Z"
+    },
+    {
+      "id": "bug-114",
+      "timestamp": "2026-05-06T22:00:00Z",
+      "error_message": "epic-dag.py parse_frontmatter crashes with an unhandled ValueError on any frontmatter scalar that lstrips its leading '-' chars to an all-digit string but is not itself a valid int literal — e.g. `key: --3`, `key: ---5`, `key: ----42`. The crash propagates out through load_sessions to main(), so `epic-dag.py … --validate` and `--bash` exit non-zero with a Python traceback; run-sessions.sh's wrapper at lines 388-393 then prints `DAG validation failed` and exits 1, hiding the actual cause unless the user scrolls up.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Line 121-122 of parse_frontmatter checks `v.lstrip('-').isdigit()` to decide whether to coerce a scalar to int. `lstrip('-')` strips ALL leading dashes, so '--3' lstrips to '3' and isdigit() returns True. The branch then runs `int(v)` on the raw v, which raises ValueError because Python's int() only accepts a single optional leading sign. The check is too permissive: it should either lstrip a single '-' (`v[1:].isdigit() if v.startswith('-') else v.isdigit()`) or wrap the int() in try/except and fall through to the string branch. Reproduced: `parse_frontmatter('---\\ntitle: --3\\n---\\nbody')` raises 'invalid literal for int() with base 10: --3'. Same defensive-numeric-input class as bug-062 / bug-092.",
+      "fix": "Tighten the predicate to allow at most one leading '-': `(v.startswith('-') and v[1:].isdigit()) or v.isdigit()`. Or wrap the conversion in `try: result[k] = int(v); except ValueError: result[k] = v.strip(\"'\\\"\")` so unparseable values fall through to the string branch instead of aborting the entire DAG build. Edge-case input but a real unhandled crash that surfaces as 'DAG validation failed' with no actionable hint. (Patched 2026-05-06T22:30:00Z.)",
+      "tags": [
+        "found-by-bug-hunt",
+        "python",
+        "parser",
+        "crash",
+        "validation",
+        "frontmatter",
+        "input-validation"
+      ],
+      "related_bugs": [
+        "bug-062",
+        "bug-092",
+        "bug-097"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T22:30:00Z"
+    },
+    {
+      "id": "bug-115",
+      "timestamp": "2026-05-06T22:00:00Z",
+      "error_message": "classify_error in scripts/lib/epic-result.sh has no branch for exit code 137 (SIGKILL). Sessions that the wave-timeout path kills via `kill_tree` (run-sessions.sh:977) record `SESSION_EXIT_BY_ID[$_tsid]=137` (line 982), but classify_error only specials 124/99/97; 137 falls through to the grep-based heuristics, returning either 'cli_crash' (if the log happens to contain 'Killed', 'fatal', etc.) or 'unknown' (if the SIGKILL'd CLI didn't get a chance to write anything). The shell-side already prints a clear `KILLED by wave timeout after Xs` line at run 984, but that semantic is dropped from the structured EPIC_RESULT JSON / `[EPIC_RESULT_START]` block, so external watchers and `--start ...` resume hints can't distinguish 'wave timeout' from a generic crash.",
+      "file": "scripts/lib/epic-result.sh",
+      "root_cause": "classify_error uses an explicit per-code mapping for exit 124 (timeout), 99 (no_output), and 97 (deliverables_failure), then falls through to log-content greps. Exit 137 = 128 + SIGKILL is the canonical signal-termination code, and the wave-timeout reaper at run-sessions.sh:982 is the only producer; nothing in classify_error knows about it. The grep fallback is unreliable for SIGKILL'd processes because the kernel doesn't write anything to the log on SIGKILL — bash's job-control 'Killed' line only appears in interactive shells, not when the parent waits on a backgrounded subshell whose grandchild was killed. Net effect: a wave timeout shows up as `error_type=unknown` in the result file with no `ERROR_DETAIL=` hint, even though the runner already knows exactly what happened.",
+      "fix": "Add `if [[ \"$exit_code\" -eq 137 ]]; then echo 'wave_timeout'; return; fi` (or 'killed') to classify_error, before the grep fallbacks. Optionally also write an errtype file with 'killed by wave timeout (SIGKILL after Xm)' so ERROR_DETAIL surfaces the diagnosis. Same pattern as the existing 124 (timeout), 99 (no_output), 97 (deliverables_failure) special cases. (Patched 2026-05-06T22:30:00Z.)",
+      "tags": [
+        "found-by-bug-hunt",
+        "sh",
+        "classification",
+        "result-file",
+        "wave-timeout",
+        "observability"
+      ],
+      "related_bugs": [
+        "bug-073",
+        "bug-083",
+        "bug-102",
+        "bug-106"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T22:30:00Z"
     }
   ]
 }

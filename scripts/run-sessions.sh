@@ -350,6 +350,16 @@ fi
 if $SEQUENTIAL; then
   MAX_PARALLEL=1
 fi
+# Clamp MAX_PARALLEL to at least 1. The numeric validator (lines 141-147)
+# accepts 0 because `^[0-9]+$` allows it, but the wave throttle at lines ~874
+# is `while [[ ${#JOB_PIDS[@]} -ge $MAX_PARALLEL ]]; do reap; sleep 1; done` —
+# with MAX_PARALLEL=0 even an empty JOB_PIDS satisfies `0 -ge 0`, so the loop
+# spins forever before launching any session and the runner silently hangs.
+# Same defensive-numeric class as bug-062 / bug-092. (bug-108)
+if [[ "$MAX_PARALLEL" -lt 1 ]]; then
+  warn "--max-parallel must be at least 1; clamping (was $MAX_PARALLEL)"
+  MAX_PARALLEL=1
+fi
 
 DAG_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/epic-dag.py"
 PROGRESS_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/epic-progress.py"
@@ -649,12 +659,21 @@ if [[ -d "$WORKTREE_BASE" ]]; then
   [[ $skipped_count -gt 0 ]] && warn "Skipped $skipped_count stale worktree(s) for safety — see warnings above"
 fi
 
-if $USE_WORKTREE; then
-  if [[ -z "$BASE_BRANCH" ]]; then
-    BASE_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || true
-    [[ -z "$BASE_BRANCH" ]] && BASE_BRANCH="main"
-  fi
+# BASE_BRANCH default-resolution must run in BOTH worktree and --no-worktree
+# modes. session_completed_on_branch (epic-git.sh) scopes its rev range to
+# `${BASE_BRANCH}..${branch}` only when BASE_BRANCH is non-empty; otherwise it
+# falls back to a bare `git log HEAD` walk that includes main's history, so a
+# prior epic's `feat: Session N — ...` commit on main makes EVERY session
+# false-positive as "already committed" on a fresh resume. Previously this
+# default was nested inside `if $USE_WORKTREE`, leaving --no-worktree mode
+# without an effective base ref and re-introducing the bug-080 scoping
+# regression for the non-worktree code path. (bug-113)
+if [[ -z "$BASE_BRANCH" ]]; then
+  BASE_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || true
+  [[ -z "$BASE_BRANCH" ]] && BASE_BRANCH="main"
+fi
 
+if $USE_WORKTREE; then
   TRUNK_WORKTREE_DIR="$WORKTREE_BASE/$BRANCH_SANITIZED"
   if [[ -d "$TRUNK_WORKTREE_DIR" ]]; then
     log "Reusing trunk worktree: $TRUNK_WORKTREE_DIR"

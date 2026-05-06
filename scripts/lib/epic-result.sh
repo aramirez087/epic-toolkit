@@ -13,6 +13,19 @@ classify_error() {
     return
   fi
 
+  # 128 + SIGKILL(9) — the wave-timeout reaper at run-sessions.sh:982 force-
+  # kills hung sessions via kill_tree and records 137. SIGKILL'd processes
+  # don't get to write a 'Killed' line to the log (the kernel doesn't, and
+  # bash job-control prints it only for interactive shells), so without an
+  # explicit branch here 137 falls through to the grep heuristics and lands
+  # on either 'cli_crash' or 'unknown' — losing the diagnosis the runner
+  # already prints to the user. (bug-115)
+  if [[ "$exit_code" -eq 137 ]]; then
+    printf '%s\n' "killed by wave timeout (SIGKILL)" > "${log_file}.errtype"
+    echo "wave_timeout"
+    return
+  fi
+
   if [[ "$exit_code" -eq 99 ]]; then
     echo "no_output"
     return
@@ -25,8 +38,19 @@ classify_error() {
     # ("error=deliverables_failure" instead of "error=unknown") tells the
     # user *that* deliverables failed but not *which* ones — the actionable
     # detail still requires opening the log file by hand. (bug-106)
+    #
+    # Scope the scan to lines AFTER the validator-failure marker that
+    # run_one_session writes (epic-session.sh:614-617). The exec log
+    # concatenates Claude's narrated text + Claude stderr + (validator
+    # stdout, normally empty) + the marker block + validator stderr; an
+    # unanchored grep matched any prose `ERROR: ...` Claude happened to
+    # echo before the validator ran, so the user saw the wrong message
+    # under ERROR_DETAIL=. (bug-109)
     local err_msg
-    err_msg="$(grep -m1 -E '^ERROR: ' "$log_file" 2>/dev/null | sed 's/^ERROR: //')"
+    err_msg="$(awk '
+      /^=== deliverables validation failed \(rc=/ { f=1; next }
+      f && /^ERROR: / { sub(/^ERROR: /, ""); print; exit }
+    ' "$log_file" 2>/dev/null)"
     if [[ -n "$err_msg" ]]; then
       printf '%s\n' "$err_msg" > "${log_file}.errtype"
     fi

@@ -90,6 +90,12 @@ def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
     # accented letter, CJK) or a literal space gets flagged as "declared
     # deliverable missing" even when the file is plainly in the diff. Force
     # raw bytes so the comparison reflects real path identity. (bug-104)
+    #
+    # encoding="utf-8": text=True alone decodes git's stdout via
+    # locale.getpreferredencoding() — cp1252 on Windows / ASCII under LC_ALL=C —
+    # which mangles the very non-ASCII paths bug-104 went out of its way to
+    # preserve. Pin UTF-8 so _matches_declared compares two consistently-decoded
+    # strings on every locale. (bug-107)
     proc = subprocess.run(
         [
             "git",
@@ -101,6 +107,7 @@ def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     if proc.returncode != 0:
