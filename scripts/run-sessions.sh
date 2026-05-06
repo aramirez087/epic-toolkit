@@ -1228,7 +1228,7 @@ ${DIFF_STATS}
   # Sweep merged epic branches whose PRs are closed/merged. This catches
   # both this epic (if user merged the PR before script exit) and any
   # leftover branches from previous runs.
-  cleanup_merged_epic_branches "$REPO_ROOT"
+  cleanup_merged_epic_branches "$ORIG_REPO_ROOT"
 
   ok ""
   ok "Branch ready: $BRANCH"

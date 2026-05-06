@@ -1,100 +1,64 @@
 {
-  "session_id": "session-2026-05-06-0705",
-  "started": "2026-05-06T13:05:42.251Z",
+  "session_id": "session-2026-05-06-0800",
+  "started": "2026-05-06T14:00:49.570Z",
   "files_read": {
     "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
+      "count": 1,
+      "tokens": 13468,
+      "first_read": "2026-05-06T14:01:04.512Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
       "count": 2,
-      "tokens": 13160,
-      "first_read": "2026-05-06T13:06:18.767Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
-      "count": 1,
-      "tokens": 773,
-      "first_read": "2026-05-06T13:06:26.521Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
-      "count": 1,
-      "tokens": 341,
-      "first_read": "2026-05-06T13:06:27.028Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/resolve-wolf.sh": {
-      "count": 1,
-      "tokens": 650,
-      "first_read": "2026-05-06T13:06:27.753Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
-      "count": 1,
-      "tokens": 2324,
-      "first_read": "2026-05-06T13:06:27.820Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
-      "count": 1,
-      "tokens": 3021,
-      "first_read": "2026-05-06T13:06:36.260Z"
+      "tokens": 5623,
+      "first_read": "2026-05-06T14:01:10.590Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
       "count": 1,
       "tokens": 650,
-      "first_read": "2026-05-06T13:06:36.449Z"
+      "first_read": "2026-05-06T14:01:10.701Z"
     },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
       "count": 1,
-      "tokens": 5623,
-      "first_read": "2026-05-06T13:06:36.834Z"
+      "tokens": 3279,
+      "first_read": "2026-05-06T14:01:15.052Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
+      "count": 1,
+      "tokens": 2333,
+      "first_read": "2026-05-06T14:01:15.208Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
       "count": 1,
       "tokens": 4533,
-      "first_read": "2026-05-06T13:08:19.130Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
-      "count": 1,
-      "tokens": 4344,
-      "first_read": "2026-05-06T13:08:19.315Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-poll-progress.py": {
-      "count": 1,
-      "tokens": 2076,
-      "first_read": "2026-05-06T13:08:26.225Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
-      "count": 1,
-      "tokens": 3346,
-      "first_read": "2026-05-06T13:08:26.283Z"
+      "first_read": "2026-05-06T14:01:20.996Z"
     }
   },
   "files_written": [
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh",
-      "action": "edit",
-      "tokens": 27,
-      "at": "2026-05-06T13:11:21.948Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh",
-      "action": "edit",
-      "tokens": 16,
-      "at": "2026-05-06T13:11:22.719Z"
-    },
-    {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
       "action": "edit",
-      "tokens": 39,
-      "at": "2026-05-06T13:11:24.403Z"
+      "tokens": 14,
+      "at": "2026-05-06T14:38:37.651Z"
     },
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
       "action": "edit",
-      "tokens": 300,
-      "at": "2026-05-06T13:11:34.836Z"
+      "tokens": 130,
+      "at": "2026-05-06T14:38:46.654Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+      "action": "edit",
+      "tokens": 119,
+      "at": "2026-05-06T14:38:52.155Z"
     }
   ],
   "edit_counts": {
-    "scripts/lib/epic-result.sh": 2,
     "scripts/run-sessions.sh": 1,
-    "scripts/lib/epic-git.sh": 1
+    "scripts/lib/epic-session.sh": 1,
+    "scripts/epic-dag.py": 1
   },
-  "anatomy_hits": 12,
+  "anatomy_hits": 6,
   "anatomy_misses": 0,
   "repeated_reads_warned": 1,
   "cerebrum_warnings": 0,

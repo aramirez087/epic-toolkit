@@ -289,11 +289,17 @@ import sys, json, os, time
 sf, sid, st = sys.argv[1], sys.argv[2], sys.argv[3]
 elapsed = float(sys.argv[4]) if len(sys.argv) > 4 else 0
 lock = sf + '.lock'
+STALE_SECS = 60  # lock older than this was left by a SIGKILL'd process
 for _ in range(200):
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.close(fd); break
     except (FileExistsError, OSError):
+        try:
+            if time.time() - os.path.getmtime(lock) > STALE_SECS:
+                os.unlink(lock)
+        except OSError:
+            pass
         time.sleep(0.05)
 else:
     sys.exit(0)

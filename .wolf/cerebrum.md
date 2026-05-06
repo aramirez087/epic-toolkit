@@ -43,6 +43,9 @@
 - [2026-05-06] Do not let `run-sessions.sh` proceed when the sessions directory is outside the repo selected from the current working directory. Validate before OpenWolf provisioning, branch creation, or worktree setup, and exit on mismatch. (bug-044)
 - [2026-05-06] Do not continue merging later siblings in a wave after a non-auto-resolvable merge conflict. Once `EPIC_FAILED=true`, break the sibling merge loop so trunk does not advance past the first failed session. (bug-045)
 - [2026-05-06] Do not define path variables only in the default worktree path when cleanup also runs in `--no-worktree` mode. Shared cleanup needs a relative sessions path assigned before the mode split. (bug-046)
+- [2026-05-06] Do not pass `$REPO_ROOT` to functions called after worktree teardown. REPO_ROOT is reassigned to TRUNK_WORKTREE_DIR at line 582 so git commands during the run target the worktree; once the worktree is deleted (line 1182) any git -C "$REPO_ROOT" silently fails. Use $ORIG_REPO_ROOT for post-teardown operations. (bug-060)
+- [2026-05-06] Do not rely solely on Python `finally` blocks for lock-file cleanup when the locked operation runs inside subprocess trees that the wave timeout kills with SIGKILL. SIGKILL bypasses finally, leaking the lock file. Add a stale-lock age check (>60s) in the acquisition retry loop so the next caller auto-recovers. (bug-061)
+- [2026-05-06] Do not use an unanchored `.+` in SESSION_RE to capture the slug — it allows spaces in filenames, which breaks the space-delimited SESSION line protocol parsed by `set -- $line` in run-sessions.sh. Validate that the slug contains no spaces immediately after extraction. (bug-062)
 
 ## Decision Log
 

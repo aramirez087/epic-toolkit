@@ -129,6 +129,11 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         path = os.path.join(sessions_dir, entry)
         sid = int(m.group(1))
         slug = m.group(2)
+        if " " in slug:
+            raise SystemExit(
+                f"ERROR: {entry} — slug contains a space. "
+                f"Rename the file using hyphens only (e.g. session-{sid:02d}-{slug.replace(' ', '-')}.md)"
+            )
         if sid == 0:
             operator = path
             continue
