@@ -295,6 +295,75 @@ _realpath() {
     python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1" 2>/dev/null || echo "$1"
   fi
 }
+
+# Auto-provision .wolf/ merge auto-resolution for a consuming repo.
+#
+# If the repo has a .wolf/ directory (uses OpenWolf), this function:
+#   1. Syncs bundled scripts from the toolkit into .wolf/scripts/ and scripts/
+#   2. Idempotently appends merge directives to .gitattributes
+#   3. Registers the wolf-json merge driver in local git config
+#
+# All operations are idempotent and silent on no-change. Logs only when
+# new files are written or .gitattributes is updated. Drift is corrected
+# automatically on every epic run (toolkit is the source of truth).
+#
+# Args:
+#   $1 = repo root
+provision_wolf_merge() {
+  local repo_root="$1"
+  local wolf_dir="$repo_root/.wolf"
+  [[ -d "$wolf_dir" ]] || return 0  # not an OpenWolf repo, no-op
+
+  local toolkit_assets="$CLAUDE_PLUGIN_ROOT/scripts/wolf-merge"
+  [[ -d "$toolkit_assets" ]] || return 0  # toolkit not bundled correctly, skip
+
+  local provisioned=0
+  mkdir -p "$wolf_dir/scripts" "$repo_root/scripts"
+
+  # Sync each bundled asset; only log when contents actually change.
+  _wolf_sync_file() {
+    local src="$1" dst="$2"
+    if [[ ! -f "$dst" ]] || ! cmp -s "$src" "$dst"; then
+      cp "$src" "$dst"
+      chmod +x "$dst"
+      provisioned=$((provisioned + 1))
+      return 0
+    fi
+    return 1
+  }
+
+  _wolf_sync_file "$toolkit_assets/merge-wolf-json.py" "$wolf_dir/scripts/merge-wolf-json.py" || true
+  _wolf_sync_file "$toolkit_assets/install-merge-driver.sh" "$wolf_dir/scripts/install-merge-driver.sh" || true
+  _wolf_sync_file "$toolkit_assets/resolve-wolf.sh" "$repo_root/scripts/resolve-wolf.sh" || true
+
+  # Idempotently merge .gitattributes. Skip if any wolf-json driver
+  # directive is already present (managed-block marker OR manual entry).
+  local gitattrs="$repo_root/.gitattributes"
+  local snippet="$toolkit_assets/gitattributes-snippet"
+  if [[ -f "$snippet" ]]; then
+    local has_managed_block=false has_manual_entry=false
+    if [[ -f "$gitattrs" ]]; then
+      grep -q "BEGIN openwolf merge drivers" "$gitattrs" 2>/dev/null && has_managed_block=true
+      grep -qE '^\.wolf/.*merge=(wolf-json|union)' "$gitattrs" 2>/dev/null && has_manual_entry=true
+    fi
+    if ! $has_managed_block && ! $has_manual_entry; then
+      [[ -f "$gitattrs" ]] && [[ -s "$gitattrs" ]] && echo "" >> "$gitattrs"
+      cat "$snippet" >> "$gitattrs"
+      provisioned=$((provisioned + 1))
+    fi
+  fi
+
+  # Register the wolf-json driver in local git config (idempotent, fast).
+  if [[ -x "$wolf_dir/scripts/install-merge-driver.sh" ]]; then
+    bash "$wolf_dir/scripts/install-merge-driver.sh" 2>/dev/null || true
+  fi
+
+  if [[ $provisioned -gt 0 ]]; then
+    log "Provisioned OpenWolf merge auto-resolution ($provisioned file(s) updated)"
+  fi
+  unset -f _wolf_sync_file
+}
+
 REPO_ROOT="$(_realpath "$(cd "$(git rev-parse --show-toplevel)" && pwd)")"
 ORIG_REPO_ROOT="$REPO_ROOT"
 
@@ -776,74 +845,6 @@ cleanup_merged_epic_branches() {
   return 0
 }
 
-# Auto-provision .wolf/ merge auto-resolution for a consuming repo.
-#
-# If the repo has a .wolf/ directory (uses OpenWolf), this function:
-#   1. Syncs bundled scripts from the toolkit into .wolf/scripts/ and scripts/
-#   2. Idempotently appends merge directives to .gitattributes
-#   3. Registers the wolf-json merge driver in local git config
-#
-# All operations are idempotent and silent on no-change. Logs only when
-# new files are written or .gitattributes is updated. Drift is corrected
-# automatically on every epic run (toolkit is the source of truth).
-#
-# Args:
-#   $1 = repo root
-provision_wolf_merge() {
-  local repo_root="$1"
-  local wolf_dir="$repo_root/.wolf"
-  [[ -d "$wolf_dir" ]] || return 0  # not an OpenWolf repo, no-op
-
-  local toolkit_assets="$CLAUDE_PLUGIN_ROOT/scripts/wolf-merge"
-  [[ -d "$toolkit_assets" ]] || return 0  # toolkit not bundled correctly, skip
-
-  local provisioned=0
-  mkdir -p "$wolf_dir/scripts" "$repo_root/scripts"
-
-  # Sync each bundled asset; only log when contents actually change.
-  _wolf_sync_file() {
-    local src="$1" dst="$2"
-    if [[ ! -f "$dst" ]] || ! cmp -s "$src" "$dst"; then
-      cp "$src" "$dst"
-      chmod +x "$dst"
-      provisioned=$((provisioned + 1))
-      return 0
-    fi
-    return 1
-  }
-
-  _wolf_sync_file "$toolkit_assets/merge-wolf-json.py" "$wolf_dir/scripts/merge-wolf-json.py" || true
-  _wolf_sync_file "$toolkit_assets/install-merge-driver.sh" "$wolf_dir/scripts/install-merge-driver.sh" || true
-  _wolf_sync_file "$toolkit_assets/resolve-wolf.sh" "$repo_root/scripts/resolve-wolf.sh" || true
-
-  # Idempotently merge .gitattributes. Skip if any wolf-json driver
-  # directive is already present (managed-block marker OR manual entry).
-  local gitattrs="$repo_root/.gitattributes"
-  local snippet="$toolkit_assets/gitattributes-snippet"
-  if [[ -f "$snippet" ]]; then
-    local has_managed_block=false has_manual_entry=false
-    if [[ -f "$gitattrs" ]]; then
-      grep -q "BEGIN openwolf merge drivers" "$gitattrs" 2>/dev/null && has_managed_block=true
-      grep -qE '^\.wolf/.*merge=(wolf-json|union)' "$gitattrs" 2>/dev/null && has_manual_entry=true
-    fi
-    if ! $has_managed_block && ! $has_manual_entry; then
-      [[ -f "$gitattrs" ]] && [[ -s "$gitattrs" ]] && echo "" >> "$gitattrs"
-      cat "$snippet" >> "$gitattrs"
-      provisioned=$((provisioned + 1))
-    fi
-  fi
-
-  # Register the wolf-json driver in local git config (idempotent, fast).
-  if [[ -x "$wolf_dir/scripts/install-merge-driver.sh" ]]; then
-    bash "$wolf_dir/scripts/install-merge-driver.sh" 2>/dev/null || true
-  fi
-
-  if [[ $provisioned -gt 0 ]]; then
-    log "Provisioned OpenWolf merge auto-resolution ($provisioned file(s) updated)"
-  fi
-  unset -f _wolf_sync_file
-}
-
 # Look up a session id's handoff file under docs/roadmap/<epic>/
 # Search the current epic's roadmap dir first (intra-epic dependency),
 # then fall back to all epic dirs (cross-epic handoff).
@@ -1117,7 +1118,14 @@ run_one_session() {
   local rc=0
   local attempt=1
   local max_attempts=$((RETRY + 1))
-  
+
+  # Capture worktree HEAD before the session runs so we can detect a
+  # no-op completion below: a model that returns rc=0 without creating
+  # any files, modifying anything, or committing — the session did
+  # nothing and must not be reported as success.
+  local baseline_head
+  baseline_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
+
   while [[ $attempt -le $max_attempts ]]; do
     if [[ $attempt -gt 1 ]]; then
       echo "Retry attempt $attempt of $max_attempts" >> "$exec_log"
@@ -1263,6 +1271,25 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
     fi
   fi
 
+  # No-op session guard. If the underlying CLI returned success but the
+  # session produced nothing — no new commits beyond baseline, no diff,
+  # no untracked files — we must NOT report success. Most commonly seen
+  # when the model aborts early (oversized prompt, transient API issue)
+  # but the wrapper still exits 0. Reporting success here corrupts the
+  # epic: dependent sessions read missing artifacts and either stub out
+  # or compound the failure.
+  if [[ $rc -eq 0 && -n "$baseline_head" ]]; then
+    local current_head
+    current_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
+    if [[ "$current_head" == "$baseline_head" ]] \
+       && git diff --quiet HEAD 2>/dev/null \
+       && [[ -z "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+      echo "ERROR: session $sid completed with rc=0 but produced no output (no commits, no diff, no untracked files). Treating as failure." >> "$exec_log"
+      warn "  ⚠ session $sid produced no output — marking failed (likely model no-op)"
+      rc=99
+    fi
+  fi
+
   cd "$prev_cwd"
   return $rc
 }
@@ -1277,7 +1304,12 @@ classify_error() {
     echo "timeout"
     return
   fi
-  
+
+  if [[ "$exit_code" -eq 99 ]]; then
+    echo "no_output"
+    return
+  fi
+
   if grep -q "ERROR: could not extract prompt" "$log_file" 2>/dev/null; then
     echo "prompt_error"
     return
@@ -1491,8 +1523,13 @@ reap_finished_jobs() {
   local i new_pids=() new_sids=()
   for i in "${!JOB_PIDS[@]}"; do
     local pid="${JOB_PIDS[$i]}"
-    # Use ps instead of kill -0 to detect zombies and actual process state
-    if ! ps -p "$pid" > /dev/null 2>&1; then
+    # Reap if the process is gone OR is a zombie. `kill -0` and bare `ps -p`
+    # both return success for zombies, so neither alone catches an exited
+    # child whose status we haven't yet collected. Reading the process state
+    # column distinguishes them: empty = vanished, leading 'Z' = zombie.
+    local pstate
+    pstate="$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ')"
+    if [[ -z "$pstate" || "$pstate" == Z* ]]; then
       local rc=0
       wait "$pid" || rc=$?
       local sid="${JOB_SIDS[$i]}"
@@ -1651,6 +1688,8 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   # Wait for all jobs in this wave with timeout protection
   wave_start=$(date +%s)
   wave_timeout=$((WAVE_TIMEOUT_MINUTES * 60))  # Default 240 min per wave
+  ! $LIVE_UI && log "  ⏳ Wave $wn: awaiting ${#JOB_PIDS[@]} session(s) (timeout ${WAVE_TIMEOUT_MINUTES}m)"
+  heartbeat_iters=0
   while [[ ${#JOB_PIDS[@]} -gt 0 ]]; do
     wave_elapsed=$(($(date +%s) - wave_start))
     if [[ $wave_elapsed -gt $wave_timeout ]]; then
@@ -1661,8 +1700,22 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
       break
     fi
     reap_finished_jobs
-    [[ ${#JOB_PIDS[@]} -gt 0 ]] && sleep 2
+    if [[ ${#JOB_PIDS[@]} -gt 0 ]]; then
+      sleep 2
+      heartbeat_iters=$((heartbeat_iters + 1))
+      # Heartbeat every ~60s (30 × 2s) so the runner doesn't look dead when
+      # a long session is in flight. Suppressed under LIVE_UI; the dashboard
+      # already shows per-session progress there.
+      if ! $LIVE_UI && (( heartbeat_iters % 30 == 0 )); then
+        running_list=""
+        for psid in "${JOB_SIDS[@]}"; do
+          running_list+=" s$(printf '%02d' "$psid")"
+        done
+        log "  ⏳ Wave $wn still running:${running_list} (elapsed $(format_elapsed "$wave_elapsed"))"
+      fi
+    fi
   done
+  ! $LIVE_UI && log "  ✔ Wave $wn: all sessions reaped — beginning merge"
 
   # --- Merge successful wave children into trunk ---
   if $USE_WORKTREE; then
