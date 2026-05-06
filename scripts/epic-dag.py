@@ -100,8 +100,24 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         for i in range(scan_start, len(line)):
             ch = line[i]
             if in_quote is not None:
-                if ch == in_quote and line[i - 1] != "\\":
-                    in_quote = None
+                if ch == in_quote:
+                    # Count the run of consecutive `\` immediately before i.
+                    # A bare `line[i-1] != "\\"` check treated EVERY preceding
+                    # backslash as escaping the quote, so a YAML double-quoted
+                    # value ending in `\\"` (escaped backslash then real
+                    # terminator) never closed — the trailing `# comment` was
+                    # silently absorbed into the value, and the value retained
+                    # its closing quote. Even count (incl. zero) means the
+                    # quote is the actual terminator; odd count means the
+                    # quote is escaped. Same class as bug-117 in the
+                    # apostrophe branch. (bug-123)
+                    bs = 0
+                    j = i - 1
+                    while j >= 0 and line[j] == "\\":
+                        bs += 1
+                        j -= 1
+                    if bs % 2 == 0:
+                        in_quote = None
             elif ch == "#" and line[i - 1] == " ":
                 return line[:i].rstrip()
         return line

@@ -2294,6 +2294,44 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T22:41:22.610Z"
+    },
+    {
+      "id": "bug-122",
+      "timestamp": "2026-05-06T23:00:00.000Z",
+      "error_message": "cleanup_merged_epic_branches always treats default branch as 'main' regardless of repo (silent fallback masks the real failure)",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "Line 216 invokes `gh -R \"$(git remote get-url origin)\" repo view --json defaultBranchRef ...`, but `gh repo view` does NOT accept the `-R` flag \u2014 `-R/--repo` is a per-subcommand flag and `repo view` takes the repository as a positional argument, not via `-R`. Tested against gh 2.87.2: the call always errors with `unknown shorthand flag: 'R' in -R` regardless of whether the URL is HTTPS, SSH, or OWNER/REPO. The `2>/dev/null || echo main` swallows the failure and the function silently uses 'main' for every repo. Downstream, the no-PR branch-cleanup case (lines 244-253) compares against 'main' / 'origin/main' instead of the real default \u2014 repos whose default is master/develop/trunk never get their merged epic/* branches reaped, and the symptom is invisible because nothing is logged.",
+      "fix": "Drop the broken `-R <url>` form for `repo view`. Either (a) call `gh repo view --json defaultBranchRef -q '.defaultBranchRef.name'` without `-R` and rely on cwd auto-detection (matches the other two callers in run-sessions.sh:1261 and :1281), or (b) use the positional form `gh repo view \"$(git remote get-url origin)\" --json ...`. The sibling `pr_state` call on line 228 already uses `gh -R <url> pr list ...` correctly because `pr list` does support `-R` (with URL forms).",
+      "tags": [
+        "gh",
+        "cli-flag",
+        "silent-failure",
+        "branch-cleanup",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T23:00:00.000Z"
+    },
+    {
+      "id": "bug-123",
+      "timestamp": "2026-05-06T23:00:00.000Z",
+      "error_message": "_strip_inline_comment fails to close a YAML double-quoted string that ends in `\\\\\"` \u2014 the trailing `# comment` is silently absorbed into the value",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Line 103: `if ch == in_quote and line[i - 1] != \"\\\\\":`. The escape check looks at a single previous byte and treats ANY preceding backslash as escaping the quote, but YAML double-quoted strings allow `\\\\` (escaped backslash). After a literal `\\\\`, the next `\"` IS the actual string terminator \u2014 yet the parser sees the trailing `\\` and refuses to close. Verified: input `title: \"abc\\\\\\\\\" # back` (where `\\\\\\\\` is two backslashes in the source = one literal `\\\\` in YAML semantics) parses as `'abc\\\\\\\\\" # back'` \u2014 closing quote and the entire `# back` comment leaked into the value. Same class as bug-117 (apostrophe escape) but in the double-quote branch. Realistic trigger: Windows paths in frontmatter (`title: \"C:\\\\Users\\\\foo\\\\\" # platform-specific`) or any escape-terminated string with a trailing comment.",
+      "fix": "Count consecutive backslashes immediately before the candidate closer; only treat the quote as escaped when the run length is ODD. Loop back from i-1 collecting `\\\\` chars, and close iff the count is even (zero, two, four\u2026). Equivalent: walk forward through the value tracking an `escaped` flag \u2014 set on `\\\\` and consumed on the next char \u2014 instead of looking only at line[i-1].",
+      "tags": [
+        "yaml",
+        "frontmatter",
+        "parser",
+        "escape-handling",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-117"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T23:00:00.000Z"
     }
   ]
 }

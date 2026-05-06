@@ -213,7 +213,18 @@ cleanup_merged_epic_branches() {
   # Fetch with prune so origin/epic/* refs disappear when the remote branch is gone.
   git -C "$repo_root" fetch --prune --quiet origin 2>/dev/null || true
   local default_branch
-  default_branch="$(gh -R "$(git -C "$repo_root" remote get-url origin 2>/dev/null)" repo view --json defaultBranchRef -q '.defaultBranchRef.name' 2>/dev/null || echo main)"
+  # `gh repo view` does NOT accept -R/--repo (that flag is per-subcommand and
+  # repo-view takes the repo only as a positional). The previous form
+  # `gh -R "$url" repo view ...` failed with `unknown shorthand flag: 'R' in -R`
+  # for every URL form, the `2>/dev/null || echo main` swallowed it, and
+  # default_branch was silently always "main" — so repos whose default is
+  # master/develop/trunk never had their merged epic/* branches reaped via the
+  # no-PR fallback below. Run gh from the repo root via a subshell cd so
+  # auto-detection picks the right repo (matches the two callers in
+  # run-sessions.sh:1261 and :1281). The sibling `pr_state` call below uses
+  # `gh pr list -R …` correctly because pr-list does support -R with URLs.
+  # (bug-122)
+  default_branch="$( (cd "$repo_root" && gh repo view --json defaultBranchRef -q '.defaultBranchRef.name') 2>/dev/null || echo main)"
   local removed=0 br pr_state
   while IFS= read -r br; do
     [[ -z "$br" ]] && continue
