@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T16:59:54.500Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-06T17:17:03.735Z
 > Files: 36 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -59,10 +59,10 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~4602 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~4773 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4488 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~13759 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~14316 tok)
 
 ## scripts/lib/
 

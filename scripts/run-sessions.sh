@@ -406,10 +406,16 @@ while IFS= read -r line; do
     "WAVE "*) : ;;  # WAVE <num> <size> — informational only
     "SESSION "*)
       # SESSION <wave> <id> <file> <deps> <slug> <parallel> [<model> <cli>]
+      # Empty model/cli are emitted as the sentinel `-` by epic-dag.py so
+      # `set -- $_rest`'s whitespace-collapse can't shift cli into the
+      # model slot when model is empty. Translate the sentinel back here.
+      # (bug-076)
       _rest="${line#SESSION }"
       set -- $_rest
       sw="$1"; sid="$2"; sfile="$3"; sdeps="$4"; sslug="$5"; sparallel="$6"
       smodel="${7:-}"; scli="${8:-}"
+      [[ "$smodel" == "-" ]] && smodel=""
+      [[ "$scli"   == "-" ]] && scli=""
       WAVE_IDS[$sw]="${WAVE_IDS[$sw]:-} $sid"
       SESSION_FILE_BASENAME[$sid]="$sfile"
       SESSION_SLUG_BY_ID[$sid]="$sslug"
@@ -469,12 +475,18 @@ if $SEQUENTIAL; then
         _new_wave=$((_new_wave + 1))
         _SEQ_WAVE_IDS[$_new_wave]="$_sid"
         _SEQ_SESSION_WAVE_OF[$_sid]="$_new_wave"
+        # Mirror epic-dag.py emit_bash: empty model/cli become `-` so a
+        # downstream re-parse via `set -- $line` can't shift cli into the
+        # model slot. (bug-076)
+        _seq_model="${SESSION_MODEL_BY_ID[$_sid]:-}"
+        _seq_cli="${SESSION_CLI_BY_ID[$_sid]:-}"
+        [[ -z "$_seq_model" ]] && _seq_model="-"
+        [[ -z "$_seq_cli"   ]] && _seq_cli="-"
         echo "WAVE $_new_wave 1"
         printf 'SESSION %s %s %s %s %s %s %s %s\n' \
           "$_new_wave" "$_sid" "${SESSION_FILE_BASENAME[$_sid]}" \
           "${SESSION_DEPS_BY_ID[$_sid]}" "${SESSION_SLUG_BY_ID[$_sid]}" \
-          "${SESSION_PARALLEL[$_sid]}" "${SESSION_MODEL_BY_ID[$_sid]:-}" \
-          "${SESSION_CLI_BY_ID[$_sid]:-}"
+          "${SESSION_PARALLEL[$_sid]}" "$_seq_model" "$_seq_cli"
       done
     done
   } > "$_seq_tmp"
@@ -489,7 +501,7 @@ if $SEQUENTIAL; then
   for _seq_sid in "${!_SEQ_SESSION_WAVE_OF[@]}"; do
     SESSION_WAVE_OF[$_seq_sid]="${_SEQ_SESSION_WAVE_OF[$_seq_sid]}"
   done
-  unset _seq_tmp _old_wave_count _new_wave _ids _sid _seq_wn _seq_sid
+  unset _seq_tmp _old_wave_count _new_wave _ids _sid _seq_wn _seq_sid _seq_model _seq_cli
   unset _SEQ_WAVE_IDS _SEQ_SESSION_WAVE_OF
 fi
 
@@ -629,7 +641,14 @@ or ensure the sessions dir path uses the same case as the repo root."
     [[ -e "$f" ]] || continue
     [[ -e "$ORIG_SESSIONS_DIR/$(basename "$f")" ]] || rm -f "$f"
   done
-  cp "$ORIG_SESSIONS_DIR"/session-*.md "$TRUNK_SESSIONS_DIR/" 2>/dev/null || true
+  # `-p` preserves source mtime so the plan-cache freshness check in
+  # run_one_session (`[[ "$plan_file" -nt "$session_path" ]]`) only invalidates
+  # when the user actually edits the session prompt. Without -p, every run
+  # resets the destination's mtime to "now", so any cached plan from a prior
+  # run looks older than the freshly-copied prompt and the plan phase
+  # re-executes on every resume — exactly the scenario the cache exists for.
+  # (bug-075)
+  cp -p "$ORIG_SESSIONS_DIR"/session-*.md "$TRUNK_SESSIONS_DIR/" 2>/dev/null || true
 
   # Bootstrap commit so per-session worktrees inherit the session files.
   if ! git diff --quiet HEAD -- "$TRUNK_SESSIONS_DIR" 2>/dev/null \
@@ -940,12 +959,27 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
             # .wolf/-only (append-only metadata; theirs = session = winner).
             if auto_resolve_wolf_conflicts "$TRUNK_WORKTREE_DIR" "theirs"; then
               warn "  ⚠ auto-resolving .wolf/ conflicts for session $(printf '%02d' "$sid") (metadata files only)"
-              git -C "$TRUNK_WORKTREE_DIR" commit -q \
-                -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved]
+              # Wrap the auto-resolve commit in an `if` so a hook failure,
+              # GPG signing failure, or index lock contention does not abort
+              # the runner mid-wave under `set -e` — that path skipped
+              # write_epic_result and left external watchers polling for a
+              # result file that was never written. (bug-077)
+              if git -C "$TRUNK_WORKTREE_DIR" commit -q \
+                  -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved]
 
-Co-Authored-By: AI <noreply@ai>" 2>/dev/null
-              ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk (wolf conflicts auto-resolved)"
-              add_merged_session "$sid"
+Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
+                ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk (wolf conflicts auto-resolved)"
+                add_merged_session "$sid"
+              else
+                err "  ⇢ MERGE COMMIT FAILED after wolf auto-resolve for session $(printf '%02d' "$sid")"
+                err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
+                err "      Common causes: failing pre-commit hook, GPG signing failure, index lock"
+                err "      Inspect, then resume with --start $((sid + 1))"
+                git -C "$TRUNK_WORKTREE_DIR" merge --abort 2>/dev/null || true
+                EPIC_FAILED=true
+                [[ -z "$FIRST_FAILED_ID" ]] && FIRST_FAILED_ID="$sid"
+                break
+              fi
             else
               err "  ⇢ MERGE CONFLICT merging session $(printf '%02d' "$sid") into trunk"
               err "      Trunk worktree: $TRUNK_WORKTREE_DIR"

@@ -1377,6 +1377,89 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-06T16:59:22.680Z"
+    },
+    {
+      "id": "bug-075",
+      "timestamp": "2026-05-06T17:14:44.000Z",
+      "error_message": "Plan-phase cache (`[[ \"$plan_file\" -nt \"$session_path\" ]]`) is silently invalidated on every re-run. The pre-wave `cp \"$ORIG_SESSIONS_DIR\"/session-*.md \"$TRUNK_SESSIONS_DIR/\"` at run-sessions.sh:632 omits `-p`, so each run resets the destination's mtime to \"now\". Any cached plan from a prior run has an EARLIER mtime than the freshly-copied session prompt, so plan_cached=false and the entire plan phase re-executes. Empirically reproduced: dest.md mtime is 11:10:20, .plan.md mtime is 11:10:18 -> .plan.md is NOT newer than dest.md. The cache the comment promises (\"Reuse a cached plan file if it exists, is non-empty, and is newer than the session prompt\") never fires across runs - exactly the case it was designed for (resume after a session executed plan but failed exec).",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "`cp` defaults to setting destination mtime = now, not preserving source mtime. The plan-cache freshness check at scripts/lib/epic-session.sh:375 compares plan_file mtime against session_path mtime, so the freshly-copied session always looks newer than any pre-existing plan, even when neither the source session nor the plan changed.",
+      "fix": "Use `cp -p` (or rsync with -t / install -m644 -p) on run-sessions.sh:632 so the destination's mtime tracks the source's. Then the cache invalidates only when the user actually edits the session prompt (the documented intent), not on every cp.",
+      "tags": [
+        "found-by-bug-hunt",
+        "sh",
+        "cache",
+        "mtime",
+        "silent-failure",
+        "resume"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:14:44.000Z"
+    },
+    {
+      "id": "bug-076",
+      "timestamp": "2026-05-06T17:14:44.000Z",
+      "error_message": "When a session declares `cli:` in frontmatter without also declaring `model:`, the session's CLI override is silently lost AND the literal CLI name (e.g. \"claude\") is parsed as the per-session model id. epic-dag.py emit_bash prints `SESSION <wave> <id> <file> <deps> <slug> <parallel> <model> <cli>` with empty model rendered as a blank field, producing two adjacent spaces. run-sessions.sh:410-412 splits via `set -- $_rest` (unquoted), so consecutive whitespace collapses and the cli value shifts into $7, which is assigned to smodel. Result: SESSION_MODEL_BY_ID[$sid]=\"claude\" (wrong), SESSION_CLI_BY_ID[$sid]=\"\" (wrong). In run_cli (epic-session.sh:162), the model-override branch fires with raw_model=\"claude\" and map_model_shorthand turns it into either bare \"claude\" or warns \"not a known OpenCode shorthand\"; the cli-override branch never fires (-n test on empty fails) so the global CLI is still used. The user's per-session `cli: claude` selector is silently dropped.",
+      "file": "scripts/run-sessions.sh, scripts/epic-dag.py",
+      "root_cause": "Bash field-splitting on whitespace collapses consecutive separators. The bash protocol between epic-dag.py and run-sessions.sh has trailing optional fields (model, cli) but uses bare single-space delimiters, so an empty middle field shifts every later field one slot to the left. Same family as bug-012 / bug-062 (positional space-delimited protocol bugs).",
+      "fix": "Two viable repairs: (a) in emit_bash, render empty optional fields as a sentinel (e.g. `-`) and have run-sessions.sh translate `-` back to empty after `set --`; or (b) switch the SESSION line to a delimiter that survives empty fields (tab-separated with `IFS=$'\\t' read -r ...`). Option (b) also fixes future fields cleanly.",
+      "tags": [
+        "found-by-bug-hunt",
+        "sh",
+        "python",
+        "wrong-value",
+        "silent-failure",
+        "frontmatter",
+        "field-shift"
+      ],
+      "related_bugs": [
+        "bug-012",
+        "bug-041",
+        "bug-062"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:14:44.000Z"
+    },
+    {
+      "id": "bug-077",
+      "timestamp": "2026-05-06T17:14:44.000Z",
+      "error_message": "After auto_resolve_wolf_conflicts succeeds in the wave-merge phase (run-sessions.sh:943-946), `git -C \"$TRUNK_WORKTREE_DIR\" commit -q -m \"...\" 2>/dev/null` is invoked as a bare command in the `then` branch of the if. It has no `|| true` and is not the test of an `if`, so under the script's `set -euo pipefail` (line 47), any non-zero exit (pre-commit hook failure, GPG signing failure when commit.gpgsign=true, index lock contention) terminates the runner mid-wave. The EXIT trap fires and kills jobs, but write_epic_result is never called, so the [EPIC_RESULT_START] sentinel and the result JSON file at $TMPDIR/epic-toolkit/<repo>--<name>.result.json are never written - external watchers polling that file (the documented orchestrator hand-off, including Claude/OpenCode after running the script) hang waiting for completion that never reports. EPIC_FAILED is also not set, so wave bookkeeping is inconsistent with the actual exit.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The auto-resolve commit is the only non-guarded git mutation in the merge loop. Sibling commits in the same file use `|| true` (line 953 merge --abort) or pipe through `if` tests (line 932 merge --no-ff). The auto-resolve happy-path was written without the same guard.",
+      "fix": "Wrap the commit in an `if`: succeed -> add_merged_session, fail -> set EPIC_FAILED=true, FIRST_FAILED_ID, log err, and break. Mirrors the structure of the surrounding `if git merge --no-ff ...` at line 932 and ensures the runner always reaches write_epic_result. Same set-e abruptness pattern as bug-043 / bug-046 (cleanup-skipped-on-set-e exits).",
+      "tags": [
+        "found-by-bug-hunt",
+        "sh",
+        "set-e",
+        "silent-failure",
+        "result-file",
+        "merge",
+        "wave"
+      ],
+      "related_bugs": [
+        "bug-043",
+        "bug-046",
+        "bug-065"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T17:14:44.000Z"
+    },
+    {
+      "id": "bug-078",
+      "timestamp": "2026-05-06T17:16:40.414Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 11→17 lines (2 removed) | Also: git -C \"$TRUNK_WORKTREE_DIR\" commit -q \\; Co-Authored-By: AI <noreply@ai>\" 2>/dev/null",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-06T17:17:03.741Z"
     }
   ]
 }

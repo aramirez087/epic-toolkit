@@ -333,6 +333,14 @@ def emit_bash(plan: dict[str, Any]) -> None:
     Emit bash-parseable plan. SESSION lines have been extended with model/cli columns
     for backward compatibility: older parsers can ignore the extra trailing columns.
     Format: SESSION <wave> <id> <file> <deps> <slug> <parallel> <model> <cli>
+
+    Empty optional fields (model, cli) are rendered as the sentinel `-`. The
+    bash side splits the SESSION row via unquoted `set -- $_rest`, which
+    collapses consecutive whitespace; an empty middle field would otherwise
+    shift every later field one slot left. With model="" and cli="claude"
+    the row would parse as smodel="claude" / scli="" — silently losing the
+    per-session CLI override and treating "claude" as a model id. Same family
+    as the deps field, which already uses `-` for "no parents". (bug-076)
     """
     print(f"META operator_path={plan['operator_path']}")
     print(f"META operator_file={os.path.basename(plan['operator_path'])}")
@@ -342,9 +350,11 @@ def emit_bash(plan: dict[str, Any]) -> None:
         print(f"WAVE {wi} {len(w)}")
         for s in w:
             parents = ",".join(f"{p}" for p in s["depends_on"]) or "-"
+            model = s["model"] or "-"
+            cli = s["cli"] or "-"
             print(
                 f"SESSION {wi} {s['id']} {s['file']} {parents} {s['slug']} "
-                f"{'1' if s['parallel_safe'] else '0'} {s['model']} {s['cli']}"
+                f"{'1' if s['parallel_safe'] else '0'} {model} {cli}"
             )
 
 
