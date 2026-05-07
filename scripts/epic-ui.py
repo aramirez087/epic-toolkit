@@ -164,6 +164,52 @@ def load_status(path: str) -> dict:
     return sessions if isinstance(sessions, dict) else {}
 
 
+# Type-coerce one session entry's scalar fields. Same audit class as
+# bug-178/179/180/183/184 extended to the next consumer: every field the
+# renderer reads can be emitted by the producer as null or a non-conforming
+# shape (hand-edit, schema drift, out-of-band writer), and `dict.get(key,
+# default)` only fires its default for ABSENT keys — null/list/dict pass
+# through verbatim. The renderer's downstream operations crash mid-tick on
+# the type mismatch:
+#   • `fmt_elapsed(elapsed)` calls `int(elapsed)` — None → TypeError, "abc"
+#     → ValueError, [1,2] → TypeError; kills _build_lines() / _redraw() and
+#     the live UI thread dies.
+#   • `f'{step:2d}'` requires int — None / "abc" / list raise on the
+#     format spec.
+#   • `tool or ''` only catches falsy values; a truthy non-str (`[1]`,
+#     `{"a":1}`) passes through and `f'{tool:<10}'` raises TypeError.
+#   • The previous bug-185 guard handled non-dict entries at the OUTER
+#     level but trusted the INNER fields, mirroring the bug-176 → bug-180
+#     gap in epic-progress.py and bug-182 → bug-183/184 in merge-wolf-json.py.
+# Coerce non-conforming shapes to the existing per-field defaults so the
+# malformed entry degrades to "pending / 0 / ''" rather than crashing the
+# tick. `bool` is rejected from numeric paths because `isinstance(True,
+# int)` would otherwise accept `True`/`False` and silently coerce them to 1/0.
+def _normalize_entry(d: dict) -> dict:
+    status  = d.get('status',  'pending')
+    step    = d.get('step',    0)
+    tool    = d.get('tool',    '')
+    target  = d.get('target',  '')
+    elapsed = d.get('elapsed', 0.0)
+    if not isinstance(status, str):
+        status = 'pending'
+    if isinstance(step, bool) or not isinstance(step, int):
+        step = 0
+    if not isinstance(tool, str):
+        tool = ''
+    if not isinstance(target, str):
+        target = ''
+    if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)):
+        elapsed = 0.0
+    return {
+        'status':  status,
+        'step':    step,
+        'tool':    tool,
+        'target':  target,
+        'elapsed': elapsed,
+    }
+
+
 # ── Live UI renderer ─────────────────────────────────────────────────────────
 
 class EpicUI:
@@ -194,13 +240,7 @@ class EpicUI:
         d = self.status.get(str(sid), {})
         if not isinstance(d, dict):
             d = {}
-        return {
-            'status':  d.get('status',  'pending'),
-            'step':    d.get('step',    0),
-            'tool':    d.get('tool',    ''),
-            'target':  d.get('target',  ''),
-            'elapsed': d.get('elapsed', 0.0),
-        }
+        return _normalize_entry(d)
 
     def _all_done(self) -> bool:
         if not self.status:
@@ -369,7 +409,8 @@ class EpicUI:
             # populated. (bug-185)
             if not isinstance(st_data, dict):
                 continue
-            status = st_data.get('status', 'pending')
+            entry  = _normalize_entry(st_data)
+            status = entry['status']
             key    = f'{sid_str}:{status}'
             if key in self._seen_states:
                 continue
@@ -384,8 +425,8 @@ class EpicUI:
             if status == 'running':
                 sys.stderr.write(f'  ▶ {sid:02d}-{slug} running…\n')
             elif status == 'done':
-                el   = fmt_elapsed(st_data.get('elapsed', 0))
-                step = st_data.get('step', 0)
+                el   = fmt_elapsed(entry['elapsed'])
+                step = entry['step']
                 sys.stderr.write(f'  ✓ {sid:02d}-{slug} done in {el} ({step} steps)\n')
             elif status == 'failed':
                 sys.stderr.write(f'  ✗ {sid:02d}-{slug} FAILED\n')
