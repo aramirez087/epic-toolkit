@@ -477,6 +477,38 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         if implicit:
             deps: list[int] = []
         else:
+            # Reject non-list shapes BEFORE the iteration. Same audit class as
+            # bug-097/142/146/164: every fm.get site that consumes a typed
+            # value must reject inputs the parser can produce but the consumer
+            # can't interpret. Two silent-wrong shapes the previous
+            # `[int(d) for d in deps_raw]` accepted:
+            #   1. Quoted string: `depends_on: "12"` parses to the string
+            #      "12" (bug-145's _unquote_scalar strips the quotes), and
+            #      the list-comprehension iterates it CHAR-BY-CHAR — yielding
+            #      `[1, 2]` (deps on sessions 1 AND 2) instead of either an
+            #      error or the intended `[12]`. Silently wrong DAG topology.
+            #   2. YAML 1.1 boolean: `depends_on: yes`/`no`/`on`/etc. coerces
+            #      to True/False (bug-097), the list-comp's `for d in True`
+            #      raises TypeError, the existing except prints "got True" —
+            #      correct error but doesn't name the YAML 1.1 trap, leaving
+            #      the user to guess. Mirror bug-142/146's bool-name-first
+            #      pattern so the cause is surfaced before the type-error.
+            if isinstance(deps_raw, bool):
+                raise SystemExit(
+                    f"ERROR: {entry} depends_on must be a list of session "
+                    f"numbers, got boolean {deps_raw!r}. YAML 1.1 spellings "
+                    f"(yes/no/on/off/y/n/true/false) are coerced to booleans "
+                    f"by the frontmatter parser — write `depends_on: [N]` "
+                    f"instead, or use a block list with `- N` items."
+                )
+            if not isinstance(deps_raw, list):
+                raise SystemExit(
+                    f"ERROR: {entry} depends_on must be a list of session "
+                    f"numbers, got {type(deps_raw).__name__} {deps_raw!r}. "
+                    f"Use flow-list syntax `depends_on: [N]` or a block list "
+                    f"with `- N` items. A bare scalar (`depends_on: 12`) or "
+                    f"quoted string (`depends_on: \"12\"`) is not a list."
+                )
             try:
                 deps = [int(d) for d in deps_raw]
             except (TypeError, ValueError) as exc:

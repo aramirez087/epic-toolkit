@@ -3150,6 +3150,31 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T12:52:18Z"
+    },
+    {
+      "id": "bug-165",
+      "timestamp": "2026-05-07T13:13:01Z",
+      "error_message": "epic-dag.py load_sessions silently miscoerces a quoted-string `depends_on: \"NN\"` by iterating it character-by-character: a two-digit `\"12\"` produces deps=[1,2] instead of either erroring or yielding [12], silently corrupting DAG topology so the session waits on the wrong parents and runs out of order. YAML 1.1 boolean spellings (`depends_on: yes`/`no`) raise TypeError but the existing message reads `got True` and never names the YAML 1.1 trap, leaving the user to guess the cause.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "load_sessions trusted `[int(d) for d in deps_raw]` to fail loudly for any non-list, but Python iterates strings char-by-char so a quoted-string scalar runs the comprehension to completion with each character as a separate dep id. Same audit class as bug-097/142/146/164 \u2014 every fm.get site that consumes a typed value must reject the shapes parse_frontmatter can produce but the consumer cannot interpret. depends_on was the unaudited site: touches has the isinstance(list) guard since forever, parallel_safe got it in bug-164, but depends_on still went straight from fm.get into the list comprehension.",
+      "fix": "Reject `isinstance(deps_raw, bool)` first (mirroring bug-142/146 so the YAML 1.1 cause is named before the type-error surrogate), then `not isinstance(deps_raw, list)` with a message that distinguishes scalar-int and quoted-string from the legitimate flow-list/block-list shapes. Existing TypeError/ValueError except remains for the within-list case (e.g. `depends_on: [foo]`).",
+      "tags": [
+        "epic-dag",
+        "yaml-parser",
+        "depends_on",
+        "type-coercion",
+        "audit-class:bug-097",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-127",
+        "bug-142",
+        "bug-146",
+        "bug-164"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T13:13:01Z"
     }
   ]
 }
