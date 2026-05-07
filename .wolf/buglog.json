@@ -4184,6 +4184,35 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T23:31:02.000Z"
+    },
+    {
+      "id": "bug-208",
+      "timestamp": "2026-05-07T23:50:00.000Z",
+      "error_message": "run-sessions.sh's auto-rebase target (line 1585), on-default-branch guard (line 1605-1606), diff-stats base ref (line 1651), and the auto-`gh pr create` invocation (line 1672) all derive their notion of \"the base branch\" from `gh repo view --json defaultBranchRef -q '.defaultBranchRef.name'` (the repo's gh-default), NOT from the runner's already-resolved `$BASE_BRANCH` (the user-supplied `--base` value, or origin/HEAD's target, or the literal `main` fallback — see line 943-945). For users who pass `--base develop` (or any non-gh-default) on a repo whose gh-default is main, this means: (a) auto-rebase fetches origin/main and rebases the develop-based epic onto origin/main — replays main's commits-not-in-develop on top of the epic, almost certainly producing conflicts or wrong-base history that the .wolf-resolve loop bails on with non-.wolf conflicts; (b) auto-PR is opened against main (gh's auto-default for `gh pr create` when --base is omitted) instead of develop — entirely wrong target branch, the user has to either close it and recreate manually or use `gh pr edit --base develop` to fix it; (c) diff stats are computed against `origin/main...HEAD` instead of `origin/develop...HEAD` — the PR body's \"Stats\" section absorbs every commit in develop-not-in-main, inflating the totals with churn that is not part of the epic; (d) the on-default-branch guard at line 1606 compares CURRENT_BRANCH against gh's default rather than the actual PR target — degenerate but semantically wrong. bug-205 fixed the human-readable success-path advice string at line 1760 to use `$BASE_BRANCH` (\"Next step: gh pr create --base $BASE_BRANCH --head $BRANCH\") — the script's own message named the right target — but the audit chain stopped at the user-visible string and missed every actual implementation site. The script's help at line 34 documents `--base BRANCH` as \"Base branch for trunk (default: repo default)\", and the trunk worktree IS branched off `$BASE_BRANCH` at line 959, so the user's `--base` value is honored at trunk creation but silently dropped at the rebase / PR-target / stats sites — the script does the right thing on the way in and the wrong thing on the way out. Same audit class as bug-122/204/207 (every consumer of \"the base branch the user wanted\" must use BASE_BRANCH, not gh's repo default); fourth call site that the bug-205 audit chain missed even though it fixed the symmetric advice string in the same function block.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Symmetric audit gap to bug-205. The runner has TWO orthogonal sources of \"the default branch\": (1) `$BASE_BRANCH`, resolved at line 943-945 from `--base` → origin/HEAD → \"main\", which represents the user's chosen PR target and is used for trunk worktree creation (line 959) and the success-path advice string (line 1760, fixed in bug-205); (2) `$REBASE_DEFAULT` / `$DEFAULT_BRANCH`, re-derived inline from `gh repo view --json defaultBranchRef` at lines 1585 and 1605, which represents the repo's GitHub-side default branch and silently overrides BASE_BRANCH for every actual rebase/PR/stats operation. The two sources agree only when the user did not pass `--base` and origin/HEAD matches the repo default (the common case, which is why the bug stayed silent). bug-205 patched only the user-visible advice string; the four implementation sites were left untouched.",
+      "fix": "Replace the two `gh repo view --json defaultBranchRef` queries with `$BASE_BRANCH` directly (lines 1585 and 1605) and add `--base \"$BASE_BRANCH\"` to the `gh pr create` invocation (line 1672). After the change, REBASE_DEFAULT, DEFAULT_BRANCH, and the gh PR target all agree with the trunk worktree's actual base. The existing local-vs-origin probe at lines 1651-1655 (bug-204) still works unchanged because DEFAULT_BRANCH now equals BASE_BRANCH — the `origin/$DEFAULT_BRANCH` rev-parse becomes `origin/$BASE_BRANCH`, which matches the bug-204 / bug-207 pattern. The on-default-branch guard at line 1606 still detects the degenerate self-merge case (CURRENT_BRANCH == BASE_BRANCH) but now compares against the user's actual target rather than gh's repo-wide default. Verified by inspection: pre-fix `--base develop` on a main-default repo rebased onto origin/main, opened a PR against main, computed stats against main; post-fix the same invocation rebases onto origin/develop, opens a PR against develop, computes stats against develop. No behavioral change in the common case (user did not pass --base, BASE_BRANCH == origin/HEAD == gh-default). The `command -v gh &>/dev/null` guard at line 1584 is now technically vestigial for the rebase block (gh is no longer called there) but kept for minimum-scope; relaxing it so auto-rebase runs without gh is a separate UX improvement.",
+      "tags": [
+        "found-by-bug-hunt",
+        "run-sessions",
+        "auto-pr",
+        "auto-rebase",
+        "diff-stats",
+        "base-branch",
+        "audit-gap",
+        "symmetric-to-bug-205",
+        "symmetric-to-bug-122",
+        "symmetric-to-bug-204",
+        "symmetric-to-bug-207"
+      ],
+      "related_bugs": [
+        "bug-122",
+        "bug-204",
+        "bug-205",
+        "bug-207"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T23:50:00.000Z"
     }
   ]
 }

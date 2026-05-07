@@ -1582,7 +1582,21 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
   # is pushed as-is for manual conflict resolution on GitHub.
   REBASE_RESULT="skipped"
   if $AUTO_REBASE && command -v gh &>/dev/null; then
-    REBASE_DEFAULT="$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name' 2>/dev/null || echo main)"
+    # Use the runner's already-resolved $BASE_BRANCH (line 943-945: user's
+    # `--base` value, or origin/HEAD's target, or "main" fallback) instead of
+    # re-querying gh's repo default. The trunk worktree was branched off
+    # `$BASE_BRANCH` at line 959; the auto-rebase MUST target the same branch
+    # or it replays the epic's commits onto a different base, introducing
+    # commits-not-in-base churn (when gh-default ⊃ BASE_BRANCH) or producing
+    # conflicts (when BASE_BRANCH and gh-default have diverged). For users
+    # who pass `--base develop` on a repo whose gh-default is main, the
+    # pre-fix code rebased a develop-based epic onto `origin/main` —
+    # silently wrong target with no diagnostic. Mirrors the bug-205 fix at
+    # line 1760, which corrected the human-readable advice string to use
+    # `$BASE_BRANCH` but stopped short of the actual implementation. Same
+    # audit class as bug-122/204/207 (every consumer of "the base branch
+    # the user wanted" must use BASE_BRANCH, not gh's repo default).
+    REBASE_DEFAULT="$BASE_BRANCH"
     log "Fetching origin/${REBASE_DEFAULT} for pre-PR rebase..."
     if git -C "$REPO_ROOT" fetch -q origin "$REBASE_DEFAULT" 2>/dev/null; then
       log "Rebasing $BRANCH onto origin/${REBASE_DEFAULT} (auto-resolving .wolf/)..."
@@ -1602,7 +1616,14 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
   # --- Auto-PR ---
   if $AUTO_PR && command -v gh &>/dev/null; then
     CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
-    DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef -q '.defaultBranchRef.name' 2>/dev/null || echo main)"
+    # Use $BASE_BRANCH (the runner's resolved PR target — see line 943-945)
+    # instead of re-querying gh's repo default. The on-default-branch guard
+    # exists to skip PR creation when CURRENT_BRANCH IS the merge target
+    # (degenerate self-merge); after the fix the comparison is against the
+    # actual target, not gh's repo-wide default. Same audit gap as the
+    # auto-rebase site immediately above and the diff-stats / gh pr create
+    # sites below.
+    DEFAULT_BRANCH="$BASE_BRANCH"
     if [[ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]]; then
       EXISTING_PR="$(gh pr view "$CURRENT_BRANCH" --json url -q '.url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
@@ -1669,7 +1690,18 @@ ${DIFF_STATS}
 
 🤖 Generated with DAG epic runner"
 
-        PR_URL="$(gh pr create --title "$PR_TITLE" --body "$PR_BODY" 2>&1)" || true
+        # Pass `--base "$BASE_BRANCH"` explicitly. `gh pr create` without
+        # --base defaults to the repo's gh-default branch, which is NOT the
+        # same as the runner's $BASE_BRANCH whenever the user passed `--base
+        # develop` (or any non-default base). Pre-fix, an epic branched off
+        # develop opened a PR against main, the diff stats above were
+        # computed against the wrong base, and the "Next step" advice
+        # string at line 1760 (bug-205) was the only place that named the
+        # right target — every actual implementation site silently used
+        # gh's default. The flag accepts a bare branch name (gh resolves it
+        # against origin) and matches what the bug-205 advice already tells
+        # the user to type when running gh manually.
+        PR_URL="$(gh pr create --base "$BASE_BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2>&1)" || true
         if [[ "$PR_URL" == http* ]]; then
           ok "Pull request created: $PR_URL"
         else
