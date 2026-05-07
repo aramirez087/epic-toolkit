@@ -1797,7 +1797,26 @@ else
   err "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   if [[ -n "$FIRST_FAILED_ID" ]]; then
     err "First failure: session $(printf '%02d' "$FIRST_FAILED_ID")"
-    err "Resume with: $(basename "$0") $ORIG_SESSIONS_DIR --start $FIRST_FAILED_ID --branch $BRANCH"
+    # Include --base $BASE_BRANCH so a resumed run targets the same base the
+    # original used. Without it, the resume invocation falls back to
+    # `origin/HEAD` or "main" at line 943-945, and on a repo whose default
+    # is `main` while the original epic targeted `develop`/`master`/`trunk`
+    # via `--base`, every base-consuming site silently switches: the auto-
+    # rebase at line 1599 replays onto the wrong target (bug-208's exact
+    # failure), the auto-PR at line 1704 opens against the wrong base,
+    # session_completed_on_branch (epic-git.sh:290 / bug-207) scopes its
+    # rev range against the wrong base — false-positiving sessions whose
+    # subjects appear in the lagging local-vs-origin gap of the new fallback
+    # — and the diff-stats at line 1676 compute against the wrong target.
+    # Symmetric audit gap to bug-205 (which fixed the success-path "Next
+    # step" advice at line 1792 to use `$BASE_BRANCH`) and bug-208 (which
+    # fixed every implementation site); the failure-path resume advice was
+    # the unaudited user-facing string still naming a derived default.
+    # BASE_BRANCH is unconditionally resolved at line 943-945 by the time
+    # we reach this failure-path tail, so the value always names a sensible
+    # remediation — either the user's explicit `--base`, the repo's
+    # origin/HEAD target, or the literal "main" fallback.
+    err "Resume with: $(basename "$0") $ORIG_SESSIONS_DIR --start $FIRST_FAILED_ID --branch $BRANCH --base $BASE_BRANCH"
   fi
   if $USE_WORKTREE; then
     err "Trunk worktree preserved : $TRUNK_WORKTREE_DIR"
