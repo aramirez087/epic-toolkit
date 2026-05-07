@@ -104,21 +104,41 @@ RETRY_USER_SET=false
 MODEL_USER_SET=false
 MAX_PARALLEL_USER_SET=false
 
+# Guard value-bearing flags against a missing `$2`. Without this, running
+# the script with a value-bearing flag as the LAST argument (e.g.
+# `run-sessions.sh foo/ --start`, or `--start --end 5` where the user
+# forgot the `--start` value and `$2` lands on the next flag — only the
+# truly-last-arg case is fatal here) crashes with `$2: unbound variable`
+# under the runner-wide `set -u`, far from a meaningful diagnostic. The
+# bash error names a positional parameter index, not the flag the user
+# typed, so the user has no signal that they forgot a value. Same audit
+# class as bug-194/198 (numeric-flag UX), now extended to argv-shape: a
+# clear "missing value for --flag" message names both the cause and the
+# remediation. Apply at every value-bearing case branch BEFORE the bare
+# `$2` reference. `(( $# < 2 ))` is true when only the flag itself
+# remains — exactly the crash precondition.
+require_flag_value() {
+  if (( $# < 2 )); then
+    err "Missing value for $1"
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --start)                    START_FROM="$2"; shift 2 ;;
-    --end)                      END_AT="$2"; shift 2 ;;
-    --max-parallel)             MAX_PARALLEL="$2"; MAX_PARALLEL_USER_SET=true; shift 2 ;;
+    --start)                    require_flag_value "$@"; START_FROM="$2"; shift 2 ;;
+    --end)                      require_flag_value "$@"; END_AT="$2"; shift 2 ;;
+    --max-parallel)             require_flag_value "$@"; MAX_PARALLEL="$2"; MAX_PARALLEL_USER_SET=true; shift 2 ;;
     --strict)                   STRICT=true; shift ;;
     --sequential)               SEQUENTIAL=true; shift ;;
     --show-dag)                 SHOW_DAG=true; shift ;;
     --dry-run)                  DRY_RUN=true; shift ;;
-    --branch)                   BRANCH="$2"; shift 2 ;;
-    --base)                     BASE_BRANCH="$2"; shift 2 ;;
-    --model)                    MODEL="$2"; MODEL_USER_SET=true; shift 2 ;;
-    --cli)                      CLI_OVERRIDE="$2"; shift 2 ;;
-    --timeout)                  TIMEOUT="$2"; TIMEOUT_USER_SET=true; shift 2 ;;
-    --retry)                    RETRY="$2"; RETRY_USER_SET=true; shift 2 ;;
+    --branch)                   require_flag_value "$@"; BRANCH="$2"; shift 2 ;;
+    --base)                     require_flag_value "$@"; BASE_BRANCH="$2"; shift 2 ;;
+    --model)                    require_flag_value "$@"; MODEL="$2"; MODEL_USER_SET=true; shift 2 ;;
+    --cli)                      require_flag_value "$@"; CLI_OVERRIDE="$2"; shift 2 ;;
+    --timeout)                  require_flag_value "$@"; TIMEOUT="$2"; TIMEOUT_USER_SET=true; shift 2 ;;
+    --retry)                    require_flag_value "$@"; RETRY="$2"; RETRY_USER_SET=true; shift 2 ;;
     --no-commit)                AUTO_COMMIT=false; shift ;;
     --no-pr)                    AUTO_PR=false; shift ;;
     --no-rebase)                AUTO_REBASE=false; shift ;;
@@ -127,7 +147,7 @@ while [[ $# -gt 0 ]]; do
     --keep-worktree)            KEEP_WORKTREE=true; shift ;;
     --keep-session-worktrees)   KEEP_SESSION_WORKTREES=true; shift ;;
     --keep-session-docs)        KEEP_SESSION_DOCS=true; shift ;;
-    --wave-timeout)             WAVE_TIMEOUT_MINUTES="$2"; WAVE_TIMEOUT_USER_SET=true; shift 2 ;;
+    --wave-timeout)             require_flag_value "$@"; WAVE_TIMEOUT_MINUTES="$2"; WAVE_TIMEOUT_USER_SET=true; shift 2 ;;
     --fresh)                    FRESH=true; shift ;;
     --help|-h)                  usage ;;
     *)
@@ -796,8 +816,25 @@ if [[ -d "$WORKTREE_BASE" ]]; then
     # bugs already documented. (bug-198)
     [[ -z "$line" ]] && continue
     set -- $line
+    # Default `$3` via `${3:-}` so a truncated `SESSION` / `SESSION 1`
+    # row (only 1-2 fields after split) doesn't trip `set -u` on bare
+    # `$3` BEFORE the loop continues. bug-199 patched the same loop's
+    # blank-line crash, but the truncated-row case was missed: a
+    # producer-emittable corruption (partial-flush from a SIGKILL'd
+    # `cp` mid-write of the plan file, NFS read racing the write,
+    # schema drift from a future writer, hand-edit for debugging) can
+    # leave a SESSION line with fewer than 3 fields, and the bare `$3`
+    # access raises `$3: unbound variable` under the runner-wide
+    # `set -u`, crashing the entire runner with rc=1 BEFORE any
+    # worktree is touched. Same audit class as bug-193/195/199 — every
+    # bash-side consumer of producer-emitted plan-file data must
+    # reject inputs the consumer can't interpret. The well-formed
+    # SESSION rows in the same file still register their sid, so the
+    # cleanup loop degrades gracefully (an empty default for the
+    # truncated row is a no-op for the regex match at the stale-id
+    # comparison below) instead of failing wholesale.
     case "$1" in
-      SESSION) current_session_ids="$current_session_ids $3" ;;
+      SESSION) current_session_ids="$current_session_ids ${3:-}" ;;
     esac
   done < "$DAG_TMP"
 

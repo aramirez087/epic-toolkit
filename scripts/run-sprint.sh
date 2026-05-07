@@ -94,24 +94,40 @@ NO_FINAL_PR=false
 DRY_RUN=false
 PASS_THROUGH=()
 
+# Guard value-bearing flags against a missing `$2`. Same audit class as
+# the run-sessions.sh fix (bug-200): a `--branch` / `--sprint-config` /
+# `--timeout` etc. as the LAST argument crashes with `$2: unbound
+# variable` under `set -u` instead of emitting a meaningful "missing
+# value" diagnostic. The bash error names a positional parameter index,
+# not the flag the user typed, so the user has no signal that they
+# forgot a value. The `=`-form branches are unaffected because they
+# read `${1#*=}` which always succeeds (an empty value just produces
+# an empty string, validated downstream).
+require_flag_value() {
+  if (( $# < 2 )); then
+    err "Missing value for $1"
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     # Sprint-level value flags accept both `--flag value` and `--flag=value`.
-    --sprint-config)        SPRINT_CONFIG="$2"; shift 2 ;;
+    --sprint-config)        require_flag_value "$@"; SPRINT_CONFIG="$2"; shift 2 ;;
     --sprint-config=*)      SPRINT_CONFIG="${1#*=}"; shift ;;
-    --branch)               BRANCH="$2"; shift 2 ;;
+    --branch)               require_flag_value "$@"; BRANCH="$2"; shift 2 ;;
     --branch=*)             BRANCH="${1#*=}"; shift ;;
-    --base)                 BASE_BRANCH="$2"; shift 2 ;;
+    --base)                 require_flag_value "$@"; BASE_BRANCH="$2"; shift 2 ;;
     --base=*)               BASE_BRANCH="${1#*=}"; shift ;;
-    --model)                GLOBAL_MODEL="$2"; shift 2 ;;
+    --model)                require_flag_value "$@"; GLOBAL_MODEL="$2"; shift 2 ;;
     --model=*)              GLOBAL_MODEL="${1#*=}"; shift ;;
-    --cli)                  CLI_OVERRIDE="$2"; shift 2 ;;
+    --cli)                  require_flag_value "$@"; CLI_OVERRIDE="$2"; shift 2 ;;
     --cli=*)                CLI_OVERRIDE="${1#*=}"; shift ;;
     --continue-on-failure)  CONTINUE_ON_FAILURE=true; shift ;;
     --no-final-pr)          NO_FINAL_PR=true; shift ;;
     --dry-run)              DRY_RUN=true; PASS_THROUGH+=(--dry-run); shift ;;
     --timeout|--retry|--max-parallel|--wave-timeout)
-                            PASS_THROUGH+=("$1" "$2"); shift 2 ;;
+                            require_flag_value "$@"; PASS_THROUGH+=("$1" "$2"); shift 2 ;;
     --timeout=*|--retry=*|--max-parallel=*|--wave-timeout=*)
                             # Normalize to space form — run-sessions.sh
                             # accepts `--flag VALUE` only, not `--flag=VALUE`.
