@@ -500,6 +500,25 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"(true/false/yes/no/on/off), got string {ps_raw!r}. "
                 f"Quote the value if you intend it as a literal string."
             )
+        # Reject list / dict / None too. parse_frontmatter assigns `[]` to any
+        # key whose value column is empty (`parallel_safe:` with no value, or
+        # followed by indented block-list items that the user typed by
+        # mistake). The previous guard only caught strings, so the empty-
+        # value case fell through to `bool(ps_raw)` below — `bool([]) is False`
+        # silently inverted the documented default (True), turning a typo into
+        # a serial-wave run with no error. The block-list-items case was
+        # worse: `bool([item]) is True`, masking the typo as success while
+        # the items were thrown away. Same audit class as bug-097/142 —
+        # every fm.get site that consumes a typed value must reject inputs
+        # the parser can produce but the consumer can't interpret. (bug-164)
+        if not isinstance(ps_raw, (bool, int)):
+            raise SystemExit(
+                f"ERROR: {entry} parallel_safe must be a boolean "
+                f"(true/false/yes/no/on/off), got {type(ps_raw).__name__} "
+                f"{ps_raw!r}. This usually means the YAML key has no value "
+                f"(empty `parallel_safe:`) or has accidental indented children. "
+                f"Either remove the key (defaults to true) or set it to true/false."
+            )
         # Symmetric guard for string-typed fields. parse_frontmatter's YAML 1.1
         # boolean whitelist (true/false/yes/no/on/off/y/n, added by bug-097 for
         # parallel_safe) coerces ANY key with one of those values to a Python

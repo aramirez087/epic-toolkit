@@ -3127,6 +3127,29 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T00:00:00-06:00"
+    },
+    {
+      "id": "bug-164",
+      "timestamp": "2026-05-07T12:52:18Z",
+      "error_message": "epic-dag.py load_sessions silently coerces `parallel_safe:` (empty value) to False via bool([]), inverting the documented default of True. Block-list children under the same key (typo where user accidentally indented sub-items) coerce to True via bool([item]) while the items are thrown away. Either way the runner serializes (or parallelizes) waves contrary to user intent with no error surfaced.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "The bug-097 guard only rejects str-typed parallel_safe values; it doesn't reject lists. parse_frontmatter assigns `[]` whenever a key column has no scalar value (either empty `key:` or `key:` followed by `  - item` rows). bool([]) is False, bool([item]) is True \u2014 both are silent coercions of malformed YAML into a boolean, exactly the failure mode the bug-097/142 guards were supposed to prevent on every fm.get-typed-value site.",
+      "fix": "Add a list/dict/None guard alongside the existing isinstance-str check. Refuse anything that isn't already a bool or int (YAML 1.1 boolean whitelist + numeric 0/1 still pass). Audit class extension \u2014 every parser site that consumes a typed value must reject inputs the parser can produce but the consumer can't interpret.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml-parser",
+        "silent-coercion",
+        "type-validation",
+        "frontmatter",
+        "parallel_safe"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-142",
+        "bug-146"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T12:52:18Z"
     }
   ]
 }

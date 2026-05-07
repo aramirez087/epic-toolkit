@@ -588,3 +588,10 @@
 | 06:27 | Edited scripts/epic-progress.py | expanded (+12 lines) | ~286 |
 | 06:27 | Edited scripts/epic-progress.py | modified endswith() | ~267 |
 | 06:27 | Edited scripts/wolf-merge/resolve-wolf.sh | expanded (+11 lines) | ~249 |
+| 06:29 | Session end: 4 writes across 2 files (epic-progress.py, resolve-wolf.sh) | 13 reads | ~58225 tok |
+
+## Session: 2026-05-07 06:30
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 06:51 | Edited scripts/epic-dag.py | modified isinstance() | ~472 |
