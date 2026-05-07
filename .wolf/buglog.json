@@ -3521,6 +3521,31 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T15:50:00.000Z"
+    },
+    {
+      "id": "bug-181",
+      "timestamp": "2026-05-07T16:30:00.000Z",
+      "error_message": "Per-session and global model selection silently corrupted on `--cli opencode` whenever the model name is not in the small known-shorthand whitelist (sonnet/opus/haiku/gpt5/gpt5nano/gemini/glm/sonnet4). `map_model_shorthand`'s default-case branch calls `log \"Model '<name>' is not a known OpenCode shorthand — using as-is\"; echo \"$model\"`, but `log` is `echo -e \"${BLUE}[epic]${NC} $*\"` which writes to stdout — and every call site captures stdout via `$(...)` (run-sessions.sh:288 global, epic-session.sh:174 per-session model override, epic-session.sh:184 per-session cli-flip remap). The captured value becomes the ANSI-coloured `\\e[0;34m[epic]\\e[0m Model 'foo' is not a known OpenCode shorthand — using as-is\\nfoo` (109 bytes for `claude-sonnet-4-5` instead of 17), flowed verbatim into `model_flag=(-m \"$session_model\")` / `(--model \"$session_model\")` at epic-session.sh:208/210. opencode/claude rejects the multi-line argument with an opaque 'unknown model id' error far from the YAML / CLI cause — and on Bash 3.2 macOS `echo -e` may even emit the literal `-e` flag too. Fires for any non-shorthand model name passed as a fully-qualified-but-slashless string (e.g. `--model claude-sonnet-4-5`, `--model bedrock-claude`, any custom or newer model id) and for any session-frontmatter `model:` override that isn't in the case list.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Captured-stdout discipline violation: `map_model_shorthand`'s contract is to return ONLY the mapped model string on stdout because every call site is `var=$(map_model_shorthand …)`. The function nevertheless calls `log` (which emits to stdout, not stderr — only `err` redirects to >&2) for the unknown-model diagnostic, polluting the captured value. Same audit class as the bug-167/175/176/178/179/180 producer-consumer protocol audits, but applied to the SHELL function-return contract instead of the JSON-event contract: every helper consumed via `$(...)` must reserve stdout for the canonical return value and route diagnostics to stderr. The other captured helpers in the codebase (`_realpath`, `extract_prompt`, `build_handoff_section`, `find_handoff_for`, `format_elapsed`, `classify_error`) all already obey this and only echo their canonical output — `map_model_shorthand` was the lone violator, missed because the unknown-model branch is silent on success-path runs.",
+      "fix": "Append `>&2` to the log call so the diagnostic prints to the user's terminal but does not contaminate the captured value: `log \"Model '$model' is not a known OpenCode shorthand — using as-is\" >&2; echo \"$model\"`. Verified by reproducer: captured length drops from 109 bytes (ANSI-coloured log message + model) to 17 bytes (just `claude-sonnet-4-5`); stderr diagnostic remains visible to the user.",
+      "tags": [
+        "found-by-bug-hunt",
+        "captured-stdout",
+        "shell-function-return-contract",
+        "model-resolution",
+        "opencode",
+        "run-sessions",
+        "bash"
+      ],
+      "related_bugs": [
+        "bug-076",
+        "bug-122",
+        "bug-138",
+        "bug-147"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T16:30:00.000Z"
     }
   ]
 }

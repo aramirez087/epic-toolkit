@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T15:42:03.553Z
-> Files: 42 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T16:40:42.894Z
+> Files: 43 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -13,6 +13,7 @@
 - `epic-toolkit-commit-msg.txt` (~413 tok)
 - `epic-toolkit-fix-msg-2.txt` (~311 tok)
 - `epic-toolkit-fix-msg.txt` (~353 tok)
+- `test-bug-181.sh` — Reproduce bug-181: log call inside map_model_shorthand leaks into captured stdout (~461 tok)
 
 ## ../../.claude/
 
@@ -67,7 +68,7 @@
 - `epic-dag.py` — - supabase/migrations/*auth* (~13185 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~7567 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16574 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16876 tok)
 - `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
 
 ## scripts/lib/

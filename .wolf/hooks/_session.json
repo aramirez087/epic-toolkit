@@ -1,101 +1,79 @@
 {
-  "session_id": "session-2026-05-07-0935",
-  "started": "2026-05-07T15:35:10.452Z",
+  "session_id": "session-2026-05-07-1026",
+  "started": "2026-05-07T16:26:51.734Z",
   "files_read": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
+      "count": 1,
+      "tokens": 7567,
+      "first_read": "2026-05-07T16:27:19.043Z"
+    },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
       "count": 1,
       "tokens": 13185,
-      "first_read": "2026-05-07T15:35:33.508Z"
+      "first_read": "2026-05-07T16:27:36.758Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
       "count": 1,
       "tokens": 4737,
-      "first_read": "2026-05-07T15:35:38.821Z"
+      "first_read": "2026-05-07T16:27:58.962Z"
     },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
-      "count": 1,
-      "tokens": 6310,
-      "first_read": "2026-05-07T15:35:42.470Z"
+    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
+      "count": 6,
+      "tokens": 16574,
+      "first_read": "2026-05-07T16:28:13.671Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
       "count": 1,
       "tokens": 3346,
-      "first_read": "2026-05-07T15:36:51.825Z"
+      "first_read": "2026-05-07T16:28:19.571Z"
     },
-    "/Users/aramirez/.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/openwolf_auto_hooks.md": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
+      "count": 1,
+      "tokens": 6739,
+      "first_read": "2026-05-07T16:28:29.289Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
+      "count": 1,
+      "tokens": 3160,
+      "first_read": "2026-05-07T16:29:54.098Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+      "count": 1,
+      "tokens": 839,
+      "first_read": "2026-05-07T16:30:11.602Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
+      "count": 1,
+      "tokens": 4094,
+      "first_read": "2026-05-07T16:30:23.357Z"
+    },
+    "/tmp/commit-msg-bughunt.txt": {
       "count": 1,
       "tokens": 0,
-      "first_read": "2026-05-07T15:39:22.927Z"
+      "first_read": "2026-05-07T16:30:44.135Z"
     }
   },
   "files_written": [
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
       "action": "edit",
-      "tokens": 384,
-      "at": "2026-05-07T15:40:06.911Z"
+      "tokens": 515,
+      "at": "2026-05-07T16:40:28.480Z"
     },
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 427,
-      "at": "2026-05-07T15:40:16.789Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 297,
-      "at": "2026-05-07T15:40:23.710Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 362,
-      "at": "2026-05-07T15:40:32.872Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 298,
-      "at": "2026-05-07T15:40:39.921Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 73,
-      "at": "2026-05-07T15:41:44.926Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 57,
-      "at": "2026-05-07T15:41:49.218Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 60,
-      "at": "2026-05-07T15:41:53.889Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 79,
-      "at": "2026-05-07T15:41:58.522Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
-      "action": "edit",
-      "tokens": 71,
-      "at": "2026-05-07T15:42:03.558Z"
+      "file": "/tmp/test-bug-181.sh",
+      "action": "create",
+      "tokens": 494,
+      "at": "2026-05-07T16:40:42.899Z"
     }
   ],
   "edit_counts": {
-    "scripts/epic-progress.py": 10
+    "scripts/run-sessions.sh": 1,
+    "../../../../tmp/test-bug-181.sh": 1
   },
-  "anatomy_hits": 4,
+  "anatomy_hits": 9,
   "anatomy_misses": 1,
-  "repeated_reads_warned": 0,
+  "repeated_reads_warned": 5,
   "cerebrum_warnings": 0,
   "stop_count": 0
 }

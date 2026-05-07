@@ -271,7 +271,23 @@ map_model_shorthand() {
       gpt5nano) echo "opencode/gpt-5-nano" ;;
       gemini)   echo "opencode/gemini-3-flash" ;;
       glm)      echo "opencode/glm-5.1" ;;
-      *)        log "Model '$model' is not a known OpenCode shorthand — using as-is"; echo "$model" ;;
+      # Redirect the diagnostic to stderr so it does NOT leak into the
+      # captured stdout when callers wrap this function in `$(...)` —
+      # which is every call site (run-sessions.sh:288 global,
+      # epic-session.sh:174/184 per-session). `log` writes to stdout, so
+      # the previous form `log "..."; echo "$model"` captured BOTH lines
+      # — `$session_model` ended up as the ANSI-coloured "[epic] Model
+      # 'foo' is not a known OpenCode shorthand — using as-is\n<model>",
+      # which then flowed verbatim into `model_flag=(-m "$session_model")`
+      # / `(--model "$session_model")` (epic-session.sh:208/210). claude
+      # / opencode rejected the multi-line argument with an opaque
+      # "unknown model id" error, far from the YAML / CLI cause. Fires
+      # for any non-shorthand model name on `--cli opencode` — including
+      # legitimate fully-qualified ids that happen not to match the
+      # `*/*` slash test (e.g. a user typo like `claude-sonnet-4-5`
+      # instead of `opencode/claude-sonnet-4-5`), AND for any session-
+      # level `model:` override that isn't in the case list. (bug-181)
+      *)        log "Model '$model' is not a known OpenCode shorthand — using as-is" >&2; echo "$model" ;;
     esac
   else
     echo "$model"
