@@ -74,9 +74,29 @@ def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
     literal = [p for p in changed_paths if p == declared]
     if literal:
         return literal
-    if any(c in declared for c in "*?["):
-        return [p for p in changed_paths if fnmatch.fnmatchcase(p, declared)]
-    return []
+    if not any(c in declared for c in "*?["):
+        return []
+    # Glob path. fnmatch.fnmatchcase still mangles `[id]`-style segments when
+    # the declared path mixes a literal bracket with a glob meta — e.g.
+    # `app/[id]/*.tsx` matches `app/i/page.tsx` but not the actual on-disk
+    # `app/[id]/page.tsx`, because fnmatch reads `[id]` as a character class.
+    # bug-118's literal probe doesn't help here: the path isn't exact, so the
+    # session still fails with rc=97 even though the file is plainly in the
+    # diff. Build our own regex that treats `[`/`]` as literal characters and
+    # only `*`/`?` as wildcards. Trade-off: real fnmatch character classes
+    # (`[abc]`, `[a-z]`, `[!x]`) are no longer respected — but in practice
+    # `produces:` never uses them, while Next.js/Remix dynamic-route segments
+    # are common. (bug-141)
+    pattern = ""
+    for ch in declared:
+        if ch == "*":
+            pattern += ".*"
+        elif ch == "?":
+            pattern += "."
+        else:
+            pattern += re.escape(ch)
+    rx = re.compile(f"^{pattern}$")
+    return [p for p in changed_paths if rx.match(p)]
 
 
 def _is_metadata_only(changed_paths: list[str]) -> bool:

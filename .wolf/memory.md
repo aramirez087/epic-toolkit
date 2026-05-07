@@ -516,3 +516,7 @@
 | 19:45 | Edited scripts/epic-dag.py | modified except() | ~162 |
 | 19:45 | Edited scripts/epic-dag.py | modified in() | ~239 |
 | 19:45 | Session end: 5 writes across 2 files (merge-wolf-json.py, epic-dag.py) | 2 reads | ~11293 tok |
+| 19:46 | Session end: 5 writes across 2 files (merge-wolf-json.py, epic-dag.py) | 2 reads | ~11293 tok |
+| 19:47 | Session end: 5 writes across 2 files (merge-wolf-json.py, epic-dag.py) | 2 reads | ~11293 tok |
+| 19:51 | Edited scripts/validate-session-deliverables.py | modified _matches_declared() | ~523 |
+| 19:52 | Edited scripts/epic-dag.py | modified isinstance() | ~821 |

@@ -406,11 +406,45 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"(true/false/yes/no/on/off), got string {ps_raw!r}. "
                 f"Quote the value if you intend it as a literal string."
             )
+        # Symmetric guard for string-typed fields. parse_frontmatter's YAML 1.1
+        # boolean whitelist (true/false/yes/no/on/off/y/n, added by bug-097 for
+        # parallel_safe) coerces ANY key with one of those values to a Python
+        # bool. Without this guard, `model: yes` becomes True, emit_bash writes
+        # the literal token `True` into the SESSION row, and run_cli passes
+        # `--model True` to claude — which rejects the unknown model id with
+        # an opaque error far from the typo. Run before the cli/model shape
+        # checks below so the YAML 1.1 cause is named first instead of the
+        # downstream "must be 'claude' or 'opencode'" surrogate. (bug-142)
+        for _str_key in ("title", "model", "cli"):
+            _str_val = fm.get(_str_key)
+            if isinstance(_str_val, bool):
+                raise SystemExit(
+                    f"ERROR: {entry} {_str_key} must be a string, got boolean "
+                    f"{_str_val!r}. YAML 1.1 spellings (yes/no/on/off/y/n/"
+                    f"true/false) are coerced to booleans by the frontmatter "
+                    f"parser — quote the value if you intend a literal string."
+                )
         cli_raw = fm.get("cli", "") or ""
         if cli_raw and cli_raw not in ("claude", "opencode"):
             raise SystemExit(
                 f"ERROR: {entry} cli must be 'claude' or 'opencode' (or omit for auto-detect), "
                 f"got {cli_raw!r}"
+            )
+        # emit_bash writes a space-delimited SESSION row that run-sessions.sh
+        # parses via `set -- $_rest`, so any whitespace or shell-glob meta in
+        # model shifts every later field one slot left. parse_frontmatter
+        # strips surrounding quotes, so a quoted `model: "Custom Sonnet"` still
+        # arrives here as the bare string `Custom Sonnet`; the bug-076 `-`
+        # sentinel only protects empty fields, not split-able ones. cli is
+        # already pinned to {claude,opencode} above; only model needs the
+        # shape guard. Same defect class as bug-062 (slug spaces) and bug-092
+        # (slug glob meta). (bug-143)
+        model_raw = fm.get("model", "") or ""
+        if model_raw and not re.match(r"^[A-Za-z0-9._/+:-]+$", str(model_raw)):
+            raise SystemExit(
+                f"ERROR: {entry} model={model_raw!r} contains characters that "
+                f"break the SESSION row's space-delimited format. model must "
+                f"match [A-Za-z0-9._/+:-]+ (no spaces, tabs, or shell meta)."
             )
         sessions.append(
             {
