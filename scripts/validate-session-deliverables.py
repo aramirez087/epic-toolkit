@@ -235,10 +235,44 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    produces = fm.get("produces", []) or []
+    # `fm.get("produces", []) or []` silently coerced any falsy non-list to
+    # an empty list, falling through to the metadata-only heuristic at the
+    # bottom of main(). Three concrete shapes the parser emits the consumer
+    # couldn't interpret:
+    #   1. `produces: false` / `no` / `off` — YAML 1.1 boolean → False;
+    #      `False or []` → `[]` → metadata-only fallback runs instead of
+    #      declared-deliverables validation, defeating the whole point of
+    #      `produces:`. The session sails through if it touched any non-
+    #      metadata path.
+    #   2. `produces: 0` — int 0; same `0 or []` → `[]` collapse.
+    #   3. `produces: ""` — empty quoted scalar; same `"" or []` collapse.
+    # Truthy non-list shapes (True from `produces: yes`, int N, "foo") DID
+    # hit the isinstance error, but the message didn't name the YAML 1.1
+    # boolean trap, so users mistyping a list as a scalar got a symptom-
+    # level error. Same audit class as bug-097/142/146/164/165 in epic-dag.py
+    # — every fm.get site that consumes a typed value must reject inputs the
+    # parser can produce but the consumer can't interpret. Mirror the
+    # epic-dag.py pattern: name bool first, then generic shape, then accept
+    # the list.
+    produces = fm.get("produces", [])
+    if isinstance(produces, bool):
+        print(
+            f"ERROR: produces: must be a list of paths or fnmatch globs, got "
+            f"boolean {produces!r}. YAML 1.1 spellings (yes/no/on/off/y/n/"
+            f"true/false) are coerced to booleans by the frontmatter parser — "
+            f"write `produces: [path]` instead, or a block list with `- path` "
+            f"items. (If you intended to opt out of deliverables validation, "
+            f"set `skip_deliverables_check: true` instead.)",
+            file=sys.stderr,
+        )
+        return 2
     if not isinstance(produces, list):
         print(
-            "ERROR: produces: must be a list of paths or fnmatch globs",
+            f"ERROR: produces: must be a list of paths or fnmatch globs, got "
+            f"{type(produces).__name__} {produces!r}. Use flow-list syntax "
+            f"`produces: [path]` or a block list with `- path` items. A bare "
+            f"scalar (`produces: src/foo`) or quoted string (`produces: \"src/foo\"`) "
+            f"is not a list.",
             file=sys.stderr,
         )
         return 2

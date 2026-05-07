@@ -3215,6 +3215,90 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T13:55:00Z"
+    },
+    {
+      "id": "bug-168",
+      "timestamp": "2026-05-07T13:56:49.612Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→35 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T13:56:49.612Z"
+    },
+    {
+      "id": "bug-169",
+      "timestamp": "2026-05-07T13:57:03.618Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 8→42 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T13:57:03.618Z"
+    },
+    {
+      "id": "bug-170",
+      "timestamp": "2026-05-07T14:00:00Z",
+      "error_message": "epic-dag.py load_sessions silently coerces falsy non-list values for `touches` to an empty list. `touches: false`/`no`/`off` parses to bool False, `touches: 0` to int 0, `touches: \"\"` to empty string — all three were rewritten to `[]` by `fm.get(\"touches\", []) or []` and then passed the isinstance(list) check. The session looked like it had no touches declared, so find_overlaps never warned about same-wave neighbours sharing the disk region the user tried to claim. Truthy non-list shapes (True from `touches: yes`, bare int, unquoted scalar) DID hit the existing isinstance error, but the message was a generic 'must be a list of globs' that did not name the YAML 1.1 boolean trap, leaving users mistyping a list as a scalar with a symptom-level error far from the cause.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "`fm.get(\"touches\", []) or []` collapses any falsy non-list shape (False, 0, \"\") to `[]`, which then satisfies isinstance(list) and silently disables touches-overlap detection. The same `or []` swallows the diagnostic value of the existing isinstance guard, so the audit class identified by bug-097/142/146/164/165 (every fm.get site that consumes a typed value must reject inputs the parser can produce but the consumer can't interpret) was incomplete — `touches` was the next unaudited site after `parallel_safe` (bug-164) and `depends_on` (bug-165).",
+      "fix": "Drop the `or []` fallback. Read raw via `fm.get(\"touches\", [])`; reject bool first with a YAML 1.1 boolean-trap message; reject any other non-list shape with a flow-list/block-list remediation; otherwise accept the list. Mirrors the bug-164/165 pattern — bool case first (most common cause), then generic shape error.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "silent-coerce",
+        "audit-class:bug-164",
+        "audit-class:bug-165"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-142",
+        "bug-146",
+        "bug-164",
+        "bug-165",
+        "bug-168"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T14:00:00Z"
+    },
+    {
+      "id": "bug-171",
+      "timestamp": "2026-05-07T14:00:30Z",
+      "error_message": "validate-session-deliverables.py silently treats `produces: false`/`no`/`off`/`0`/`\"\"` as 'no produces declared' and falls through to the metadata-only heuristic. A session whose author meant to declare deliverables but typed a scalar instead of a list bypasses the declared-deliverables validation entirely — the session passes if it touched any non-metadata path, defeating the whole point of `produces:`. Truthy non-list shapes hit the existing isinstance error but with a one-liner ('must be a list of paths or fnmatch globs') that did not name the YAML 1.1 boolean trap or suggest `skip_deliverables_check: true` for the legitimate opt-out case.",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "`fm.get(\"produces\", []) or []` collapses any falsy non-list shape to `[]`, which then makes `if produces:` at line 247 false, skipping declared-deliverables validation and routing through `_is_metadata_only`. Same audit class as bug-170 (which fixed the symmetric bug for `touches:` in epic-dag.py); this is the matching site in the validator that reads from epic-dag.py's parse_frontmatter.",
+      "fix": "Drop the `or []` fallback. Read raw via `fm.get(\"produces\", [])`; reject bool first with a YAML 1.1 boolean-trap message that points at `skip_deliverables_check: true` for the legitimate opt-out path; reject any other non-list shape; otherwise accept the list. Mirrors bug-170's pattern in epic-dag.py.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "silent-coerce",
+        "validator",
+        "audit-class:bug-164",
+        "audit-class:bug-170"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-164",
+        "bug-165",
+        "bug-169",
+        "bug-170"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T14:00:30Z"
     }
   ]
 }

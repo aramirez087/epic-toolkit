@@ -516,9 +516,41 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                     f"ERROR: {entry} depends_on must be a list of session numbers; "
                     f"got {deps_raw!r}"
                 ) from exc
-        touches = fm.get("touches", []) or []
-        if not isinstance(touches, list):
-            raise SystemExit(f"ERROR: {entry} touches must be a list of globs")
+        # `fm.get("touches", []) or []` silently coerced any falsy non-list to
+        # an empty list — `touches: false`/`no`/`off` parsed to False, `0`
+        # parsed to int 0, an empty quoted scalar `touches: ""` parsed to "" —
+        # all three were rewritten to `[]` by `or []` and then passed the
+        # isinstance(list) check. The session looked like it had no touches
+        # declared, so the wave-overlap warning (find_overlaps) never fired
+        # against neighbours that genuinely shared the disk region the user
+        # tried to claim. Truthy non-list shapes (True from `touches: yes`,
+        # bare int `touches: 12`, unquoted scalar `touches: foo`) DID fire
+        # the existing isinstance error, but the message ("must be a list
+        # of globs") didn't name the YAML 1.1 boolean trap that maps yes/no/
+        # on/off → bool, so users mistyping a list as a scalar got a
+        # symptom-level error far from the cause. Same audit class as
+        # bug-097/142/146/164/165: every fm.get site that consumes a typed
+        # value must reject inputs the parser can produce but the consumer
+        # can't interpret. Match the bug-164/165 pattern — name the bool
+        # case first (most common cause), then the generic shape error.
+        touches_raw = fm.get("touches", [])
+        if isinstance(touches_raw, bool):
+            raise SystemExit(
+                f"ERROR: {entry} touches must be a list of globs, got boolean "
+                f"{touches_raw!r}. YAML 1.1 spellings (yes/no/on/off/y/n/"
+                f"true/false) are coerced to booleans by the frontmatter "
+                f"parser — write `touches: [path/glob]` instead, or a block "
+                f"list with `- glob` items."
+            )
+        if not isinstance(touches_raw, list):
+            raise SystemExit(
+                f"ERROR: {entry} touches must be a list of globs, got "
+                f"{type(touches_raw).__name__} {touches_raw!r}. Use flow-list "
+                f"syntax `touches: [path/glob]` or a block list with `- glob` "
+                f"items. A bare scalar (`touches: src/foo`) or quoted string "
+                f"(`touches: \"src/foo\"`) is not a list."
+            )
+        touches = touches_raw
         # Defence-in-depth alongside the bug-097 fix in parse_frontmatter:
         # any string that survived the boolean-recognition whitelist (typo,
         # capitalised brand-name like `parallel_safe: Maybe`, accidental
