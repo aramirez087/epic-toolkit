@@ -1,11 +1,12 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T17:26:25.823Z
-> Files: 43 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T17:34:49.901Z
+> Files: 44 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
 - `bughunt-tests.sh` (~1187 tok)
+- `commit-msg-bug-182.txt` — Declares as (~894 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
 - `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` — Declares as (~495 tok)
@@ -82,5 +83,5 @@
 
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
 - `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
-- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~3373 tok)
+- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~4116 tok)
 - `resolve-wolf.sh` — resolve-wolf.sh — One-shot resolver for in-progress merge/rebase conflicts (~975 tok)

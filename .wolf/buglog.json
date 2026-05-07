@@ -3573,6 +3573,68 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T17:27:41.852Z"
+    },
+    {
+      "id": "bug-183",
+      "timestamp": "2026-05-07T17:36:02.000Z",
+      "error_message": "merge-wolf-json.py merge_buglog crashes the OpenWolf JSON merge driver with `TypeError: '>' not supported between instances of 'NoneType' and 'str'` (and symmetric variants for list/int/dict) when two parallel sessions both touched the same bug-id and the duplicate-bug branch reaches `bug.get(\"last_seen\", \"\") > existing.get(\"last_seen\", \"\")`. dict.get's default fires only for ABSENT keys, not null values: a producer that emits `\"last_seen\": null` (partial-flush by a SIGKILL'd hook, hand-edit, schema-drift artefact, buggy producer) lands None, and `None > \"...\"` raises TypeError in Python 3. Truthy non-str shapes (`\"last_seen\": 5`, `[\"x\"]`, `{\"a\":1}`) raise the same TypeError on the heterogeneous compare. Repro: ours='2026-01-01' / theirs=None on a true-duplicate signature \u2014 driver exits 1, git records `.wolf/buglog.json` as unresolvable, the user sees the same merge-conflict failure mode bug-148/182 went out of their way to silence at the OUTER bugs/id level.",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "Same audit class as bug-148/154/167/175/176/178/179/180/182 \u2014 every consumer of `.get(key, default)` must reject inputs the parser/producer can emit but the consumer can't interpret. Bug-182 patched `_bugs_of` and `_bug_id` to gate non-conforming OUTER shapes (the `bugs` value, the `id` field on each bug item) but stopped there; the INNER scalar fields the merge loop consumes (`last_seen` for the newer-wins tie-break, `occurrences` for occurrence accumulation \u2014 see bug-184) were left trusting the producer to send well-formed scalars. dict.get's default-firing-only-on-absent-keys semantics is the same trap that bit bug-167 (`evt.get(\"error\", {})`), bug-175 (`evt.get(\"content_block\", {})` etc.), bug-178 (`delta.get(\"partial_json\", \"\")`) and bug-179 (`delta.get(\"text\", \"\")`): a `null` value silently passes through the default and the next stage crashes on the type mismatch.",
+      "fix": "Add a `_last_seen(bug) -> str` helper mirroring `_bug_id`'s shape-coercing pattern: returns the value only when it is a string, else `''`. Coerced empties still compare correctly via lexicographic ordering on strings only \u2014 the malformed entry simply never wins the newer-wins tie-break, and the well-formed side's metadata is kept (analogous to bug-182's malformed-id falling through to extras with a fresh id rather than crashing). Replace `bug.get(\"last_seen\", \"\") > existing.get(\"last_seen\", \"\")` with `_last_seen(bug) > _last_seen(existing)`. Verified against 4 repro shapes (None, list, int, dict) plus the bug-098 happy-path that exercises the tie-break with two valid string timestamps \u2014 the well-formed side wins on every malformed input, the bug-098 case still selects '2026-01-03' over '2026-01-02'.",
+      "tags": [
+        "found-by-bug-hunt",
+        "schema-robustness",
+        "type-coercion",
+        "merge-driver",
+        "wolf-json",
+        "py",
+        "audit-class-bug-148-154-167-175-176-182"
+      ],
+      "related_bugs": [
+        "bug-148",
+        "bug-154",
+        "bug-167",
+        "bug-175",
+        "bug-176",
+        "bug-178",
+        "bug-179",
+        "bug-180",
+        "bug-182",
+        "bug-184"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T17:36:02.000Z"
+    },
+    {
+      "id": "bug-184",
+      "timestamp": "2026-05-07T17:36:02.000Z",
+      "error_message": "merge-wolf-json.py merge_buglog crashes the OpenWolf JSON merge driver with `TypeError: unsupported operand type(s) for -: 'str' and 'int'` (and symmetric `+` / `<` / `min` variants for list/dict/str shapes) at the duplicate-bug occurrence-accumulation site `summed = max(1, ours_occ + theirs_occ - base_occ)` and at the ancestor-fallback `min(ours_occ, theirs_occ)` (bug-154 path when ancestor was unreadable). The previous `bug.get(\"occurrences\", 1) or 1` guard catches None and 0 (falsy \u2192 1) but the `or 1` short-circuit on the FIRST truthy value keeps any truthy non-int verbatim: `\"occurrences\": \"5\"` (truthy str) lets `\"5\" + \"3\" = \"53\"` (silent str concat) which then crashes on `\"53\" - 0`; `\"occurrences\": [1, 2]` (truthy list) lets `[1] + [2] = [1, 2]` (list concat) which then crashes on `[1, 2] - 0`; `min([1, 2], 3)` crashes the bug-154 fallback path with TypeError on the heterogeneous compare. All chains end the same way as bug-148/182/183: driver exits 1, git records `.wolf/buglog.json` as unresolvable, the user sees a merge conflict the auto-merge driver was supposed to handle silently.",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "Symmetric to bug-183 \u2014 same audit class (bug-148/154/167/175/176/178/179/180/182) extended to the second INNER scalar field. `or 1` only handles falsy values; truthy malformed shapes pass through unchanged and the next-stage arithmetic crashes. Three distinct call sites consume `occurrences`: the ancestor_occ population path (line ~147), the bug-154 ancestor-unreadable fallback (line ~169-170), and the duplicate-bug accumulation (line ~208-209). All three were vulnerable; a malformed value at any one site corrupts the merge.",
+      "fix": "Add a `_occurrences(bug) -> int` helper that returns a positive int (>=1, defaulting to 1). Rejects `bool` explicitly because `bool` is an `int` subclass that `isinstance(True, int)` would otherwise accept (we don't want `True` to count as 1 \u2014 a producer mistake should surface as a clean default, not silently pretend to be valid data). Clamps to `>= 1` so the existing `summed = max(1, ours_occ + theirs_occ - base_occ)` invariant downstream is preserved by construction. Replace all four call sites: ancestor_occ population (line ~147), bug-154 fallback's two `.get(\"occurrences\", 1) or 1` reads (line ~169-170), and the duplicate-bug branch's two reads (line ~208-209). Verified against 3 repro shapes (str, list, mixed-with-ancestor) \u2014 the malformed side coerces to 1, well-formed-side accumulation arithmetic produces the expected counts (e.g. ours=5, theirs=3, ancestor='2'\u21921 \u2192 summed=max(1, 5+3-1)=7), and the bug-098 happy-path (ours=4, theirs=5, ancestor=3 \u2192 summed=6) is unchanged.",
+      "tags": [
+        "found-by-bug-hunt",
+        "schema-robustness",
+        "type-coercion",
+        "merge-driver",
+        "wolf-json",
+        "py",
+        "audit-class-bug-148-154-167-175-176-182"
+      ],
+      "related_bugs": [
+        "bug-148",
+        "bug-154",
+        "bug-167",
+        "bug-175",
+        "bug-176",
+        "bug-178",
+        "bug-179",
+        "bug-180",
+        "bug-182",
+        "bug-183"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T17:36:02.000Z"
     }
   ]
 }

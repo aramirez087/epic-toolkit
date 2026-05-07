@@ -62,6 +62,57 @@ def _bug_id(bug) -> str:
     return bid if isinstance(bid, str) and bid else ""
 
 
+def _last_seen(bug) -> str:
+    """Return last_seen as a string, or '' for missing/non-string values.
+
+    Same audit class as bug-148/154/167/175/176/178/179/180/182 extended to
+    the INNER scalar field. The duplicate-bug branch compares
+    `bug.get("last_seen", "") > existing.get("last_seen", "")`, but
+    dict.get's default fires only for ABSENT keys, not null values: a
+    producer that emits `"last_seen": null` (partial-flush, hand-edit,
+    schema drift) lands None, and `None > "..."` raises
+    `TypeError: '>' not supported between instances of 'NoneType' and 'str'`
+    in Python 3. Truthy non-str shapes (`"last_seen": 5`, `["x"]`,
+    `{"a":1}`) raise the same TypeError on the heterogeneous compare. The
+    crash propagates out of merge_buglog, the driver exits 1, and git
+    records `.wolf/buglog.json` as unresolvable — exactly the failure mode
+    bug-182 went out of its way to prevent at the OUTER bugs/id level.
+    Coerce non-str to '' so the comparison uses lexicographic ordering on
+    strings only; the malformed entry simply never wins the "newer
+    last_seen" tie-break, and the well-formed side's metadata is kept.
+    (bug-183)
+    """
+    val = bug.get("last_seen", "")
+    return val if isinstance(val, str) else ""
+
+
+def _occurrences(bug) -> int:
+    """Return occurrences as a positive int (>=1), defaulting to 1.
+
+    Symmetric audit to `_last_seen`. Three crash chains the previous
+    `bug.get("occurrences", 1) or 1` couldn't reject:
+      • `"occurrences": "5"` (str) — `or 1` keeps the truthy string;
+        the next `ours_occ + theirs_occ` is `"5" + "3" = "53"` (silent
+        string-concat, NOT a crash) but `"53" - base_occ` raises
+        `TypeError: unsupported operand type(s) for -: 'str' and 'int'`.
+      • `"occurrences": [1, 2]` (list) — `or 1` keeps the truthy list;
+        `[1] + [2]` succeeds (list concat) but `[1, 2] - base_occ` raises
+        the same arithmetic TypeError. `min(...)` on a list vs int in the
+        ancestor-fallback path also crashes (`TypeError: '<' not supported
+        between instances of 'int' and 'list'`).
+      • `"occurrences": "abc"` / dict / etc. — same str-arithmetic chain.
+    Like bug-182's malformed-id path, the well-formed side's value should
+    survive cleanly when one side is bad. Coerce non-int (and bool, since
+    `bool` is an int subclass that `isinstance(True, int)` would otherwise
+    accept) to the existing default of 1; clamp to >= 1 to preserve the
+    `summed = max(1, ...)` invariant downstream. (bug-184)
+    """
+    val = bug.get("occurrences", 1)
+    if isinstance(val, bool) or not isinstance(val, int):
+        return 1
+    return val if val >= 1 else 1
+
+
 def _next_free_bug_id(used_ids):
     max_n = 0
     for bid in used_ids:
@@ -144,7 +195,7 @@ def merge_buglog(ours, theirs, ancestor=None):
         for bug in _bugs_of(ancestor):
             bid = _bug_id(bug)
             if bid:
-                ancestor_occ[bid] = bug.get("occurrences", 1) or 1
+                ancestor_occ[bid] = _occurrences(bug)
     else:
         # Ancestor was None — load() returns None on JSONDecodeError /
         # OSError / UnicodeDecodeError, and git also passes /dev/null
@@ -166,8 +217,8 @@ def merge_buglog(ours, theirs, ancestor=None):
         ours_by_id = {_bug_id(b): b for b in _bugs_of(ours) if _bug_id(b)}
         theirs_by_id = {_bug_id(b): b for b in _bugs_of(theirs) if _bug_id(b)}
         for bid in ours_by_id.keys() & theirs_by_id.keys():
-            ours_occ = ours_by_id[bid].get("occurrences", 1) or 1
-            theirs_occ = theirs_by_id[bid].get("occurrences", 1) or 1
+            ours_occ = _occurrences(ours_by_id[bid])
+            theirs_occ = _occurrences(theirs_by_id[bid])
             ancestor_occ[bid] = min(ours_occ, theirs_occ)
     used_ids = {
         _bug_id(bug)
@@ -205,11 +256,11 @@ def merge_buglog(ours, theirs, ancestor=None):
                 # tightening, parallel detections that previously
                 # renumbered now correctly land here, so this branch is
                 # the one that has to preserve the count. (bug-098)
-                ours_occ = existing.get("occurrences", 1) or 1
-                theirs_occ = bug.get("occurrences", 1) or 1
+                ours_occ = _occurrences(existing)
+                theirs_occ = _occurrences(bug)
                 base_occ = ancestor_occ.get(bid, 0)
                 summed = max(1, ours_occ + theirs_occ - base_occ)
-                if bug.get("last_seen", "") > existing.get("last_seen", ""):
+                if _last_seen(bug) > _last_seen(existing):
                     winner = dict(bug)
                 else:
                     winner = dict(existing)
