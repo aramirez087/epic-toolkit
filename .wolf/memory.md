@@ -552,3 +552,10 @@
 | 21:44 | Edited scripts/run-sessions.sh | 150 → 153 | ~10 |
 | 21:44 | Edited scripts/wolf-merge/merge-wolf-json.py | inline fix | ~8 |
 | 21:44 | Edited scripts/lib/epic-session.sh | 152 → 155 | ~18 |
+| 21:45 | Session end: 6 writes across 3 files (run-sessions.sh, merge-wolf-json.py, epic-session.sh) | 13 reads | ~49984 tok |
+
+## Session: 2026-05-07 21:50
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:17 | Edited scripts/lib/epic-session.sh | modified find_handoff_for() | ~185 |

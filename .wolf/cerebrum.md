@@ -62,6 +62,7 @@
 - [2026-05-07] Do not merge `.wolf/buglog.json` occurrence counts by blindly summing `ours + theirs`; both sides include the common ancestor count, so the merge driver double-counts shared history. Load the ancestor and combine deltas instead.
 - [2026-05-07] Do not allow `cli:` frontmatter or `--cli` values outside `claude`/`opencode`. The runner has only those two execution branches, and any other string currently falls into the OpenCode path after corrupting model-flag selection.
 - [2026-05-07] Do not convert frontmatter `session:` with bare `int(...)`; malformed values raise a Python traceback. Validate and raise `SystemExit` with the filename and expected numeric session id.
+- [2026-05-07] Do not let `find_handoff_for` fall back to a cross-epic glob (`docs/roadmap/*/session-NN-handoff.md`) when the current-epic probe fails. The DAG dependency model is intra-epic by construction (`depends_on:` takes session ids within the current epic), so the fallback's only practical firing condition is "parent in the SAME epic produced no handoff" — and it silently grabs the alphabetically-first OTHER epic's handoff, framing it in the prompt as "the only memory of prior work" via build_handoff_section's header. The fix is purely subtractive: drop the second loop; build_handoff_section already suppresses the section header when no entries collected. (bug-159)
 
 ## Decision Log
 

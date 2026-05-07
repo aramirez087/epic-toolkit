@@ -112,18 +112,18 @@ is_worktree_in_use() {
   return 1
 }
 
-# Look up a session id's handoff file under docs/roadmap/<epic>/
-# Search the current epic's roadmap dir first (intra-epic dependency),
-# then fall back to all epic dirs (cross-epic handoff).
+# Look up a session id's handoff file under docs/roadmap/<epic>/.
+# Intra-epic only: the DAG dependency model takes session ids within the
+# current epic, so a cross-epic fallback would only fire when an in-epic
+# parent produced no handoff — and would silently inject an unrelated
+# epic's artifact, framed by build_handoff_section as "the only memory of
+# prior work". Returns empty stdout when not found; build_handoff_section
+# already suppresses the section header in that case. (bug-159)
 find_handoff_for() {
-  local pid="$1" padded
+  local pid="$1" padded cand
   padded="$(printf "%02d" "$pid")"
-  for cand in "$REPO_ROOT/docs/roadmap/$EPIC_NAME_SLUG/session-${padded}-handoff.md"; do
-    [[ -f "$cand" ]] && { echo "$cand"; return; }
-  done
-  for cand in "$REPO_ROOT/docs/roadmap/"*"/session-${padded}-handoff.md"; do
-    [[ -f "$cand" ]] && { echo "$cand"; return; }
-  done
+  cand="$REPO_ROOT/docs/roadmap/$EPIC_NAME_SLUG/session-${padded}-handoff.md"
+  [[ -f "$cand" ]] && echo "$cand"
 }
 
 # Build the multi-parent handoff section for a session.
