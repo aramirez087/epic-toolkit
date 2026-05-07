@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import codecs
 import json
 import os
 import queue
@@ -229,6 +230,18 @@ def main():
     threading.Thread(target=_reader, daemon=True).start()
     line_buf = ""
     eof = False
+    # Streaming UTF-8 decoder. Buffers partial multi-byte sequences across
+    # chunk boundaries — `read1(65536)` returns whatever the underlying pipe
+    # has available, so a 2/3/4-byte UTF-8 codepoint can land with its first
+    # byte(s) at the tail of one chunk and its remainder at the head of the
+    # next. The previous `chunk.decode("utf-8", errors="replace")` per chunk
+    # treated each fragment as its own complete string, replacing every split
+    # codepoint with `�` on both sides — so any em-dash, smart quote, or
+    # non-ASCII filename Claude streamed near a 64KB boundary landed garbled
+    # in the log file and in the live UI's `target` field. An incremental
+    # decoder defers final="False" calls until enough bytes have arrived to
+    # complete the codepoint, so cross-boundary sequences round-trip cleanly.
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
     try:
         while True:
@@ -240,6 +253,10 @@ def main():
             if chunk is not None:
                 if not chunk:
                     eof = True
+                    # Flush any trailing bytes the decoder is still buffering
+                    # (partial multi-byte sequence at producer-EOF) so we
+                    # don't silently drop a final character.
+                    line_buf += decoder.decode(b"", final=True)
                     # Force-flush any trailing partial line (no final newline)
                     # so the parse loop drains it before the outer break test
                     # fires. Without this, a producer that crashes / is killed
@@ -248,7 +265,7 @@ def main():
                     if line_buf and not line_buf.endswith("\n"):
                         line_buf += "\n"
                 else:
-                    line_buf += chunk.decode("utf-8", errors="replace")
+                    line_buf += decoder.decode(chunk)
 
                 while "\n" in line_buf:
                     line, line_buf = line_buf.split("\n", 1)

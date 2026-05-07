@@ -60,7 +60,18 @@ fi
 NON_WOLF="$(printf '%s\n' "$CONFLICTED" | grep -Ev '^\.wolf/' | grep -v '^$' || true)"
 if [[ -n "$NON_WOLF" ]]; then
   echo "Refusing to auto-resolve: non-.wolf/ conflicts present:" >&2
-  printf '  %s\n' $NON_WOLF >&2
+  # Iterate via while-read so paths that contain whitespace or shell-glob
+  # meta (`* ? [`) are printed verbatim. The previous `printf ... $NON_WOLF`
+  # was unquoted on purpose to split lines into separate %s args, but that
+  # also subjects each line to word-splitting AND pathname expansion against
+  # cwd — a conflicted `app/[id]/page.tsx` would either fragment around
+  # spaces or get glob-expanded to whatever happened to match in the user's
+  # working dir, hiding the real conflict from the operator before the
+  # script exits 1.
+  while IFS= read -r _f; do
+    [[ -z "$_f" ]] && continue
+    printf '  %s\n' "$_f" >&2
+  done <<< "$NON_WOLF"
   echo "" >&2
   echo "Resolve those manually first, then re-run this script." >&2
   exit 1
