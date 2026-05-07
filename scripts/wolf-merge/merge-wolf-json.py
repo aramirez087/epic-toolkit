@@ -80,22 +80,32 @@ def merge_buglog(ours, theirs, ancestor=None):
     """
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
         return ours
+    # `dict.get(key, default)` only returns the default when the key is ABSENT.
+    # If a buglog has `"bugs": null` (a partially-flushed write, a hand-edit, a
+    # schema-drift artefact) the call returns None, and `for bug in None` raises
+    # TypeError mid-merge — load() only catches JSONDecodeError/OSError/
+    # UnicodeDecodeError, so the semantic-shape failure propagates out, the
+    # driver exits 1, and git records the file as unresolvable. Same audit
+    # class as bug-035's "audit every open() site" — extended here to "audit
+    # every .get(key, default) site that consumes an iterable". (bug-148)
+    def _bugs_of(src: dict) -> list:
+        return src.get("bugs") or []
     ancestor_occ: dict[str, int] = {}
     if isinstance(ancestor, dict):
-        for bug in ancestor.get("bugs", []):
+        for bug in _bugs_of(ancestor):
             bid = bug.get("id")
             if bid:
                 ancestor_occ[bid] = bug.get("occurrences", 1) or 1
     used_ids = {
         bug.get("id")
         for src in (ours, theirs)
-        for bug in src.get("bugs", [])
+        for bug in _bugs_of(src)
         if bug.get("id")
     }
     by_id = {}
     extras = []
     for src in (ours, theirs):
-        for bug in src.get("bugs", []):
+        for bug in _bugs_of(src):
             bid = bug.get("id")
             if not bid:
                 # Same data-loss class as bug-090's id-collision case: a

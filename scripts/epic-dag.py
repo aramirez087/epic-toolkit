@@ -257,10 +257,22 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         audits already applied to `_strip_inline_comment` (bug-117 apostrophe,
         bug-123 escaped backslash, bug-124 tab-before-`#`, bug-126
         tab-after-`:`); this is the remaining unaudited site. (bug-132)
+
+        Track flow_depth so nested `[...]` / `{...}` items aren't split mid-
+        bracket. `_strip_inline_comment` grew flow_depth tracking via bug-134,
+        but `_split_flow_list` was the symmetric site that still walked at
+        depth-blind state — `[[a, b], c]`'s inner body `[a, b], c` produced
+        `['[a', 'b]', 'c']` instead of `['[a, b]', 'c']`, silently corrupting
+        any nested-flow entry in `touches:` / `produces:` / `depends_on:`.
+        Open-bracket bumps depth, close-bracket decrements; comma is a real
+        item separator only when in_q is None AND flow_depth == 0. Same audit
+        class as bug-117/123/124/126/132 — every parser site that consumes a
+        token boundary must respect quotes AND flow nesting. (bug-149)
         """
         items: list[str] = []
         buf = ""
         in_q: str | None = None
+        flow_depth = 0
         i = 0
         n = len(s)
         while i < n:
@@ -295,7 +307,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             if ch in ('"', "'"):
                 in_q = ch
                 buf += ch
-            elif ch == ",":
+            elif ch in ("[", "{"):
+                flow_depth += 1
+                buf += ch
+            elif ch in ("]", "}"):
+                if flow_depth > 0:
+                    flow_depth -= 1
+                buf += ch
+            elif ch == "," and flow_depth == 0:
                 cleaned = _unquote_scalar(buf.strip())
                 if cleaned:
                     items.append(cleaned)

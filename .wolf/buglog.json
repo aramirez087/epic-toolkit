@@ -2799,6 +2799,93 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T02:10:00Z"
+    },
+    {
+      "id": "bug-147",
+      "timestamp": "2026-05-07T02:50:57.885Z",
+      "error_message": "Missing error handling in _bugs_of",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "Code path had no error handling \u2014 exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T02:50:57.885Z"
+    },
+    {
+      "id": "bug-147",
+      "timestamp": "2026-05-07T02:52:30Z",
+      "error_message": "run-sessions.sh accepts --cli (and `.epic-config.json` `cli`) values outside {claude, opencode}; non-claude strings silently route through run_cli's OpenCode branch and corrupt the model-flag selection.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "epic-dag.py's load_sessions rejects per-session frontmatter `cli:` values outside {claude, opencode} (lines 503-507), but the same defence was missing on the command-line / config-file path. `--cli) CLI_OVERRIDE=\"$2\"; shift 2 ;;` (line 119) and the regex extraction at lines 182-184 took the value verbatim. CLI_OVERRIDE was then assigned to CLI_CMD with only a `command -v` PATH check (line 218). Downstream, run_cli's `if [[ \"$session_cli\" == \"claude\" ]]` (epic-session.sh:208) treats every non-claude string as opencode and invokes `$session_cli run --format json --dangerously-skip-permissions`; `map_model_shorthand` (line 248) also bypasses its mapping because `[[ \"$cli\" == \"opencode\" ]]` is false, so `--model sonnet --cli foo` arrives at the foreign binary as the bare shorthand `sonnet`. Same audit class as bug-138 (frontmatter side already fixed); this is the symmetric runner-side site.",
+      "fix": "Added a whitelist guard right before CLI detection: `if [[ -n \"$CLI_OVERRIDE\" && \"$CLI_OVERRIDE\" != \"claude\" && \"$CLI_OVERRIDE\" != \"opencode\" ]]; then err ...; exit 1; fi`. Catches both `--cli foo` and `.epic-config.json` `\"cli\": \"foo\"` because both funnel through CLI_OVERRIDE. Mirrors the epic-dag.py guard so the validation message names {claude, opencode} explicitly.",
+      "tags": [
+        "found-by-bug-hunt",
+        "cli-validation",
+        "runner",
+        "next-bug-138",
+        "shell"
+      ],
+      "related_bugs": [
+        "bug-138",
+        "bug-142"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T02:52:30Z"
+    },
+    {
+      "id": "bug-148",
+      "timestamp": "2026-05-07T02:52:30Z",
+      "error_message": "merge-wolf-json.py crashes mid-merge with TypeError when buglog.json has `\"bugs\": null` (or any non-iterable bugs value). git records the file as unresolvable and the wolf auto-resolve path silently turns into a real conflict.",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "merge_buglog called `src.get(\"bugs\", [])` at three sites (ancestor scan line 85, used_ids set comprehension line 92, main merge loop line 98). `dict.get(key, default)` only returns the default when the KEY IS ABSENT \u2014 if the key exists with value None (a partially-flushed write, a hand-edit, or schema drift), the call returns None and `for bug in None` raises TypeError. load() only catches JSONDecodeError/OSError/UnicodeDecodeError, so the semantic-shape failure propagates out of merge_buglog, the driver exits 1, and git's merge resolver leaves the .wolf/buglog.json with conflict markers \u2014 defeating the entire point of having a custom merge driver. Same audit class as bug-035's `audit every open() site` admonition, just for `.get(key, default)` consuming an iterable.",
+      "fix": "Added a `_bugs_of(src)` helper that returns `src.get(\"bugs\") or []`, applied at all three sites (ancestor, used_ids, main loop). Now tolerates `\"bugs\": null`, `\"bugs\": 42`, and any other shape that doesn't iterate as a list of bug dicts. Verified: `merge_buglog({'bugs': None}, {'bugs': []}, {'bugs': None})` now returns `{'bugs': []}` instead of crashing.",
+      "tags": [
+        "found-by-bug-hunt",
+        "openwolf",
+        "merge-driver",
+        "buglog",
+        "py",
+        "next-bug-035"
+      ],
+      "related_bugs": [
+        "bug-035",
+        "bug-137"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T02:52:30Z"
+    },
+    {
+      "id": "bug-149",
+      "timestamp": "2026-05-07T02:52:30Z",
+      "error_message": "epic-dag.py's `_split_flow_list` does not track nested flow-list / flow-map brackets, so a nested entry in `touches:` / `produces:` / `depends_on:` (e.g. `tags: [[a, b], c]`) is silently split mid-bracket and yields the wrong number of items.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Asymmetric audit fix. bug-134 added `flow_depth` tracking to `_strip_inline_comment` so nested `[...]` / `{...}` don't trip the `#`-stripper, but the symmetric site \u2014 `_split_flow_list`, the function that consumes the body of the flow list and yields items \u2014 only tracked `in_q` (quote state). It had no `flow_depth` counter, so the inner body of `[[a, b], c]` (i.e. `[a, b], c`) walked at depth-blind state, the first `,` after `[a` triggered a split, and the items came back as `['[a', 'b]', 'c']` instead of `['[a, b]', 'c']`. Downstream the validator (validate-session-deliverables.py) and load_sessions both consume these items as paths/globs/ints \u2014 silently corrupted before they ever reach a typed check. Same defect class as bug-117/123/124/126/132 (every parser site that consumes a token boundary must respect quotes); this extends the audit set to flow nesting.",
+      "fix": "Added a `flow_depth` int alongside `in_q` in `_split_flow_list`. `[`/`{` outside quotes increments, `]`/`}` decrements (clamped to >=0 so a malformed close doesn't underflow). The `,` branch now only fires when `in_q is None AND flow_depth == 0`. Verified end-to-end: parse_frontmatter on `touches: [[a, b], c, \"d, e\"]` now returns `['[a, b]', 'c', 'd, e']` \u2014 preserving both the bug-149 nested case and the bug-132 quoted-comma case.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "parser",
+        "flow-list",
+        "next-bug-132",
+        "next-bug-134",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-124",
+        "bug-126",
+        "bug-132",
+        "bug-134"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T02:52:30Z"
     }
   ]
 }

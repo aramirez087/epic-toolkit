@@ -212,6 +212,22 @@ fi
 # --- Detect CLI ---
 # Prefer --cli override, then the invoking tool's env var, then PATH fallback.
 # OPENCODE_SESSION_ID is set by OpenCode; CLAUDECODE is set by Claude Code.
+#
+# Whitelist CLI_OVERRIDE before the PATH check. epic-dag.py's load_sessions
+# already rejects non-{claude,opencode} values for the per-session `cli:`
+# frontmatter (line 503-507), but the same defence was missing on the
+# command-line / config-file path: `--cli foo` (or a `.epic-config.json`
+# `"cli": "foo"`) was taken verbatim, and as long as `foo` resolved on PATH
+# the runner accepted it. run_cli's `if [[ "$session_cli" == "claude" ]]`
+# branch (epic-session.sh:208) treats EVERY non-claude string as opencode,
+# so `foo` got invoked as `foo run --format json --dangerously-skip-permissions`
+# AND `map_model_shorthand` (line 248) silently passed through unmapped because
+# its `[[ "$cli" == "opencode" ]]` test failed. Same audit class as bug-138 —
+# epic-dag.py was the only fix site; here is the symmetric one. (bug-147)
+if [[ -n "$CLI_OVERRIDE" && "$CLI_OVERRIDE" != "claude" && "$CLI_OVERRIDE" != "opencode" ]]; then
+  err "--cli / .epic-config.json cli must be 'claude' or 'opencode' (got '$CLI_OVERRIDE')."
+  exit 1
+fi
 CLI_CMD=""
 if [[ -n "$CLI_OVERRIDE" ]]; then
   CLI_CMD="$CLI_OVERRIDE"
