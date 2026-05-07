@@ -834,7 +834,34 @@ if [[ -d "$WORKTREE_BASE" ]]; then
     # truncated row is a no-op for the regex match at the stale-id
     # comparison below) instead of failing wholesale.
     case "$1" in
-      SESSION) current_session_ids="$current_session_ids ${3:-}" ;;
+      SESSION)
+        # Normalize the sid via `10#` so a producer-emittable corruption
+        # like `SESSION 1 010 ...` (leading-zero sid from a partial-flush,
+        # NFS read race, schema drift, or hand-edit — same modes the
+        # rest of the bug-192/193/195/196/197/199/200 audit chain
+        # enumerates) registers as the integer 10 here too. Without
+        # normalization, `current_session_ids` accumulates the raw
+        # ` 010` token, while the per-worktree `stale_id` below at
+        # line ~851 IS already `10#`-normalized via `$((10#$stale_id))`
+        # — the substring regex match `[[ " 010 " =~ " 10 " ]]` then
+        # silently fails (the pattern ` 10 ` requires a space before
+        # `10`, but in ` 010 ` the `10` is preceded by `0`), the cleanup
+        # loop classifies the corresponding worktree as orphaned even
+        # though it belongs to the current run's DAG, and the safety
+        # guards (is_worktree_in_use, has_unmerged) gate whether
+        # `git worktree remove --force` proceeds — risking silent
+        # destruction of a worktree the runner is about to recreate.
+        # Symmetric audit gap to bug-197's bash-side parser fix at line
+        # 616-617 (which `10#`-normalized the SAME field for the array-
+        # subscript consumer at SESSION_FILE_BASENAME[$sid] but not
+        # for this cleanup-loop consumer). Numeric guard mirrors the
+        # bug-193 SESSION-row regex check so a non-numeric corruption
+        # falls through cleanly instead of letting `$((10#abc))` raise
+        # under `set -e`. (bug-203)
+        if [[ "${3:-}" =~ ^[0-9]+$ ]]; then
+          current_session_ids="$current_session_ids $((10#${3}))"
+        fi
+        ;;
     esac
   done < "$DAG_TMP"
 
@@ -1058,7 +1085,32 @@ with open(pf, encoding='utf-8', errors='replace') as f:
             int(parts[2])  # validate sid is numeric for parity with the UI consumer
         except ValueError:
             continue
-        sid, slug = parts[2], parts[5]
+        # Normalize sid via int → str round-trip to strip leading zeros.
+        # Bug-197 patched the bash-side parser at line 569-651 to `10#`-
+        # normalize sw/sid (so a producer-emittable corruption like
+        # `SESSION 1 010 ...` registers in WAVE_IDS[1] / SESSION_*[10]
+        # instead of WAVE_IDS[1] / SESSION_*[8]) and the .epic-config.json
+        # / META wave_count / cmdline numeric flags. This heredoc init
+        # was the symmetric audit gap: parts[2] is read verbatim as the
+        # status-file key, so a `010` corruption lands `sessions["010"]`
+        # while every subsequent mark_session call writes `sessions["10"]`
+        # (mark_session uses `str(session_id)` where session_id is the
+        # already-`10#`-normalized bash int). The status file ends up
+        # with both keys — `"010"` (pending forever, orphaned by every
+        # consumer that round-trips the sid through `int`) and `"10"`
+        # (the live entry). The dashboard's parse_bash_plan keys via
+        # `int(parts[2])` and looks up via `str(int(parts[2]))="10"`, so
+        # it never sees the orphan; the pollution survives across the
+        # entire run, the cleanup at the success path's tearstdown
+        # removes only `${STATUS_FILE}` itself but the orphan key already
+        # corrupted any external watcher reading the file mid-run. Same
+        # producer-corruption modes as bug-192/193/195/196/197/199/200
+        # (partial-flush from a SIGKILL'd `cp` mid-write, NFS read race,
+        # schema drift from a future writer, hand-edit for debugging).
+        # The `int(parts[2])` validation above already guarantees the
+        # value is parseable as a base-10 integer; the round-trip here
+        # is purely a string-canonicalisation step. (bug-202)
+        sid, slug = str(int(parts[2])), parts[5]
         sessions[sid] = {
             'status': 'pending', 'slug': slug, 'wave': wn,
             'title': slug.replace('-', ' ').title(),

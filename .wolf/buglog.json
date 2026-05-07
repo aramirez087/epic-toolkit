@@ -4041,6 +4041,68 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T22:25:48.159685Z"
+    },
+    {
+      "id": "bug-202",
+      "timestamp": "2026-05-07T22:44:07.003120Z",
+      "error_message": "run-sessions.sh status-init heredoc at line 1046-1069 does not normalize the SESSION-row sid before using it as the JSON status-file key. parts[2] is read verbatim \u2014 `sid, slug = parts[2], parts[5]` \u2014 so a producer-emittable corruption like `SESSION 1 010 session-10-foo.md - foo 1 - -` (partial-flush from a SIGKILL'd `cp` mid-write of the plan file, NFS read race, schema drift from a future writer, hand-edit for debugging \u2014 same modes the bug-192/193/195/196/197/199/200 audit chain enumerates) lands `sessions['010'] = {status: 'pending', ...}` in the status JSON written at init time. Every subsequent mark_session call writes `sessions['10']` \u2014 mark_session's heredoc converts via `key = str(session_id)` where session_id is the bash-side sid that bug-197 already normalized via `$((10#$sid))` to the integer 10. The status file ends up with TWO entries for the same session: `'010'` (pending forever, orphaned) and `'10'` (the live entry receiving running/done/failed updates). The dashboard's parse_bash_plan keys via `int(parts[2])` and looks up the status entry via `str(int(parts[2]))=='10'` \u2014 so the orphan never affects the user-visible dashboard rendering, but it persists in the status file for the entire run's duration and is visible to any external watcher that polls the JSON without round-tripping every key through int(). Symmetric audit gap to bug-197's bash-side parser fix at run-sessions.sh:616-617 (which `10#`-normalized the SAME field for the array-subscript consumer at SESSION_FILE_BASENAME[$sid] / WAVE_IDS[$sw] but not for this Python heredoc consumer), and to bug-203's cleanup-loop fix (the THIRD consumer of the SAME plan file's SESSION rows). Same audit class as bug-194/196/197/198 \u2014 every numeric value that flows from a producer-emitted scalar into a downstream consumer must be normalized at the consumer boundary, not just at one of multiple consumer sites. The `int(parts[2])` validation already in place at line 1058 (added by the bug-192-class audit chain) confirms parseability but did not normalize the string used as the dict key \u2014 the round-trip `str(int(parts[2]))` is the minimal canonicalization that strips leading zeros while preserving the rest of the string-key invariant the producer/consumer protocol requires.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "bug-197's normalization audit thread covered the bash-side parser at line 569-651 (SESSION row sw/sid \u2192 array subscripts), the .epic-config.json regex extracts at line 234-262, the META wave_count parser at line 555-563, and the cmdline numeric flag validator at line 161-198 \u2014 but stopped at the bash boundary. The Python heredoc that initializes the shared status-file (line 1046-1069) is a SEPARATE consumer of the SAME plan file, reading parts[2] verbatim as the dict key. Producer corruption shapes that bug-197 was supposed to coerce-and-normalize at every consumer boundary still land verbatim into the status JSON's sessions key namespace from this site, creating an asymmetry between the init's key set ('010') and the runtime updater's key set ('10'). Same producer-corruption modes as bug-192/193/195/196/197/199/200 (partial-flush, NFS read race, schema drift, hand-edit). The string-canonicalization fix mirrors the bash-side `$((10#$sid))` invariant at the consumer protocol's other endpoint, so init-time and runtime keys agree.",
+      "fix": "Replace `sid, slug = parts[2], parts[5]` with `sid, slug = str(int(parts[2])), parts[5]` at run-sessions.sh:1061. The `int(parts[2])` validation already in place at line 1058 (introduced by the bug-192-class audit chain) guarantees the value is parseable as a base-10 integer; round-tripping through int strips leading zeros so `'010'` becomes `'10'` (matching the bash-side `$((10#$sid))` normalization), `'00'` becomes `'0'`, and well-formed values (`'10'`, `'5'`) round-trip unchanged. Verified by reproducing the pre-patch corruption: `SESSION 1 010 session-10-foo.md - foo 1 - -` \u2192 init writes `sessions['010']`; post-patch the same row writes `sessions['10']`, agreeing with mark_session's `str(session_id)` key. Well-formed `SESSION 1 5 session-05-bar.md - bar 1 - -` round-trips to `sessions['5']` unchanged on both pre-patch and post-patch trees.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-extension",
+        "run-sessions",
+        "plan-file",
+        "leading-zero",
+        "octal",
+        "consumer-protocol",
+        "bash",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-192",
+        "bug-193",
+        "bug-195",
+        "bug-196",
+        "bug-197",
+        "bug-199",
+        "bug-200",
+        "bug-203"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T22:44:07.003120Z"
+    },
+    {
+      "id": "bug-203",
+      "timestamp": "2026-05-07T22:44:07.003120Z",
+      "error_message": "run-sessions.sh stale-worktree-cleanup loop at line ~837 reads SESSION rows from DAG_TMP for the second pass and accumulates `current_session_ids=\"$current_session_ids ${3:-}\"` \u2014 the `${3:-}` default added by bug-200 prevents the truncated-row crash, but the value is appended verbatim without `10#` normalization. A producer-emittable corruption (partial-flush from a SIGKILL'd `cp` mid-write of the plan file, NFS read race, schema drift, hand-edit \u2014 same modes bug-192/193/195/196/197/199/200 enumerate) like `SESSION 1 010 session-10-foo.md - foo 1 - -` lands `current_session_ids=' 010'`. The downstream stale_id at line ~851 IS already normalized via `stale_id=\"$((10#$stale_id))\"` (so the worktree directory name `epic--name--s10-foo` produces `stale_id=10`), but the substring match `[[ \" $current_session_ids \" =~ \" $stale_id \" ]]` then compares ` 010 ` against pattern ` 10 ` \u2014 the regex requires a SPACE before `10` but in the haystack the `10` is preceded by `0`, so the match silently fails. The cleanup loop classifies the worktree as orphaned even though it belongs to the current run's DAG, the safety guards (is_worktree_in_use, has_unmerged) gate whether `git worktree remove --force` proceeds, and a worktree the runner is about to recreate risks getting force-removed if its branch happens to share HEAD with trunk and no in-use process holds it. Symmetric audit gap to bug-197's bash-side parser fix at line 616-617 (which `10#`-normalized the same field for the array-subscript consumer at SESSION_FILE_BASENAME[$sid] / WAVE_IDS[$sw] but not for this cleanup-loop consumer \u2014 the THIRD consumer of the SAME SESSION row data after the main parser and the heredoc init). Same audit class as bug-194/196/197/198/202 \u2014 every numeric value that flows from a producer-emitted scalar into a downstream consumer must be normalized at the consumer boundary.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "bug-197 normalized sw/sid at the main bash-side parser (line 616-617) and bug-200 added the `${3:-}` truncation guard at this cleanup loop (line 837), but neither thread carried the `10#` invariant into the cleanup loop's accumulator. The loop then mixed two encodings of the same numeric field \u2014 raw decimal-string from `$3` versus `10#`-normalized integer from the worktree-name regex \u2014 and the substring match relies on lexical equality. Same producer-corruption modes as bug-192/193/195/196/197/199/200/202; same downstream-asymmetry pattern as bug-202 where one consumer normalizes and another doesn't. The numeric-regex pre-check mirrors the bug-193 SESSION-row regex check so a non-numeric corruption falls through cleanly instead of letting `$((10#abc))` raise under `set -e`.",
+      "fix": "Replace `case \"$1\" in SESSION) current_session_ids=\"$current_session_ids ${3:-}\" ;; esac` with a numeric-validating, `10#`-normalizing branch: `case \"$1\" in SESSION) if [[ \"${3:-}\" =~ ^[0-9]+$ ]]; then current_session_ids=\"$current_session_ids $((10#${3}))\"; fi ;; esac` at run-sessions.sh:836-863. Verified: pre-patch `SESSION 1 010 ...` \u2192 `current_session_ids=' 010'` and `[[ ' 010 ' =~ ' 10 ' ]]` is FALSE (worktree `--s10-...` wrongly classified as orphan); post-patch the same input produces `current_session_ids=' 10'` and the match succeeds. Truncated `SESSION` / `SESSION 1` rows still skip cleanly via the regex guard (mirrors bug-200's defaulting). Well-formed `SESSION 2 5 ...` registers `' 5'` unchanged. A non-DAG worktree (`stale_id=99`) still correctly fails the match.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-extension",
+        "run-sessions",
+        "plan-file",
+        "cleanup",
+        "leading-zero",
+        "octal",
+        "consumer-protocol",
+        "sh"
+      ],
+      "related_bugs": [
+        "bug-192",
+        "bug-193",
+        "bug-195",
+        "bug-196",
+        "bug-197",
+        "bug-199",
+        "bug-200",
+        "bug-202"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T22:44:07.003120Z"
     }
   ]
 }
