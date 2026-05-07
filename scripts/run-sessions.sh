@@ -1635,7 +1635,24 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
           SESSION_LIST="
 (No sessions were merged in this run)"
         fi
-        DIFF_STATS="$(git -C "$REPO_ROOT" diff --shortstat "${DEFAULT_BRANCH}...HEAD" 2>/dev/null || echo "")"
+        # Prefer `origin/<default>` over the local `<default>` ref for the PR
+        # diff stats. `git fetch --prune` (cleanup_merged_epic_branches at the
+        # tail of the run) updates the remote-tracking ref but does NOT
+        # fast-forward the local one, AND the auto-rebase at line 1589 just
+        # rebased HEAD onto `origin/$REBASE_DEFAULT` — so any time the user's
+        # local `<default>` lags behind origin (very common in worktree
+        # workflows), `<local>...HEAD` walks the merge-base back to the
+        # local tip and the shortstat absorbs every commit that landed on
+        # origin between the two — inflating the PR body's "Stats" section
+        # with churn that isn't part of this epic. Same audit pattern as
+        # cleanup_merged_epic_branches in epic-git.sh:255-258 where the
+        # local-vs-origin lag was already documented; this is the symmetric
+        # site that was missed.
+        DEFAULT_REF="$DEFAULT_BRANCH"
+        if git -C "$REPO_ROOT" rev-parse --verify --quiet "origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
+          DEFAULT_REF="origin/$DEFAULT_BRANCH"
+        fi
+        DIFF_STATS="$(git -C "$REPO_ROOT" diff --shortstat "${DEFAULT_REF}...HEAD" 2>/dev/null || echo "")"
 
         PR_TITLE="feat: ${EPIC_NAME}"
         PR_BODY="## Summary
@@ -1732,7 +1749,15 @@ ${DIFF_STATS}
 
   ok ""
   ok "Branch ready: $BRANCH"
-  ok "Next step  : gh pr create --base main --head $BRANCH"
+  # Use the resolved BASE_BRANCH (line 943-945 detects origin/HEAD or falls
+  # back to "main") rather than hardcoding `main`. On a repo whose default
+  # branch is `master` / `develop` / `trunk`, the previous form silently
+  # printed an unrunnable `gh pr create --base main` — the user copy-pasted
+  # it and got "branch main does not exist on remote", with no signal that
+  # the script's own advice was wrong. BASE_BRANCH is always resolved by
+  # the time we reach this success-path tail (the resolution block at line
+  # 943 runs unconditionally before any worktree setup).
+  ok "Next step  : gh pr create --base $BASE_BRANCH --head $BRANCH"
 else
   write_epic_result "failed"
   err "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

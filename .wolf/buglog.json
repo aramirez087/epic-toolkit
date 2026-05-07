@@ -4103,6 +4103,46 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T22:44:07.003120Z"
+    },
+    {
+      "id": "bug-204",
+      "timestamp": "2026-05-07T23:05:18Z",
+      "error_message": "PR body's 'Stats' shortstat over-counts whenever the user's local <default> branch lags behind origin",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Auto-PR shortstat at line 1638 used `${DEFAULT_BRANCH}...HEAD` (bare local branch name). After the auto-rebase at line 1589 lands HEAD on top of origin/<default>, the merge-base of (local <default>, HEAD) is the LOCAL tip \u2014 and `git fetch --prune` updates remote-tracking refs without fast-forwarding the local branch, so users in worktree workflows routinely have local <default> behind origin. The triple-dot diff then walks back to the lagging local tip and absorbs every commit that landed on origin between the two refs into the shortstat. Verified on a fixture (local main 2 commits behind origin/main, epic adds 1 file): pre-patch reports `3 files changed`, post-patch reports `1 file changed`. Symmetric audit gap to bug-122 in cleanup_merged_epic_branches (epic-git.sh:255-258) which already prefers `origin/$default_branch` when it resolves; the auto-PR site never got the same treatment.",
+      "fix": "Resolve a DEFAULT_REF that prefers `origin/$DEFAULT_BRANCH` (when it verifies via `git rev-parse --verify --quiet`) and falls back to `$DEFAULT_BRANCH` otherwise, then feed `${DEFAULT_REF}...HEAD` into the shortstat. Mirrors the cleanup_merged_epic_branches pattern exactly.",
+      "tags": [
+        "pr",
+        "stats",
+        "git-diff",
+        "rebase",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-122"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T23:05:18Z"
+    },
+    {
+      "id": "bug-205",
+      "timestamp": "2026-05-07T23:06:34Z",
+      "error_message": "Success-path 'Next step: gh pr create --base main' suggestion was hardcoded to 'main', producing an unrunnable command on master/develop/trunk-default repos",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The user-facing advice at line 1752 (printed in the success path when AUTO_PR was disabled or gh wasn't available) hardcoded `--base main` even though BASE_BRANCH was already resolved at line 943-945 to the actual default \u2014 either the user's `--base` value, the value of `git symbolic-ref refs/remotes/origin/HEAD`, or the literal fallback `main`. On a repo whose default is `master` / `develop` / `trunk` the user would copy-paste the suggestion and `gh pr create` would fail with `branch main does not exist on remote` \u2014 silently misleading advice the user has no way to fix. Symmetric audit gap to bug-122 (cleanup_merged_epic_branches in epic-git.sh) which already prefers the resolved default over hardcoded `main`; this user-visible string was the remaining unaudited site.",
+      "fix": "Replace the hardcoded `main` with `$BASE_BRANCH`. The variable is always set at the success-path tail because the resolution block at line 943-945 runs unconditionally before any worktree setup or wave loop \u2014 `[[ -z \"$BASE_BRANCH\" ]]` falls through to `git symbolic-ref refs/remotes/origin/HEAD` then to literal `main`, so `$BASE_BRANCH` is guaranteed non-empty downstream.",
+      "tags": [
+        "pr",
+        "ux",
+        "default-branch",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-122",
+        "bug-204"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T23:06:34Z"
     }
   ]
 }
