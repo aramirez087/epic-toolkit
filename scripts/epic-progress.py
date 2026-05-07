@@ -58,7 +58,34 @@ def update_status_file(path: str, session_id: int, update: dict) -> None:
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
         key = str(session_id)
-        data.setdefault('sessions', {}).setdefault(key, {}).update(update)
+        # Symmetric guard to mark_session in epic-session.sh. dict.get
+        # AND dict.setdefault both return the EXISTING value when the
+        # key is present — `setdefault('sessions', {})` returns None
+        # whenever data['sessions'] is null (the default fires only for
+        # ABSENT keys, not null values), and the next `.setdefault(...)`
+        # on None raises AttributeError. Same chain at the inner
+        # session entry: a `{"sessions": {"1": null}}` shape lets
+        # `setdefault(key, {})` return None and the next `.update(...)`
+        # raises AttributeError too.
+        # The outer `except Exception: pass` here silently swallows the
+        # crash (best-effort discipline), but the broken state persists
+        # in the file and every subsequent update call fails the same
+        # way — the user loses live progress for the rest of the run
+        # with no diagnostic. Same audit class as bug-167/175/178/183/
+        # 184. Coerce non-dict shapes to {} at every level so the writer
+        # rebuilds the missing structure rather than crashing on it.
+        # (bug-186)
+        if not isinstance(data, dict):
+            data = {}
+        sessions_obj = data.get('sessions')
+        if not isinstance(sessions_obj, dict):
+            sessions_obj = {}
+            data['sessions'] = sessions_obj
+        entry = sessions_obj.get(key)
+        if not isinstance(entry, dict):
+            entry = {}
+            sessions_obj[key] = entry
+        entry.update(update)
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)

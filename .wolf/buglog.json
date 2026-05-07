@@ -3635,6 +3635,60 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T17:36:02.000Z"
+    },
+    {
+      "id": "bug-185",
+      "timestamp": "2026-05-07T18:13:46.745Z",
+      "error_message": "epic-ui.py live dashboard thread crashes with `AttributeError: 'NoneType' object has no attribute 'get'` whenever a status-file session entry lands the literal None \u2014 the dict.get default fires only for ABSENT keys, not null values, so a status file with `\"sessions\": {\"1\": null}` (hand-edit, schema drift from a future writer that emitted partials, a buggy out-of-band hook overwriting the file outside the lock protocol) returns None at _get's `self.status.get(str(sid), {})`, and the next `d.get('status', 'pending')` raises AttributeError \u2014 the dashboard's _build_lines() / _redraw() crashes mid-render, the main loop dies, the live progress display goes dead, and the user loses visibility into running waves until they re-launch the runner. Symmetric site `_print_changes` (non-TTY mode iterating self.status.items() + st_data.get('status', 'pending')) crashes the same way on the same trigger. Outer-level `load_status` has the same defect: `json.load(f).get('sessions', {})` returns the literal None when the file has `\"sessions\": null` (key exists, value is null); a non-dict return type then breaks every downstream caller.",
+      "file": "scripts/epic-ui.py",
+      "root_cause": "Same audit class as bug-167/175/178/180/183/184 extended to the status-file consumer in epic-ui.py. dict.get(KEY, default) only returns the default for ABSENT keys, NOT for keys with a null value (or any non-dict value). load_status's `.get('sessions', {})`, _get's `self.status.get(str(sid), {})`, and _print_changes's `st_data.get('status', 'pending')` all assumed the producer would only emit dict shapes; under any producer-emitted null/non-dict, the next attribute-style access raises AttributeError and kills the UI thread.",
+      "fix": "Three coercion guards mirroring the bug-176/180 INNER-vs-OUTER pattern: load_status coerces non-dict sessions to {} before returning so downstream callers can trust the type; _get coerces non-dict d to {} so per-field defaults below the guard apply cleanly; _print_changes skips non-dict st_data so the iteration continues past corrupt entries instead of dying mid-tick. Verified by reproducing all three crash paths on the pre-patch tree (sessions=null at outer, sessions[1]=null at inner, sessions=[list] at outer) and confirming all three return clean defaults / skip cleanly on the patched tree, with well-formed entries still routed through the original render path.",
+      "tags": [
+        "audit-extension",
+        "dict-get-null-default",
+        "status-file",
+        "epic-ui",
+        "sigpipe-misclass-cousin",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-167",
+        "bug-175",
+        "bug-178",
+        "bug-180",
+        "bug-183",
+        "bug-184"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T18:13:46.745Z"
+    },
+    {
+      "id": "bug-186",
+      "timestamp": "2026-05-07T18:13:46.745Z",
+      "error_message": "mark_session (epic-session.sh Python heredoc) and update_status_file (epic-progress.py) crash with AttributeError / TypeError on producer-emitted null shapes the consumer can't interpret. mark_session line 318 `entry = data['sessions'].setdefault(sid, {})` fails three ways: (a) data is non-dict (file is `null`/list/str): `data['sessions']` raises TypeError on subscript; (b) data['sessions'] is None or non-dict: `.setdefault(...)` raises AttributeError; (c) data['sessions'][sid] is null: `setdefault(sid, {})` returns None (default fires only for ABSENT keys, not null values), then `entry['status'] = st` raises TypeError ('NoneType does not support item assignment'). The mark_session heredoc has no try/except around the body, so any of these propagate out, the Python exits non-zero, and the shell side doesn't check the exit code \u2014 the status update is silently dropped, the corrupted file is left intact, and every subsequent mark_session call fails the same way until manual repair. update_status_file's symmetric chain `data.setdefault('sessions', {}).setdefault(key, {}).update(update)` has identical failure modes; its outer `except Exception: pass` swallows the crash but the broken state persists in the file and every subsequent update call fails the same way \u2014 the user loses live progress for the rest of the run with no diagnostic.",
+      "file": "scripts/lib/epic-session.sh, scripts/epic-progress.py",
+      "root_cause": "Same audit class as bug-167/175/178/180/183/184/185 extended to the status-file WRITERS. Every consumer of `.get(key, default)` AND `.setdefault(key, default)` must reject inputs the producer can emit but the consumer can't interpret. setdefault has the same default-fires-only-for-absent-keys semantics as get \u2014 a present-but-null key returns the literal None, and the next attribute-style access (`.setdefault` chain, `.update`, item assignment) raises. The previous fixes audited the OUTER container shapes (data being a dict, sessions being a dict via setdefault) but stopped there; the INNER session entry was left trusting the producer to emit a dict at every key. Producer scenarios: hand-edit (rare), schema drift across toolkit versions, a future buggy writer that emits null in a partial-flush, or a user hook that touches the status file outside the lock+os.replace protocol.",
+      "fix": "Three-level isinstance(dict) coercion at every read site, mirroring the bug-148/154/182 _bugs_of pattern: `isinstance(data, dict)` (rebuild data={} if file root is non-dict), `isinstance(sessions_obj, dict)` (rebuild and re-attach if data['sessions'] is null/non-dict), `isinstance(entry, dict)` (rebuild and re-attach if sessions[sid] is null/non-dict). Apply at both mark_session's heredoc and update_status_file. The writer rebuilds the missing structure rather than crashing on it, the next os.replace makes the file well-formed again, and downstream readers see the recovered shape. Verified by reproducing all crash chains on the pre-patch tree (data=null, sessions=null, sessions[sid]=null, all four combinations across both consumers) and confirming all return rc=0 with the malformed shape transparently rebuilt; well-formed input is preserved (fields not in the update payload, like slug, are kept).",
+      "tags": [
+        "audit-extension",
+        "dict-setdefault-null-default",
+        "status-file",
+        "mark-session",
+        "update-status-file",
+        "silent-failure",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-167",
+        "bug-175",
+        "bug-178",
+        "bug-180",
+        "bug-183",
+        "bug-184",
+        "bug-185"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T18:13:46.745Z"
     }
   ]
 }

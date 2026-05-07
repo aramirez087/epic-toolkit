@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 3683465,
-    "total_reads": 772,
-    "total_writes": 316,
-    "total_sessions": 70,
-    "anatomy_hits": 738,
+    "total_tokens_estimated": 3723576,
+    "total_reads": 778,
+    "total_writes": 320,
+    "total_sessions": 72,
+    "anatomy_hits": 744,
     "anatomy_misses": 34,
     "repeated_reads_blocked": 440,
-    "estimated_savings_vs_bare_cli": 6870878
+    "estimated_savings_vs_bare_cli": 6872078
   },
   "sessions": [
     {
@@ -7877,6 +7877,79 @@
         "writes_count": 6,
         "repeated_reads_blocked": 4,
         "anatomy_lookups": 11
+      }
+    },
+    {
+      "id": "session-2026-05-07-1130",
+      "started": "2026-05-07T17:30:37.732Z",
+      "ended": "2026-05-07T17:37:37.851Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 13185,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 7567,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+          "tokens_estimated": 3373,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py",
+          "tokens_estimated": 3346,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 4737,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
+          "tokens_estimated": 6739,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+          "tokens_estimated": 926,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+          "tokens_estimated": 65,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+          "tokens_estimated": 65,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+          "tokens_estimated": 108,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 38947,
+        "output_tokens_estimated": 1164,
+        "reads_count": 6,
+        "writes_count": 4,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 6
       }
     }
   ],

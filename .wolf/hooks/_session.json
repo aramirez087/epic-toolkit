@@ -1,68 +1,10 @@
 {
-  "session_id": "session-2026-05-07-1130",
-  "started": "2026-05-07T17:30:37.732Z",
-  "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
-      "count": 1,
-      "tokens": 13185,
-      "first_read": "2026-05-07T17:30:54.704Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
-      "count": 1,
-      "tokens": 7567,
-      "first_read": "2026-05-07T17:31:20.195Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
-      "count": 1,
-      "tokens": 3373,
-      "first_read": "2026-05-07T17:31:36.431Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
-      "count": 1,
-      "tokens": 3346,
-      "first_read": "2026-05-07T17:32:04.059Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
-      "count": 1,
-      "tokens": 4737,
-      "first_read": "2026-05-07T17:32:20.339Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 1,
-      "tokens": 6739,
-      "first_read": "2026-05-07T17:32:48.243Z"
-    }
-  },
-  "files_written": [
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
-      "action": "edit",
-      "tokens": 926,
-      "at": "2026-05-07T17:34:35.843Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
-      "action": "edit",
-      "tokens": 65,
-      "at": "2026-05-07T17:34:40.643Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
-      "action": "edit",
-      "tokens": 65,
-      "at": "2026-05-07T17:34:45.125Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
-      "action": "edit",
-      "tokens": 108,
-      "at": "2026-05-07T17:34:49.906Z"
-    }
-  ],
-  "edit_counts": {
-    "scripts/wolf-merge/merge-wolf-json.py": 4
-  },
-  "anatomy_hits": 6,
+  "session_id": "session-2026-05-07-1213",
+  "started": "2026-05-07T18:13:23.204Z",
+  "files_read": {},
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 0,
   "anatomy_misses": 0,
   "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,

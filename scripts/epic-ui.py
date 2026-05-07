@@ -139,12 +139,29 @@ def parse_bash_plan(plan_file: str) -> dict:
 
 
 def load_status(path: str) -> dict:
-    """Load shared status JSON. Returns empty dict on any error."""
+    """Load shared status JSON. Returns empty dict on any error.
+
+    Defends the OUTER level against producer-emitted null shapes the
+    consumer can't interpret. dict.get's default fires only for ABSENT
+    keys, not null values: a status file with `"sessions": null` (a
+    hand-edit, a schema-drift artefact from a future writer, or a buggy
+    hook overwriting the file outside the lock protocol) returns the
+    literal None at `.get('sessions', {})`, and downstream callers
+    (`self.status.items()` in _print_changes, `self.status.get(str(sid),
+    {})` in _get) raise AttributeError on the None — the dashboard's
+    main loop dies and the live progress display goes dead until the
+    user re-launches the runner. Same audit class as
+    bug-167/175/178/183/184 — every consumer of `.get(key, default)`
+    must reject inputs the producer can emit but the consumer can't
+    interpret. Coerce non-dict shapes to {} so downstream call sites
+    can trust the type.
+    """
     try:
         with open(path, encoding='utf-8') as f:
-            return json.load(f).get('sessions', {})
+            sessions = json.load(f).get('sessions', {})
     except Exception:
         return {}
+    return sessions if isinstance(sessions, dict) else {}
 
 
 # ── Live UI renderer ─────────────────────────────────────────────────────────
@@ -164,7 +181,19 @@ class EpicUI:
     # ── helpers ─────────────────────────────────────────────────────────────
 
     def _get(self, sid: int) -> dict:
+        # Symmetric INNER-level guard alongside load_status's outer-level
+        # one. dict.get's default fires only for ABSENT keys, not null
+        # values: a status file with `"sessions": {"1": null}` (one
+        # session entry written as null by a hand-edit, schema drift,
+        # or a buggy out-of-band writer) returns the literal None here,
+        # and the next `d.get(...)` raises AttributeError — the
+        # dashboard's _build_lines() / _redraw() crashes mid-render,
+        # the main loop dies, and the live progress display goes dead.
+        # Same audit class as bug-167/175/178/183/184. Coerce non-dict
+        # entries to {} so the per-field defaults below apply cleanly.
         d = self.status.get(str(sid), {})
+        if not isinstance(d, dict):
+            d = {}
         return {
             'status':  d.get('status',  'pending'),
             'step':    d.get('step',    0),
@@ -330,6 +359,16 @@ class EpicUI:
     def _print_changes(self) -> None:
         """Print one line per status transition (no cursor movement)."""
         for sid_str, st_data in self.status.items():
+            # Symmetric guard to _get above. The Claude Code / piped
+            # non-TTY path iterates entries directly, so a single null
+            # session entry crashes the per-tick UI update without
+            # killing the runner — but the user loses every subsequent
+            # status-transition line, defeating the append-only fallback.
+            # Coerce-and-skip rather than coerce-to-{} since there are no
+            # meaningful fields to print for an entry that was never
+            # populated. (bug-185)
+            if not isinstance(st_data, dict):
+                continue
             status = st_data.get('status', 'pending')
             key    = f'{sid_str}:{status}'
             if key in self._seen_states:

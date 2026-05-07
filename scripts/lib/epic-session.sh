@@ -315,7 +315,37 @@ else:
     sys.exit(0)
 try:
     with open(sf, encoding='utf-8') as f: data = json.load(f)
-    entry = data['sessions'].setdefault(sid, {})
+    # Defend against producer-emitted shapes the consumer can't interpret.
+    # dict.get's default fires only for ABSENT keys, not null values, so
+    # `data['sessions'][sid]` lands None whenever a hand-edit, schema drift,
+    # or out-of-band writer sets the entry to null. The previous
+    # `data['sessions'].setdefault(sid, {})` chain failed three ways:
+    #   • data not a dict (file is `null`/list/str): `data['sessions']`
+    #     raises TypeError on subscript.
+    #   • data['sessions'] is None or non-dict: `.setdefault(...)` raises
+    #     AttributeError.
+    #   • data['sessions'][sid] is null: `setdefault(sid, {})` returns
+    #     None (default fires only for absent keys), then `entry['status']
+    #     = st` raises TypeError ("'NoneType' does not support item
+    #     assignment").
+    # The mark_session heredoc has no try/except around the body, so any
+    # of these propagate out, the Python exits non-zero, and the shell
+    # side doesn't check the exit code — the status update is silently
+    # dropped, the corrupted file is left intact, and every subsequent
+    # mark_session call fails the same way until manual repair. Same
+    # audit class as bug-167/175/178/183/184. Coerce non-dict shapes to
+    # an empty dict at every level so the writer rebuilds the missing
+    # structure rather than crashing on it. (bug-186)
+    if not isinstance(data, dict):
+        data = {}
+    sessions_obj = data.get('sessions')
+    if not isinstance(sessions_obj, dict):
+        sessions_obj = {}
+        data['sessions'] = sessions_obj
+    entry = sessions_obj.get(sid)
+    if not isinstance(entry, dict):
+        entry = {}
+        sessions_obj[sid] = entry
     entry['status'] = st
     if st == 'running': entry['started_at'] = time.time()
     if elapsed > 0: entry['elapsed'] = elapsed
