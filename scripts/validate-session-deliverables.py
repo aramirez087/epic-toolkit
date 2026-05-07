@@ -87,14 +87,52 @@ def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
     # (`[abc]`, `[a-z]`, `[!x]`) are no longer respected — but in practice
     # `produces:` never uses them, while Next.js/Remix dynamic-route segments
     # are common. (bug-141)
+    #
+    # Globstar (`**`) means "zero or more path segments" per gitignore /
+    # npm-glob / extended-glob convention. The naive char-by-char rule
+    # `* → .*` translates `**` into `.*.*`, which still requires at least the
+    # trailing literal `/` to be present in the path — so `app/**/page.tsx`
+    # silently rejects `app/page.tsx` (the zero-segment case the user is
+    # explicitly opting in to with `**`). Pre-rewrite the four globstar
+    # contexts before the char loop so the zero-segment case actually
+    # matches: `/**/` → `(?:/.*)?/`, `**/` at start → `(?:.*/)?`, `/**` at
+    # end → `(?:/.*)?`, bare `**` → `.*`. Single `*` keeps its existing
+    # cross-segment-permissive `.*` translation (changing that would be a
+    # behavior change beyond this bug). (bug-161)
+    PH_MID = "\x00GS_MID\x00"
+    PH_PREFIX = "\x00GS_PRE\x00"
+    PH_SUFFIX = "\x00GS_SUF\x00"
+    PH_ALONE = "\x00GS_ALL\x00"
+    s = declared.replace("/**/", PH_MID)
+    if s.startswith("**/"):
+        s = PH_PREFIX + s[3:]
+    if s.endswith("/**"):
+        s = s[:-3] + PH_SUFFIX
+    s = s.replace("**", PH_ALONE)
     pattern = ""
-    for ch in declared:
-        if ch == "*":
+    i = 0
+    while i < len(s):
+        if s.startswith(PH_MID, i):
+            pattern += "(?:/.*)?/"
+            i += len(PH_MID)
+        elif s.startswith(PH_PREFIX, i):
+            pattern += "(?:.*/)?"
+            i += len(PH_PREFIX)
+        elif s.startswith(PH_SUFFIX, i):
+            pattern += "(?:/.*)?"
+            i += len(PH_SUFFIX)
+        elif s.startswith(PH_ALONE, i):
             pattern += ".*"
-        elif ch == "?":
-            pattern += "."
+            i += len(PH_ALONE)
         else:
-            pattern += re.escape(ch)
+            ch = s[i]
+            if ch == "*":
+                pattern += ".*"
+            elif ch == "?":
+                pattern += "."
+            else:
+                pattern += re.escape(ch)
+            i += 1
     rx = re.compile(f"^{pattern}$")
     return [p for p in changed_paths if rx.match(p)]
 

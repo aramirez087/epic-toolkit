@@ -13,7 +13,7 @@
       "first_read": "2026-05-07T04:19:19.068Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
-      "count": 1,
+      "count": 2,
       "tokens": 2846,
       "first_read": "2026-05-07T04:20:19.873Z"
     },
@@ -79,14 +79,21 @@
       "action": "edit",
       "tokens": 286,
       "at": "2026-05-07T11:40:48.284Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+      "action": "edit",
+      "tokens": 766,
+      "at": "2026-05-07T12:04:39.176Z"
     }
   ],
   "edit_counts": {
-    "scripts/wolf-merge/resolve-wolf.sh": 1
+    "scripts/wolf-merge/resolve-wolf.sh": 1,
+    "scripts/validate-session-deliverables.py": 1
   },
   "anatomy_hits": 13,
   "anatomy_misses": 1,
-  "repeated_reads_warned": 6,
+  "repeated_reads_warned": 7,
   "cerebrum_warnings": 0,
-  "stop_count": 1
+  "stop_count": 3
 }

@@ -3062,6 +3062,28 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-07T05:00:00Z"
+    },
+    {
+      "id": "bug-161",
+      "timestamp": "2026-05-07T06:30:00Z",
+      "error_message": "validate-session-deliverables.py's `_matches_declared` glob-to-regex builder converts `**` to `.*.*`, which still requires the immediately-following literal `/` to be present in the candidate path. The zero-segment case that globstar (`**`) is supposed to express — gitignore / npm-glob / extended-glob convention: `app/**/page.tsx` matches `app/page.tsx`, `app/foo/page.tsx`, AND `app/a/b/page.tsx` — silently fails for the zero-segment shape. A session that legitimately declares `produces: app/**/page.tsx` and produces a top-level `app/page.tsx` (very common in Next.js, Remix, Nuxt scaffolding) gets rc=97 from the validator with `declared deliverables missing from session diff: app/**/page.tsx`, and run-sessions.sh marks the session failed and halts the wave — even though the diff plainly contains the deliverable. Reproduced empirically against the live function: `app/**/page.tsx` rejects `app/page.tsx` (no match), and identical zero-segment failures hit `src/**/*.py` vs `src/foo.py` and `**/test.py` vs `test.py`.",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "bug-141 replaced `fnmatch.fnmatchcase` with a hand-rolled regex builder so literal `[id]`-style segments (Next.js dynamic routes) survive. The builder loops over the declared pattern char-by-char with `* → .*`, `? → .`, others escaped — perfectly fine for single `*`, but globstar sees TWO consecutive `*` chars and emits `.*.*` rather than the globstar-aware `(?:.*/)?` / `(?:/.*)?/` / `(?:/.*)?` / `.*` quartet that standard glob libraries (Python `glob` with `recursive=True`, gitignore, minimatch) use. The regex `app/.*.*/page\\.tsx` requires `app/` + something + `/page.tsx`, so the zero-segment match silently fails. Same audit class as bug-118 / bug-141: every dual-meaning glob meta needs to be evaluated for ALL the contexts that meta can appear in, not just the first one the test corpus covered. The bug-141 cerebrum entry called out the `[abc]` character-class trade-off explicitly but did not enumerate `**`'s zero-segment case, which is just as load-bearing for real-world `produces:` declarations.",
+      "fix": "Pre-rewrite the four globstar contexts before the char loop using NUL-byte placeholders (which can't appear in real paths so collisions are impossible): `/**/` in middle → `(?:/.*)?/` (eats the leading `/`), `**/` at start → `(?:.*/)?` (zero or more directory prefix), `/**` at end → `(?:/.*)?` (zero or more directory suffix), bare `**` → `.*`. Then run the existing char loop, treating each placeholder as one-token-emit. Verified against 18 test cases including the three repro shapes (`app/**/page.tsx`, `src/**/*.py`, `**/test.py`), four negative cases that should NOT match, and six regression cases (single `*`, literal `[id]`, plain literal paths) — all pass.",
+      "tags": [
+        "found-by-bug-hunt",
+        "validate-session-deliverables",
+        "globstar",
+        "regex",
+        "produces",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-118",
+        "bug-141"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T06:30:00Z"
     }
   ]
 }
