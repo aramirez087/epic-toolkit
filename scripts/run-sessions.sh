@@ -475,7 +475,30 @@ while IFS= read -r line; do
   case "$line" in
     "META operator_path="*)   OPERATOR_PATH="${line#META operator_path=}" ;;
     "META any_frontmatter="*) ANY_FRONTMATTER="${line#META any_frontmatter=}" ;;
-    "META wave_count="*)      WAVE_COUNT="${line#META wave_count=}" ;;
+    "META wave_count="*)
+      # Validate at parse time — the value flows verbatim into the arithmetic
+      # contexts `[[ "$WAVE_COUNT" -eq 0 ]]` (line ~534) and `for (( wn=1;
+      # wn<=WAVE_COUNT; wn++ ))` (wave loop), and bash treats a non-numeric
+      # operand as a variable-name reference. Under the runner's `set -u`, a
+      # corrupted `META wave_count=garbage` line crashes the entire runner
+      # with `garbage: unbound variable` BEFORE the existing zero-check at
+      # line 534 can fire — the user sees a cryptic bash error rather than
+      # the intended "DAG plan is empty or malformed" diagnostic. Same
+      # producer-emittable corruption modes as bug-192/193 (partial-flush
+      # from a SIGKILL'd `cp`, NFS read racing the write, schema drift,
+      # hand-edit for debugging) and same audit class: every consumer of
+      # producer-emitted data must reject inputs the producer can emit but
+      # the consumer can't interpret, AND that audit must extend to every
+      # narrowing predicate the consumer applies — bash arithmetic-as-int
+      # is a string→int narrowing on the WAVE_COUNT field too. Reject
+      # non-numeric values silently (leave WAVE_COUNT at its default 0);
+      # the existing line-534 guard then exits with the proper diagnostic.
+      _wc_raw="${line#META wave_count=}"
+      if [[ "$_wc_raw" =~ ^[0-9]+$ ]]; then
+        WAVE_COUNT="$_wc_raw"
+      fi
+      unset _wc_raw
+      ;;
     "META "*) : ;;  # unrecognised META key — ignore
     "WAVE "*) : ;;  # WAVE <num> <size> — informational only
     "SESSION "*)
@@ -514,6 +537,30 @@ while IFS= read -r line; do
       # Also reject empty truncated rows (fewer than 6 fields after split)
       # for parity with the heredoc's `if len(parts) < 6: continue`. (bug-193)
       if ! [[ "$sw" =~ ^[0-9]+$ && "$sid" =~ ^[0-9]+$ ]]; then
+        continue
+      fi
+      # bug-193's stated intent included this length check ("Also reject
+      # empty truncated rows ... for parity with the heredoc's `if
+      # len(parts) < 6: continue`"), but the implementation only added
+      # field-defaulting via `${N:-}` plus the numeric guard on sw/sid.
+      # The length check itself was never written, so a truncated row
+      # like `SESSION 1 5` (only 3 fields after SESSION; sw=1, sid=5
+      # both numeric, but sfile/sdeps/sslug/sparallel all empty) passed
+      # the numeric check and registered a session entry with empty file
+      # and empty slug. Downstream the wave loop fanned the session out
+      # with `fname=""`, run_one_session built `session_path="$TRUNK_
+      # SESSIONS_DIR/"` (just the directory), `extract_prompt` ran awk
+      # against a directory and returned empty, and the session failed
+      # with "ERROR: could not extract prompt from <directory>" — a
+      # symptom-level error pointing at the (perfectly valid) prompt-
+      # extraction code instead of naming the malformed plan as the
+      # cause. Same producer-emittable corruption modes as bug-192/193
+      # (partial-flush from a SIGKILL'd `cp`, NFS read racing the
+      # write, schema drift, hand-edit). Mirror the heredoc's check
+      # explicitly so the bash side rejects the same shapes the Python
+      # consumer already rejects — `set -- $_rest` exposes `$#` for the
+      # field count after splitting. (bug-195)
+      if [[ $# -lt 6 ]]; then
         continue
       fi
       [[ "$smodel" == "-" ]] && smodel=""
