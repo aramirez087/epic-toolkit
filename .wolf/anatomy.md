@@ -1,10 +1,11 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T18:12:06.387Z
-> Files: 44 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T20:05:31.828Z
+> Files: 50 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
+- `bug-185-186-msg.txt` — Declares as (~1419 tok)
 - `bughunt-tests.sh` (~1187 tok)
 - `commit-msg-bug-182.txt` — Declares as (~894 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
@@ -16,9 +17,17 @@
 - `epic-toolkit-fix-msg.txt` (~353 tok)
 - `test-bug-181.sh` — Reproduce bug-181: log call inside map_model_shorthand leaks into captured stdout (~461 tok)
 
+## ../../../../tmp/sprint-test/
+
+- `run-sessions.sh` — Mock runner for sprint orchestrator tests. Echoes its argv to a log file (~74 tok)
+
 ## ../../.claude/
 
 - `settings.json` (~725 tok)
+
+## ../../.claude/plans/
+
+- `look-at-this-session-distributed-whistle.md` — Plan: Multi-Epic Sprint Primitive (~1501 tok)
 
 ## ../../.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/
 
@@ -29,7 +38,7 @@
 
 - `.gitignore` — Git ignore rules (~15 tok)
 - `AGENTS.md` — OpenWolf (~519 tok)
-- `CLAUDE.md` — OpenWolf (~521 tok)
+- `CLAUDE.md` — OpenWolf (~642 tok)
 - `LICENSE` — Project license (~290 tok)
 - `README.md` — Project documentation (~1668 tok)
 
@@ -45,8 +54,9 @@
 
 ## .opencode/commands/
 
-- `epic.generate.md` — /epic.generate - Generate session files (~4037 tok)
+- `epic.generate.md` — /epic.generate - Generate session files (~4515 tok)
 - `epic.md` — Validate (~769 tok)
+- `sprint.md` — Validate (~854 tok)
 
 ## .wolf/
 
@@ -56,8 +66,9 @@
 
 ## commands/
 
-- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4113 tok)
+- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4608 tok)
 - `epic.md` — Validate (~807 tok)
+- `sprint.md` — Validate (~889 tok)
 
 ## docs/
 
@@ -70,6 +81,7 @@
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~7983 tok)
 - `epic-ui.py` — as: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~4566 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16876 tok)
+- `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3013 tok)
 - `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
 
 ## scripts/lib/

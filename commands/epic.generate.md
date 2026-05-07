@@ -206,3 +206,34 @@ Inside each fenced prompt for sessions 01 and above, include:
 7. Ensure each file matches the required outer markdown structure exactly, including frontmatter on sessions 01+.
 8. After writing the files for each epic, run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/epic-dag.py" docs/claude-sessions/<epic-name> --show` to render the wave layout. If the output collapses into mostly single-session waves, your DAG is too sequential — revisit the dependencies and split file ownership.
 9. In your response, report: **for each epic** — the created directory, the session files written, the wave layout (paste the `epic-dag.py --show` output), and the stack/quality-gate set selected. If multi-epic, also describe the cross-epic dependency order and which epic each session belongs to.
+10. If you generated **two or more epics**, write a sprint config and print the ready-to-run sprint command (see "Sprint Configuration" below). Single-epic plans skip this step — `/epic-toolkit:epic <name>` is enough.
+
+## Sprint Configuration (multi-epic plans)
+
+Multi-epic plans must run sequentially on a shared trunk branch — each epic depends on its predecessor's commits, and one PR is opened for the whole sprint at the end. To make that ergonomic, emit a machine-readable sprint config and surface the matching `/epic-toolkit:sprint` invocation.
+
+**Write** `docs/claude-sessions/<sprint-name>.sprint.json` (the sprint name is the kebab-case slug for the overall initiative, not any individual epic). Required schema:
+
+```json
+{
+  "sprint": "<sprint-name>",
+  "branch": "epic/<sprint-name>",
+  "epics": [
+    { "dir": "docs/claude-sessions/<epic-1-name>/", "model": "<opus|sonnet|haiku|...>" },
+    { "dir": "docs/claude-sessions/<epic-2-name>/", "model": "<...>" }
+  ]
+}
+```
+
+- `branch` is the shared trunk branch every epic appends to. Default it to `epic/<sprint-name>` unless the user named one explicitly.
+- `epics` is the **ordered** sequence — epic N+1 starts only after epic N completes. List them in dependency order; the entry's `dir` must match a directory you actually created.
+- `model` is optional per entry. Set it when this epic should run on a model other than the global default (e.g. `"opus"` for the charter epic, `"sonnet"` for the rest). Omit when the global default is fine.
+
+**Print** a "Run this sprint" block at the end of your generation summary, formatted exactly like this:
+
+```
+Run this sprint:
+  /epic-toolkit:sprint docs/claude-sessions/<sprint-name>.sprint.json
+```
+
+If the user later wants to override the model fleet-wide or pass other options (`--timeout`, `--max-parallel`, etc.), they can append flags to that command — per-epic models in the sprint config still take precedence over the global `--model`.

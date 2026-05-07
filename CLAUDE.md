@@ -44,3 +44,7 @@ bash scripts/run-sessions.sh docs/claude-sessions/<name>/ --dry-run
 ## Requirements
 
 Python 3.8+ (stdlib only), Bash 3.2+, git 2.20+, `gh` CLI (optional, for auto-PR). Requires `claude` or `opencode` on PATH (auto-detected or forced with `--cli`).
+
+## Documentation lookups
+
+Use the `context7` MCP server to fetch current docs whenever the task touches a library, framework, SDK, API, CLI tool, or shell semantics — even ones you think you know (Bash, shellcheck, Python stdlib, gh CLI, git plumbing, etc.). Training data drifts; context7 doesn't. Resolve the library ID first (`mcp__context7__resolve-library-id`) then query (`mcp__context7__query-docs`). Skip it for refactoring, business logic, and general programming concepts.
