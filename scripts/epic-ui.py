@@ -99,7 +99,27 @@ def shorten(s: str, max_len: int) -> str:
 # ── Plan / status I/O ────────────────────────────────────────────────────────
 
 def parse_bash_plan(plan_file: str) -> dict:
-    """Parse epic-dag.py --bash output into a structured plan dict."""
+    """Parse epic-dag.py --bash output into a structured plan dict.
+
+    Skip malformed WAVE / SESSION lines instead of crashing the dashboard.
+    The plan file is shared protocol state — written by epic-dag.py via
+    `cp` from a temp file, then read by both the run-sessions.sh init
+    heredoc AND this consumer. Producer-emittable corruption modes the
+    previous bare `int(parts[1])` couldn't survive: a partial-flush from
+    a SIGKILL'd cp / disk-full mid-write that leaves a half-written
+    SESSION line missing the numeric wave or id field, an NFS read
+    racing a write, schema drift from a future writer, or a hand-edit
+    for debugging. Both call sites raised an unhandled ValueError —
+    parse_bash_plan crashed during EpicUI init, so the live dashboard
+    never launched and the user lost progress visibility for the entire
+    run with no diagnostic. Same audit class as bug-185/186/188/189:
+    every consumer of producer-emitted data must reject inputs the
+    producer can emit but the consumer can't interpret. The bug-188
+    `if len(parts) < 6: continue` already handled the truncation case;
+    extending the same skip-on-malformed pattern to non-numeric
+    wave/id values closes the remaining gap. Same coerce-and-skip
+    pattern as `_print_changes` for non-dict session entries (bug-185).
+    """
     waves: dict[int, list] = {}
     sessions: dict[int, dict] = {}
     wave_count = 0
@@ -114,14 +134,20 @@ def parse_bash_plan(plan_file: str) -> dict:
                     pass
             elif line.startswith('WAVE '):
                 parts = line.split()
-                wn = int(parts[1])
+                try:
+                    wn = int(parts[1])
+                except (ValueError, IndexError):
+                    continue
                 waves.setdefault(wn, [])
             elif line.startswith('SESSION '):
                 parts = line.split(None, 6)
                 if len(parts) < 6:
                     continue
-                wn   = int(parts[1])
-                sid  = int(parts[2])
+                try:
+                    wn  = int(parts[1])
+                    sid = int(parts[2])
+                except ValueError:
+                    continue
                 slug = parts[5]
                 session = {
                     'id': sid, 'wave': wn,

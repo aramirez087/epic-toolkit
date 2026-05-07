@@ -1,11 +1,12 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T20:19:23.381Z
-> Files: 50 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T21:16:20.207Z
+> Files: 51 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
 - `bug-185-186-msg.txt` — Declares as (~1419 tok)
+- `bug-189-commit-msg.txt` — Declares as (~647 tok)
 - `bughunt-tests.sh` (~1187 tok)
 - `commit-msg-bug-182.txt` — Declares as (~894 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
@@ -79,8 +80,8 @@
 
 - `epic-dag.py` — - supabase/migrations/*auth* (~13185 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~7983 tok)
-- `epic-ui.py` — as: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~5109 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16876 tok)
+- `epic-ui.py` — as: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~5832 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~17075 tok)
 - `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3013 tok)
 - `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
 

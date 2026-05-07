@@ -821,7 +821,15 @@ LIVE_UI=false
 # Copy the dag plan to a stable path (DAG_TMP is deleted on EXIT)
 cp "$DAG_TMP" "$DAG_PLAN_FILE"
 
-# Initialize shared status JSON (all sessions start as "pending")
+# Initialize shared status JSON (all sessions start as "pending").
+# Skip malformed SESSION lines (truncation from a partial-flush, non-numeric
+# wave/id from schema drift or a hand-edit) instead of crashing the heredoc
+# with an unhandled IndexError/ValueError. The shell side does not check
+# this Python's exit code, so a single bad line previously left the status
+# file uninitialized — every session displayed as 'pending' forever in the
+# UI even after completion, defeating the live progress feature for the
+# whole run with no diagnostic. Symmetric to the parse_bash_plan fix in
+# epic-ui.py; same audit class as bug-185/186/188/189.
 "$PYTHON_CMD" - "$STATUS_FILE" "$EPIC_NAME_SLUG" "$DAG_PLAN_FILE" <<'PYEOF_INIT'
 import sys, json, time
 sf, epic, pf = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -831,9 +839,15 @@ with open(pf, encoding='utf-8', errors='replace') as f:
         line = line.strip()
         if not line.startswith('SESSION '): continue
         parts = line.split(None, 6)
-        wn, sid, _, _, slug = parts[1], parts[2], parts[3], parts[4], parts[5]
+        if len(parts) < 6: continue
+        try:
+            wn = int(parts[1])
+            int(parts[2])  # validate sid is numeric for parity with the UI consumer
+        except ValueError:
+            continue
+        sid, slug = parts[2], parts[5]
         sessions[sid] = {
-            'status': 'pending', 'slug': slug, 'wave': int(wn),
+            'status': 'pending', 'slug': slug, 'wave': wn,
             'title': slug.replace('-', ' ').title(),
             'step': 0, 'tool': '', 'target': '', 'elapsed': 0.0,
         }
