@@ -3735,6 +3735,30 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T20:25:00.000Z"
+    },
+    {
+      "id": "bug-189",
+      "timestamp": "2026-05-07T20:59:35.634019Z",
+      "error_message": "epic-ui.py live dashboard render thread crashes mid-tick on producer-emitted non-finite float (NaN / +Inf / -Inf) in the per-session `elapsed` field of the status JSON entry",
+      "file": "scripts/epic-ui.py",
+      "root_cause": "_normalize_entry's `isinstance(elapsed, (int, float))` check accepts NaN and ±Inf because both are valid floats (`isinstance(float('nan'), float) is True`), so the bug-188 inner-scalar audit's existing `bool`/`int`/`float`/`str` shape rejection never fires for the non-finite subspace. fmt_elapsed then calls `int(secs)` on the non-finite value: `int(NaN)` raises `ValueError: cannot convert float NaN to integer`, `int(±Inf)` raises `OverflowError: cannot convert float infinity to integer`. Either kills `_build_lines()` / `_redraw()` and the live UI thread; the dashboard goes dead for the rest of the run with no diagnostic. Python's `json.load` accepts the non-standard `NaN`/`Infinity`/`-Infinity` tokens by default (parse_constant=None) and `json.dump` emits them by default (allow_nan=True), so update_status_file and mark_session round-trip them verbatim — once a producer (hand-edit, schema drift from a future writer that emits non-finite from buggy timer arithmetic, out-of-band hook with wall-clock skew) lands NaN/Inf in the status file, every subsequent UI tick crashes until manual repair. Same audit class as bug-185/186/188 — every consumer of `dict.get(key, default)` must reject inputs the producer can emit but the consumer can't interpret, and that audit must extend to every type-narrowing predicate the consumer applies, not just to the outer container shapes.",
+      "fix": "Extend the bug-188 _normalize_entry guard to also reject non-finite floats: `if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)) or not math.isfinite(elapsed): elapsed = 0.0`. Add `import math` to the existing imports. Order of clauses matters: bool is rejected first (since `bool` is an int subclass and `math.isfinite(True)` is True, which would let `True` slip through if checked last); type-narrowing runs second so the `math.isfinite` call only ever sees an int or float (avoiding `TypeError: must be real number, not NoneType` on non-numeric shapes); finite check runs last on the now-safe value. Verified by reproducing the original ValueError/OverflowError chains on NaN/Inf/-Inf inputs and confirming all three (plus bool/None/str/list shapes from bug-188) coerce to elapsed=0.0 / `  0s` rendering on the patched tree, with the well-formed happy-path inputs (45.2 → 45s, 5 → 5s, 0 → 0s) still passing through unchanged.",
+      "tags": [
+        "found-by-bug-hunt",
+        "epic-ui",
+        "py",
+        "audit-class",
+        "dict-get-narrowing",
+        "non-finite-float",
+        "consumer-protocol"
+      ],
+      "related_bugs": [
+        "bug-185",
+        "bug-186",
+        "bug-188"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T20:59:35.634118Z"
     }
   ]
 }

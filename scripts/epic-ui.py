@@ -14,6 +14,7 @@ Usage (launched by run-sessions.sh):
 
 import argparse
 import json
+import math
 import os
 import re
 import signal
@@ -199,7 +200,23 @@ def _normalize_entry(d: dict) -> dict:
         tool = ''
     if not isinstance(target, str):
         target = ''
-    if isinstance(elapsed, bool) or not isinstance(elapsed, (int, float)):
+    # Reject NaN/±Inf alongside non-numeric shapes. Both pass
+    # `isinstance(elapsed, (int, float))` (NaN and Inf are valid floats), so
+    # the previous guard let them through — and `fmt_elapsed`'s `int(secs)`
+    # then crashed mid-render with `ValueError: cannot convert float NaN to
+    # integer` (NaN) or `OverflowError: cannot convert float infinity to
+    # integer` (Inf), killing `_build_lines()` / `_redraw()` and the live UI
+    # thread. Python's `json.load` accepts the non-standard `NaN` / `Infinity`
+    # / `-Infinity` tokens by default, and `update_status_file` /
+    # `mark_session` round-trip them verbatim through `json.dump` — so once a
+    # producer (hand-edit, schema drift from a future writer, out-of-band
+    # hook) lands a non-finite scalar in the status file, every subsequent
+    # tick crashes until manual repair. Same audit class as bug-188 extended
+    # to the non-finite float subspace `isinstance(x, float)` admits but the
+    # consumer can't interpret. (bug-189)
+    if (isinstance(elapsed, bool)
+            or not isinstance(elapsed, (int, float))
+            or not math.isfinite(elapsed)):
         elapsed = 0.0
     return {
         'status':  status,
