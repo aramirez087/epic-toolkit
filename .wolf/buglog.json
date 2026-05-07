@@ -2332,6 +2332,52 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-06T23:00:00.000Z"
+    },
+    {
+      "id": "bug-124",
+      "timestamp": "2026-05-06T23:50:00.000Z",
+      "error_message": "_strip_inline_comment treats only ASCII space as a YAML comment separator \u2014 a tab before `#` (\\t#) silently absorbs the comment text into the value.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Line 121: `elif ch == \"#\" and line[i - 1] == \" \":`. YAML 1.2 \u00a76.6 says comments must be preceded by a *white space* character; YAML's white-space class includes both U+0020 and TAB (U+0009). The parser only checks for literal space, so any frontmatter line that uses a tab as the comment separator (very common in editors that auto-indent with hard tabs, or when authors paste from tools that emit tabs) leaves the `#` un-detected and the trailing comment gets concatenated onto the value. Reproduced: `title: Auth API\\t# inline comment` parses `title` as the literal `Auth API\\t# inline comment`. Same defect class as bug-117 / bug-123 (apostrophe and double-quote escape edge cases), and bug-098 / bug-097's defensive-vs-loud follow-ups: for `parallel_safe: true\\t# \u2026` the bug-097 SystemExit guard now fires loudly with a confusing error mentioning the comment text in the value, but for `title:`, `model:`, `cli:`, and any `produces:` / `touches:` list item the contamination passes silently downstream \u2014 Claude is then handed an unknown model id, the deliverables validator reports phantom missing files because the declared path now contains `\\t# foo`, and the user has no obvious connection back to the offending tab.",
+      "fix": "Treat tab as separator equivalently to space: `elif ch == \"#\" and (line[i - 1] == \" \" or line[i - 1] == \"\\t\"):` \u2014 or, cleaner, `line[i - 1].isspace()` so any future-added Unicode whitespace is also handled. The fix is one line and the same regression test that covers bug-117/bug-123 should grow a tab-separator case.",
+      "tags": [
+        "yaml",
+        "frontmatter",
+        "parser",
+        "whitespace",
+        "comment-stripping",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-097"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T23:50:00.000Z"
+    },
+    {
+      "id": "bug-125",
+      "timestamp": "2026-05-06T23:50:00.000Z",
+      "error_message": "ERROR_DETAIL surfaced for deliverables_failure (rc=97) is the validator's HEADER line only \u2014 the actual missing paths that bug-106 was supposed to expose are silently dropped.",
+      "file": "scripts/lib/epic-result.sh",
+      "root_cause": "Lines 50-53 awk: `f && /^ERROR: / { sub(/^ERROR: /, \"\"); print; exit }`. The validator's most common failure (`_matches_declared` returning empty for a declared path) prints a TWO-PART block to stderr: the header `ERROR: declared deliverables missing from session diff:` followed by indented `  - <path>` lines for each missing entry. The awk grabs only the first line that starts with `ERROR: ` and exits \u2014 so the captured `err_msg` is just the header without ANY of the path data. The cerebrum entry for bug-106 explicitly claims the fix surfaces 'the missing deliverable' so the user no longer has to open the log; in practice they get `ERROR_DETAIL=declared deliverables missing from session diff:` and still have to crack open `.session-NN-exec.log` to find which file the session forgot. Reproduced against a synthetic two-deliverable failure log \u2014 captured detail is the colon-terminated header with zero path information. The other validator error modes (`session HEAD advanced but produced no changed paths`, `session committed only metadata/handoff files \u2014 no real deliverables`) are single-line and unaffected; the regression is specific to the `produces:`-mismatch path, which is precisely the case bug-106 was added to make actionable.",
+      "fix": "After matching the header, slurp subsequent `^  - ` lines until a blank/non-indent line, then exit. Awk sketch: once the header matches, set a second flag and append following `^  - ` lines to a buffer, then `print buffer; exit` on the first non-list line or EOF. Keep the join character a literal `; ` (or pipe) so ERROR_DETAIL stays a single-line value compatible with the `[EPIC_RESULT_START]` line-protocol parser. Optionally cap at N entries (e.g., 5) with an `\u2026and K more` suffix to avoid blowing out the orchestrator UI.",
+      "tags": [
+        "validator",
+        "error-reporting",
+        "deliverables",
+        "epic-result",
+        "incomplete-fix",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-106",
+        "bug-102",
+        "bug-109"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T23:50:00.000Z"
     }
   ]
 }

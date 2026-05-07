@@ -46,10 +46,36 @@ classify_error() {
     # unanchored grep matched any prose `ERROR: ...` Claude happened to
     # echo before the validator ran, so the user saw the wrong message
     # under ERROR_DETAIL=. (bug-109)
+    #
+    # Slurp the indented `  - <path>` lines that follow the header — for
+    # the most common failure (`_matches_declared` returning empty) the
+    # validator emits the header `ERROR: declared deliverables missing
+    # from session diff:` followed by one `  - <path>` line per missing
+    # entry. Capturing only the header (the original bug-106 fix) left
+    # the user with `ERROR_DETAIL=declared deliverables missing from
+    # session diff:` and no path data, defeating the actionable-detail
+    # goal of bug-106. Strip the trailing colon from the header so the
+    # joined output reads `<header>: path1; path2` instead of `<header>::
+    # path1; path2`. The other validator error modes ("session HEAD
+    # advanced", "session committed only metadata") are single-line and
+    # produce only the header — unaffected. (bug-125)
     local err_msg
     err_msg="$(awk '
       /^=== deliverables validation failed \(rc=/ { f=1; next }
-      f && /^ERROR: / { sub(/^ERROR: /, ""); print; exit }
+      f && header_done && /^  - / {
+        sub(/^  - /, "")
+        paths = paths (paths ? "; " : "") $0
+        next
+      }
+      f && header_done { exit }
+      f && /^ERROR: / {
+        sub(/^ERROR: /, "")
+        header = $0
+        sub(/:[[:space:]]*$/, "", header)
+        header_done = 1
+        next
+      }
+      END { if (header_done) print (paths ? header ": " paths : header) }
     ' "$log_file" 2>/dev/null)"
     if [[ -n "$err_msg" ]]; then
       printf '%s\n' "$err_msg" > "${log_file}.errtype"

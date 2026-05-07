@@ -118,7 +118,16 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                         j -= 1
                     if bs % 2 == 0:
                         in_quote = None
-            elif ch == "#" and line[i - 1] == " ":
+            elif ch == "#" and line[i - 1] in (" ", "\t"):
+                # YAML 1.2 §6.6 requires whitespace before `#`. The previous
+                # check only matched ASCII space, so a tab-separated comment
+                # (`key: value\t# note`) silently leaked the comment text into
+                # the value — same defect class as bug-117/bug-123 in the
+                # apostrophe and double-quote branches. Tab is the only other
+                # in-line whitespace YAML allows; keep the set explicit so a
+                # newline (impossible here, splitlines() already split on it)
+                # or stray Unicode whitespace can't be misinterpreted as a
+                # separator. (bug-124)
                 return line[:i].rstrip()
         return line
 
