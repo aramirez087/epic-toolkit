@@ -15,6 +15,20 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GIT_DIR="$(git rev-parse --git-dir)"
 
+# Anchor cwd at the repo root before any git pathspec call. `git diff
+# --name-only` prints paths from the top-level regardless of cwd, but
+# `git checkout -- <pathspec>` and `git add -- <pathspec>` treat the
+# pathspec as cwd-relative. Running this script from any subdirectory
+# previously mismatched the two conventions: the diff returned `.wolf/…`,
+# the checkout looked for `<subdir>/.wolf/…`, and every resolve failed
+# with `pathspec did not match any file(s) known to git` — set -e then
+# killed the script before `commit --no-edit` / `rebase --continue` ran,
+# leaving the merge/rebase paused with conflict markers in place. Same
+# convention the runner's auto-resolver uses (it threads `git -C
+# "$workdir"` through every call); cd is the simpler fix here because the
+# script invokes git directly in many places. (bug-160)
+cd "$REPO_ROOT"
+
 # Detect operation in progress and choose default side accordingly:
 #   merge in progress  -> "ours" (keep local)
 #   rebase in progress -> "theirs" (keep replayed-commit, i.e. epic's wolf state)

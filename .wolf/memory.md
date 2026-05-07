@@ -559,3 +559,4 @@
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
 | 22:17 | Edited scripts/lib/epic-session.sh | modified find_handoff_for() | ~185 |
+| 05:40 | Edited scripts/wolf-merge/resolve-wolf.sh | expanded (+14 lines) | ~267 |

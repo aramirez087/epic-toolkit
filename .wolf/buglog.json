@@ -3043,6 +3043,25 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-07T04:08:12Z"
+    },
+    {
+      "id": "bug-160",
+      "timestamp": "2026-05-07T05:00:00Z",
+      "error_message": "scripts/wolf-merge/resolve-wolf.sh fails with `pathspec '.wolf/<file>' did not match any file(s) known to git` and aborts under set -e when invoked from any subdirectory of the repo. The script is documented as the manual fallback for resolving in-progress merge/rebase conflicts in .wolf/ files, so this surfaces precisely when the user is mid-incident and least equipped to debug it. Demonstrated empirically: from cwd `scripts/lib/`, `git diff --name-only --diff-filter=U` returns repo-root-relative paths (`.wolf/hooks/_session.json`), but `git checkout --ours -- .wolf/hooks/_session.json` from the same cwd errors with rc=1 and the pathspec-not-found message. The same mismatch hits the `git add -- $f` line two statements later. Net effect: zero `.wolf/` conflicts get resolved, the merge/rebase stays paused with conflict markers in place, and set -euo pipefail kills the script before the `commit --no-edit` / `rebase --continue` step at the bottom even runs.",
+      "file": "scripts/wolf-merge/resolve-wolf.sh",
+      "root_cause": "Lines 40, 58, 59 mix two different git path resolution conventions in the same script. `git diff --name-only` (and `git status --porcelain`, `git ls-files`) print paths from the repo top-level regardless of the invoking cwd — verified in this repo's tree from both `/Users/aramirez/Code/epic-toolkit` and `scripts/lib/`. `git checkout -- <pathspec>` and `git add -- <pathspec>`, by contrast, treat the pathspec as a CWD-relative path unless it begins with `:/`. So a path that's truthful at the diff layer becomes wrong-by-one-segment at the checkout layer the moment cwd is anywhere except the repo root. The sibling helper `auto_resolve_wolf_conflicts` in scripts/lib/epic-git.sh (line 117-127) doesn't have the bug because it threads `git -C \"$workdir\"` through every call — the runner only invokes it from a known-good cwd. resolve-wolf.sh, designed for ad-hoc terminal use, has no such anchoring: it captures REPO_ROOT at line 15 but never `cd` to it, never passes `-C \"$REPO_ROOT\"`, and never prefixes pathspecs with `:/` (the `:/path` form makes git resolve relative to the top-level). Same defect class as the cd-and-cwd audits in run-sessions.sh (e.g. bug-089's `$0`-vs-cwd path resolution) but in the manual recovery tool.",
+      "fix": "Added `cd \"$REPO_ROOT\"` immediately after the REPO_ROOT/GIT_DIR capture (before the SIDE detection and any git pathspec call). This anchors every subsequent `git diff --name-only`, `git checkout --$SIDE -- $f`, and `git add -- $f` to a consistent path-resolution origin (the repo top-level), so the diff output and the checkout pathspec interpret the same path. Chose cd over the `:/$f` pathspec form because the script invokes git directly in five places (lines 40, 58, 59, 65, 68) and the cd is a single one-line change versus prefixing every pathspec; chose cd over `git -C` for the same reason. As a bonus the user-facing `printf '  %s\\n' $NON_WOLF` error message now prints paths the user can copy and act on directly without first having to translate them into cwd-relative form. The auto-resolver in lib/epic-git.sh remains untouched — it already uses `-C \"$workdir\"` correctly.",
+      "tags": [
+        "found-by-bug-hunt",
+        "resolve-wolf",
+        "subdir-cwd",
+        "git-pathspec",
+        "wolf-merge",
+        "shell"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T05:00:00Z"
     }
   ]
 }
