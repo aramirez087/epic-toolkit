@@ -592,14 +592,56 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         # an opaque error far from the typo. Run before the cli/model shape
         # checks below so the YAML 1.1 cause is named first instead of the
         # downstream "must be 'claude' or 'opencode'" surrogate. (bug-142)
+        #
+        # Reject every other non-string shape too. parse_frontmatter emits
+        # `[]` for any key whose value column is empty (`model:` / `cli:`
+        # with no value, or with indented sub-items the user typo'd
+        # underneath), and `int(...)` for any bare-numeric scalar (`model: 5`).
+        # Both shapes used to slip past the bool-only guard and corrupt the
+        # downstream cli/model checks:
+        #   • `cli: 0` (int) — `cli_raw = 0 or "" = ""` silently coerced to
+        #     auto-detect; the user's explicit (mis-typed) value vanished
+        #     with no error.
+        #   • `cli:` empty + `- claude` (list) — `cli_raw = ['claude']`,
+        #     the value-set check at line ~605 fired with "got ['claude']"
+        #     but never named the list-vs-scalar cause; same for `cli:`
+        #     empty alone (`[]`), which collapsed to "" via `or ""` and
+        #     silently auto-detected.
+        #   • `model:` empty + `- sonnet` (list) — `model_raw = ['sonnet']`,
+        #     `str([...])` survived the regex pre-check but failed it on
+        #     the `[`/`]`/quote characters, surfacing "contains characters
+        #     that break the SESSION row's space-delimited format" — a
+        #     symptom-level error pointing at the SERIALISER when the
+        #     real cause was the user wrote a list, not a scalar.
+        #   • `model: 5` (int) — `str(5) = "5"` passed the regex, the int
+        #     was stored verbatim, emit_bash wrote `5` into the SESSION
+        #     row, and claude rejected the unknown model id far from the
+        #     YAML cause.
+        # Same audit class as bug-097/142/146/164/165/170/171: every fm.get
+        # site that consumes a typed value must reject inputs the parser
+        # can produce but the consumer can't interpret. Mirror the bug-164
+        # / bug-170 pattern — name the bool case first (most common YAML
+        # 1.1 trap), then the generic shape error with both common-cause
+        # remediations (empty key with sub-items, or numeric scalar).
         for _str_key in ("title", "model", "cli"):
             _str_val = fm.get(_str_key)
+            if _str_val is None:
+                continue
             if isinstance(_str_val, bool):
                 raise SystemExit(
                     f"ERROR: {entry} {_str_key} must be a string, got boolean "
                     f"{_str_val!r}. YAML 1.1 spellings (yes/no/on/off/y/n/"
                     f"true/false) are coerced to booleans by the frontmatter "
                     f"parser — quote the value if you intend a literal string."
+                )
+            if not isinstance(_str_val, str):
+                raise SystemExit(
+                    f"ERROR: {entry} {_str_key} must be a string, got "
+                    f"{type(_str_val).__name__} {_str_val!r}. This usually "
+                    f"means the YAML key has no value (empty `{_str_key}:`) "
+                    f"with accidental indented children below it, or a "
+                    f"non-string scalar (`{_str_key}: 5`). Quote the value "
+                    f"if you intend a literal string, or remove the line."
                 )
         cli_raw = fm.get("cli", "") or ""
         if cli_raw and cli_raw not in ("claude", "opencode"):

@@ -3299,6 +3299,67 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T14:00:30Z"
+    },
+    {
+      "id": "bug-172",
+      "timestamp": "2026-05-07T15:00:00Z",
+      "error_message": "epic-dag.py load_sessions silently accepted non-string shapes for `model:` (the per-session model override). Two concrete shapes the bool-only str-key guard at line 595-603 missed: (1) `model: 5` — parse_frontmatter's int branch (line 371) coerces any bare-numeric scalar to `int`, the existing `model_raw or \"\"` left it alone, the regex pre-check at line 620 ran str(5)=\"5\" through `[A-Za-z0-9._/+:-]+` which matches, the int landed in the SESSION row, run_cli passed `--model 5` to claude, and claude rejected the unknown model id with an opaque error far from the YAML cause; (2) `model:` empty followed by indented `- sonnet` items — parse_frontmatter assigns `[]` for an empty value column then appends the block-list items, so `model_raw = ['sonnet']`, `str(['sonnet'])` survived the str() coercion but failed the regex on the `[`/`]`/quote characters, surfacing 'contains characters that break the SESSION row's space-delimited format' — a symptom-level error pointing at the SERIALISER when the real cause was the user wrote a list, not a scalar. Same audit class as bug-097/142/146/164/165/170/171.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "The string-typed-fields guard at line 595-603 only rejected bool. Every other shape parse_frontmatter can emit (int from numeric scalar, list from empty key with indented sub-items) fell through to the downstream regex check at line 620, which surfaced a misleading 'characters that break the SESSION row' message regardless of whether the user wrote bad characters in a real string OR wrote the wrong shape entirely. Same defect class as the recently-audited fm.get sites for `touches:` (bug-170) and `produces:` (bug-171): every consumer must reject inputs the parser can produce but the consumer can't interpret, AND the diagnostic must name the parser cause (YAML 1.1 boolean trap, list-vs-scalar typo) so the user can fix the YAML, not the symptom.",
+      "fix": "Extend the string-typed-fields loop to reject non-string types after the existing bool branch: continue on None (absent key), raise on bool with the existing YAML 1.1 message, then raise on non-str with a generic shape error that names the two concrete remediation paths (empty key with indented children → remove children; numeric scalar → quote it). The downstream `cli_raw or \"\"` and `model_raw or \"\"` patterns are now defence-in-depth — only strings can reach them — but kept for safety. Mirrors the audit-class pattern from bug-164/170/171.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "silent-coerce",
+        "audit-class:bug-097",
+        "audit-class:bug-164",
+        "audit-class:bug-170"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-142",
+        "bug-143",
+        "bug-146",
+        "bug-164",
+        "bug-165",
+        "bug-170",
+        "bug-171",
+        "bug-173"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:00:00Z"
+    },
+    {
+      "id": "bug-173",
+      "timestamp": "2026-05-07T15:00:00Z",
+      "error_message": "epic-dag.py load_sessions silently accepted non-string shapes for `cli:` (the per-session CLI override). Two concrete shapes the bool-only str-key guard at line 595-603 missed: (1) `cli: 0` (or any falsy non-bool int) — parse_frontmatter's int branch coerces it to `0`, then `cli_raw = fm.get(\"cli\", \"\") or \"\"` collapses `0 or \"\"` to `\"\"`, falling silently through to the auto-detect path with the user's explicit (mis-typed) value vanished without diagnostic; (2) `cli:` empty followed by indented `- claude` — parse_frontmatter assigns `['claude']`, the value-set check at line 605 fired with 'cli must be claude or opencode, got ['claude']' but never named the list-vs-scalar cause. The bare empty `cli:` (no children) collapsed to `[]` then `[] or \"\"` to `\"\"` — same silent auto-detect coercion as the int 0 case. Same audit class as bug-097/142/146/164/165/170/171/172.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Same defect as bug-172 in the symmetric site: the string-typed-fields guard at line 595-603 only rejected bool, leaving int and list shapes to flow through `cli_raw = fm.get(\"cli\", \"\") or \"\"` (which silently coerces every falsy non-string to `\"\"`) and the value-set check (which only describes WHICH literal cli was wrong, not WHY the user's typed shape can't be one). Both branches lost or buried the YAML cause.",
+      "fix": "Same loop extension as bug-172 covers cli too — the `for _str_key in (\"title\", \"model\", \"cli\")` loop now rejects every non-string shape with a YAML-aware message before the downstream value-set or regex check can run. After the loop, only strings (or absent → None) reach `cli_raw`, so the `or \"\"` is defence-in-depth. Mirrors bug-164/170/171.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "silent-coerce",
+        "audit-class:bug-097",
+        "audit-class:bug-164",
+        "audit-class:bug-170"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-138",
+        "bug-142",
+        "bug-146",
+        "bug-147",
+        "bug-164",
+        "bug-165",
+        "bug-170",
+        "bug-171",
+        "bug-172"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:00:00Z"
     }
   ]
 }
