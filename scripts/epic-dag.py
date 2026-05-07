@@ -186,6 +186,64 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             i += 1
         return line
 
+    def _unquote_scalar(raw: str) -> str:
+        """Decode a YAML 1.2 quoted scalar to its plain string form.
+
+        bug-123 / bug-136 made `_strip_inline_comment` correctly LOCATE the
+        closing quote of a YAML scalar (handling `\\"` parity in double-quoted
+        strings and `''` escapes in single-quoted strings). But the value
+        extraction at every consumer site was still `v.strip("'\\"")` — a
+        blind two-sided trim of any `'` or `"` chars from the boundary. That
+        broke two ways:
+          1. YAML escapes were never decoded — `"He said \\"hi\\""` returned
+             the raw bytes instead of `He said "hi"`, and `'It''s'` returned
+             `It''s` instead of `It's`.
+          2. Worse, when a value ended with `\\"` (escaped inner quote) right
+             before the closing `"`, the right-hand strip pulled BOTH `"`
+             characters off, exposing the `\\` and dropping the user's
+             intended `"`. So `"He said \\"hi\\""` collapsed to `He said \\"hi\\`
+             — strictly losing data the bug-123 fix had just been written
+             to preserve.
+        This helper is the single decode point: double-quoted (§5.7) handles
+        `\\\\`, `\\"`, `\\n`, `\\t`, `\\r`, `\\0`, `\\a`, `\\b`, `\\v`, `\\f`,
+        `\\e`, `\\/`, with `\\<unknown>` falling through to the literal char so
+        a forwards-compatible escape doesn't crash. Single-quoted (§7.3.2)
+        only honours `''` → `'`. Anything that isn't a recognisable quoted
+        scalar (unquoted, mismatched outer quotes, len < 2) falls back to the
+        historical `strip("'\\"")` so plain bareword values still work. (bug-145)
+        """
+        if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+            esc = {
+                '\\': '\\', '"': '"', '/': '/',
+                'n': '\n', 't': '\t', 'r': '\r', '0': '\0',
+                'a': '\a', 'b': '\b', 'v': '\v', 'f': '\f', 'e': '\x1b',
+            }
+            out: list[str] = []
+            i = 1
+            end = len(raw) - 1
+            while i < end:
+                ch = raw[i]
+                if ch == '\\' and i + 1 < end:
+                    out.append(esc.get(raw[i + 1], raw[i + 1]))
+                    i += 2
+                else:
+                    out.append(ch)
+                    i += 1
+            return ''.join(out)
+        if len(raw) >= 2 and raw[0] == "'" and raw[-1] == "'":
+            out = []
+            i = 1
+            end = len(raw) - 1
+            while i < end:
+                if raw[i] == "'" and i + 1 < end and raw[i + 1] == "'":
+                    out.append("'")
+                    i += 2
+                else:
+                    out.append(raw[i])
+                    i += 1
+            return ''.join(out)
+        return raw.strip("'\"")
+
     def _split_flow_list(s: str) -> list[str]:
         """Split a `[...]` flow-list body on `,`, respecting quoted spans.
 
@@ -238,14 +296,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 in_q = ch
                 buf += ch
             elif ch == ",":
-                cleaned = buf.strip().strip("'\"")
+                cleaned = _unquote_scalar(buf.strip())
                 if cleaned:
                     items.append(cleaned)
                 buf = ""
             else:
                 buf += ch
             i += 1
-        cleaned = buf.strip().strip("'\"")
+        cleaned = _unquote_scalar(buf.strip())
         if cleaned:
             items.append(cleaned)
         return items
@@ -267,7 +325,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         # ignored. (bug-127)
         lstripped = raw.lstrip(" \t")
         if lstripped == "-" or lstripped.startswith(("- ", "-\t")):
-            item = lstripped[1:].strip().strip("'\"")
+            item = _unquote_scalar(lstripped[1:].strip())
             if current_key is not None:
                 result.setdefault(current_key, []).append(item)
             continue
@@ -300,7 +358,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             # with the actual cause hidden in stderr. (bug-114)
             result[k] = int(v)
         else:
-            result[k] = v.strip("'\"")
+            result[k] = _unquote_scalar(v)
     return result, body
 
 
@@ -366,6 +424,23 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         fm, _ = parse_frontmatter(text)
         fm_session = fm.get("session")
         if fm_session is not None:
+            # Mirror the bug-142 guard for title/model/cli. parse_frontmatter's
+            # YAML 1.1 boolean whitelist coerces `session: y` / `session: no`
+            # / `session: on` to True / False, and `int(True) == 1` so the
+            # try/except below would NOT fire — control would fall through to
+            # the id-vs-filename check at line ~376 which then raises the
+            # misleading error "declares session=True but filename says 02",
+            # pointing the user at a session/filename mismatch when the real
+            # cause is a YAML 1.1 boolean trap. Same audit class as bug-142.
+            # (bug-146)
+            if isinstance(fm_session, bool):
+                raise SystemExit(
+                    f"ERROR: {entry} session: must be a numeric session id, "
+                    f"got boolean {fm_session!r}. YAML 1.1 spellings "
+                    f"(yes/no/on/off/y/n/true/false) are coerced to booleans "
+                    f"by the frontmatter parser — quote the value if you "
+                    f"intend a literal string, or use the numeric id."
+                )
             try:
                 fm_session_int = int(fm_session)
             except (TypeError, ValueError):

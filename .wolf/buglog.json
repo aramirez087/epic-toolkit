@@ -2747,6 +2747,58 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-07T01:51:41.598Z"
+    },
+    {
+      "id": "bug-145",
+      "timestamp": "2026-05-07T02:10:00Z",
+      "error_message": "epic-dag.py parse_frontmatter strips quote characters off YAML scalar values without decoding YAML 1.2 escape sequences. After bug-123 (double-quoted backslash parity) and bug-136 (single-quoted '' escape) made `_strip_inline_comment` correctly LOCATE the closing quote, value extraction was still `v.strip(\"'\\\"\")` at four sites: parse_frontmatter:303 (string scalars), _split_flow_list:241/248 (flow-list items), and the block-list-item branch:270. Two failure modes: (1) escapes are never decoded \u2014 `title: \"He said \\\"hi\\\"\"` yields the raw `He said \\\"hi\\\"` instead of the YAML-correct `He said \"hi\"`, and `'It''s'` yields `It''s` instead of `It's`; (2) when a value ends with `\\\"` right before the real closing `\"`, the right-hand strip pulls BOTH `\"` chars off, exposing the `\\` and dropping the user's intended `\"` \u2014 so `\"He said \\\"hi\\\"\"` collapses to `He said \\\"hi\\` (10 chars), strictly losing data the bug-123 fix had been written to preserve. Same bug applies to flow-list and block-list quoted entries with internal escapes.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "All four consumer sites use `str.strip(\"'\\\"\")` \u2014 a blind two-sided trim of any `'` or `\"` chars from the boundary \u2014 instead of a YAML-aware decode. The strip walks until it hits a non-quote char, so a value ending `\\\"` exposes the `\\` and the strip happily eats the next `\"` over. Single-quoted `''` and double-quoted `\\X` escapes are never converted to their literal forms because there is no decode step at all.",
+      "fix": "Added `_unquote_scalar` helper inside parse_frontmatter that recognises a properly-quoted scalar by matching outer quote chars (length >= 2). Double-quoted (\u00a75.7): walks the body and decodes \\\\, \\\", \\/, \\n, \\t, \\r, \\0, \\a, \\b, \\v, \\f, \\e, with `\\<unknown>` falling through to the literal next char so a forwards-compatible escape doesn't crash. Single-quoted (\u00a77.3.2): walks and converts `''` to `'`. Anything not recognised as a quoted scalar (unquoted bareword, mismatched outer quotes, len < 2) falls back to the historical strip(\"'\\\"\") so plain values still work. Replaced all four call sites: parse_frontmatter:303, _split_flow_list:241/248, block-list-item:270. Verified 15 regression cases including the bug-132/134/136 quote-aware fixtures still pass.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "parser",
+        "escape-decode",
+        "next-bug-123",
+        "next-bug-136",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-132",
+        "bug-134",
+        "bug-135",
+        "bug-136"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T02:10:00Z"
+    },
+    {
+      "id": "bug-146",
+      "timestamp": "2026-05-07T02:10:00Z",
+      "error_message": "epic-dag.py load_sessions does not guard the `session:` frontmatter field against YAML 1.1 boolean coercion. parse_frontmatter's boolean whitelist (added by bug-097) coerces `session: y` / `session: no` / `session: on` to True / False. bug-142 added an isinstance(value, bool) guard for title/model/cli but missed `session:`. With session=True, the bug-139 try/except for int() does NOT fire because `int(True) == 1`, so control falls through to the id-vs-filename mismatch check at line ~376 which raises the misleading error 'declares session=True but filename says 02' \u2014 pointing the user at a session/filename mismatch when the real cause is a YAML 1.1 boolean trap on a numeric field.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "The bug-142 audit guarded title/model/cli against YAML 1.1 boolean coercion but did not extend the same guard to `session:`, even though `session:` is the most numeric of all frontmatter fields. parse_frontmatter happily coerces `y/n/yes/no/on/off/true/false` to bool, and bool is a numeric type in Python (issubclass(bool, int)), so the downstream `int(fm_session)` succeeds and produces `1` for True / `0` for False \u2014 bypassing the bug-139 SystemExit and surfacing as a session/filename mismatch instead.",
+      "fix": "Added an isinstance(fm_session, bool) check immediately before the int(...) try block in load_sessions. On bool, raise SystemExit naming the YAML 1.1 cause first (yes/no/on/off/y/n/true/false coerce to booleans \u2014 quote the value or use the numeric id), so the user sees the real cause instead of the misleading mismatch. Mirrors the bug-142 guard pattern. Verified: `session: y` now raises with the bool-aware message; `session: 99` (numeric mismatch) still hits the existing filename-mismatch branch; `session: 1` and `session: \"01\"` still load correctly.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "boolean-coercion",
+        "validation",
+        "next-bug-142",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-139",
+        "bug-142"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T02:10:00Z"
     }
   ]
 }
