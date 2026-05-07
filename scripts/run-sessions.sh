@@ -993,11 +993,24 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     fi
   fi
   wave_timeout=$((_effective_wtm * 60))
-  ! $LIVE_UI && log "  ⏳ Wave $wn: awaiting ${#JOB_PIDS[@]} session(s) (timeout ${_effective_wtm}m)"
+  if ! $LIVE_UI; then
+    if [[ $wave_timeout -gt 0 ]]; then
+      log "  ⏳ Wave $wn: awaiting ${#JOB_PIDS[@]} session(s) (timeout ${_effective_wtm}m)"
+    else
+      log "  ⏳ Wave $wn: awaiting ${#JOB_PIDS[@]} session(s) (no wave timeout)"
+    fi
+  fi
   heartbeat_iters=0
   while [[ ${#JOB_PIDS[@]} -gt 0 ]]; do
     wave_elapsed=$(($(date +%s) - wave_start))
-    if [[ $wave_elapsed -gt $wave_timeout ]]; then
+    # Treat wave_timeout=0 as DISABLED (consistent with --timeout 0 = disabled
+    # per session). Without this gate, an explicit `--wave-timeout 0` (or a
+    # `.epic-config.json` `"waveTimeout": 0`) sets WAVE_TIMEOUT_USER_SET=true,
+    # bypasses auto-derive, lands wave_timeout=0, and the comparison
+    # `$wave_elapsed -gt 0` fires after the first 2-second sleep — killing
+    # every in-flight session before it can do any real work and reporting
+    # the epic as failed. (bug-153)
+    if [[ $wave_timeout -gt 0 && $wave_elapsed -gt $wave_timeout ]]; then
       err "Wave timeout after $((wave_elapsed / 60)) minutes; killing hung jobs"
       # Kill, reap, and mark each in-flight session as failed. Without this
       # the merge phase finds status='running' (neither 'done' nor 'failed'),

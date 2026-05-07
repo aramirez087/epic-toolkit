@@ -96,6 +96,30 @@ def merge_buglog(ours, theirs, ancestor=None):
             bid = bug.get("id")
             if bid:
                 ancestor_occ[bid] = bug.get("occurrences", 1) or 1
+    else:
+        # Ancestor was None — load() returns None on JSONDecodeError /
+        # OSError / UnicodeDecodeError, and git also passes /dev/null
+        # for %O when the file is brand-new in both branches. Without a
+        # fallback, ancestor_occ stays empty and bug-137's
+        # `ours + theirs - base_occ` formula uses base=0, silently
+        # double-counting every true-duplicate bug whose ancestor file
+        # we couldn't read. The over-count surfaces invisibly in
+        # buglog.json (occurrences=20 instead of 10) and corrupts the
+        # signal that drives Do-Not-Repeat triage. Conservative
+        # baseline: for any id present on BOTH sides, assume
+        # ancestor_occ = min(ours_occ, theirs_occ). The invariant
+        # `ancestor_occ <= min(ours_occ, theirs_occ)` always holds
+        # because occurrences only grow from the shared baseline, so
+        # this never over-counts; it may under-count when one branch
+        # added more than the other (acceptable trade-off when the
+        # ancestor is genuinely unreadable). Same audit class as
+        # bug-148. (bug-154)
+        ours_by_id = {b.get("id"): b for b in _bugs_of(ours) if b.get("id")}
+        theirs_by_id = {b.get("id"): b for b in _bugs_of(theirs) if b.get("id")}
+        for bid in ours_by_id.keys() & theirs_by_id.keys():
+            ours_occ = ours_by_id[bid].get("occurrences", 1) or 1
+            theirs_occ = theirs_by_id[bid].get("occurrences", 1) or 1
+            ancestor_occ[bid] = min(ours_occ, theirs_occ)
     used_ids = {
         bug.get("id")
         for src in (ours, theirs)

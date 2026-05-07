@@ -45,11 +45,19 @@ extract_prompt() {
     # The previous version used a single fm_done flag and stripped the
     # FIRST `# ` heading anywhere after the frontmatter — so a file with
     # no leading title silently lost its first body section header.
+    #
+    # Initialise awaiting_title=1 so the title-strip window also opens
+    # for files that have NO frontmatter at all. Otherwise the function
+    # docs claim to "strip frontmatter and the title line" but the
+    # frontmatter-less branch never enters awaiting_title and leaks the
+    # leading `# Title` into the model's prompt. Files with a leading
+    # `---` still flip in_fm=1 first, so the awaiting_title window is
+    # correctly re-armed only AFTER the closing `---`. (bug-155)
     content="$(awk '
-      BEGIN { in_fm=0; awaiting_title=0 }
+      BEGIN { in_fm=0; awaiting_title=1 }
       { sub(/\r$/, "") }
       NR==1 { sub(/^\357\273\277/, "") }
-      NR==1 && /^---$/ { in_fm=1; next }
+      NR==1 && /^---$/ { in_fm=1; awaiting_title=0; next }
       in_fm && /^---$/ { in_fm=0; awaiting_title=1; next }
       in_fm { next }
       awaiting_title && /^[[:space:]]*$/ { print; next }

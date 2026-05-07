@@ -531,3 +531,24 @@
 | 20:22 | Edited scripts/epic-dag.py | 6→6 lines | ~83 |
 | 20:22 | Edited scripts/epic-dag.py | strip() → _unquote_scalar() | ~32 |
 | 20:23 | Edited scripts/epic-dag.py | modified isinstance() | ~479 |
+| 20:25 | Session end: 5 writes across 1 files (epic-dag.py) | 11 reads | ~54940 tok |
+
+## Session: 2026-05-07 20:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 20:50 | Edited scripts/run-sessions.sh | expanded (+16 lines) | ~372 |
+| 20:50 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bugs_of() | ~354 |
+| 20:51 | Edited scripts/epic-dag.py | modified _split_flow_list() | ~1080 |
+| 20:52 | Session end: 3 writes across 3 files (run-sessions.sh, merge-wolf-json.py, epic-dag.py) | 10 reads | ~56040 tok |
+
+## Session: 2026-05-07 21:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:42 | Edited scripts/run-sessions.sh | expanded (+13 lines) | ~257 |
+| 21:42 | Edited scripts/wolf-merge/merge-wolf-json.py | modified isinstance() | ~502 |
+| 21:43 | Edited scripts/lib/epic-session.sh | expanded (+8 lines) | ~394 |
+| 21:44 | Edited scripts/run-sessions.sh | 150 → 153 | ~10 |
+| 21:44 | Edited scripts/wolf-merge/merge-wolf-json.py | inline fix | ~8 |
+| 21:44 | Edited scripts/lib/epic-session.sh | 152 → 155 | ~18 |
