@@ -1,48 +1,57 @@
 {
-  "session_id": "session-2026-05-07-1915",
-  "started": "2026-05-07T01:15:31.438Z",
+  "session_id": "session-2026-05-07-1943",
+  "started": "2026-05-07T01:43:41.684Z",
   "files_read": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
+      "count": 3,
+      "tokens": 1778,
+      "first_read": "2026-05-07T01:43:59.247Z"
+    },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
-      "count": 1,
-      "tokens": 7492,
-      "first_read": "2026-05-07T01:16:07.959Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
-      "count": 1,
-      "tokens": 2560,
-      "first_read": "2026-05-07T01:18:14.548Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
-      "count": 1,
-      "tokens": 4761,
-      "first_read": "2026-05-07T01:18:39.377Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
-      "count": 1,
-      "tokens": 3160,
-      "first_read": "2026-05-07T01:19:15.133Z"
+      "count": 3,
+      "tokens": 8544,
+      "first_read": "2026-05-07T01:43:59.892Z"
     }
   },
   "files_written": [
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
       "action": "edit",
-      "tokens": 1607,
-      "at": "2026-05-07T01:25:57.762Z"
+      "tokens": 364,
+      "at": "2026-05-07T01:45:16.583Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+      "action": "edit",
+      "tokens": 69,
+      "at": "2026-05-07T01:45:20.627Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+      "action": "edit",
+      "tokens": 137,
+      "at": "2026-05-07T01:45:27.078Z"
     },
     {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
       "action": "edit",
-      "tokens": 531,
-      "at": "2026-05-07T01:26:12.068Z"
+      "tokens": 162,
+      "at": "2026-05-07T01:45:32.788Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+      "action": "edit",
+      "tokens": 239,
+      "at": "2026-05-07T01:45:40.458Z"
     }
   ],
   "edit_counts": {
+    "scripts/wolf-merge/merge-wolf-json.py": 3,
     "scripts/epic-dag.py": 2
   },
-  "anatomy_hits": 4,
+  "anatomy_hits": 2,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 0,
+  "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
   "stop_count": 1
 }

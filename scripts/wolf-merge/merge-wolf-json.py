@@ -61,7 +61,7 @@ def _next_free_bug_id(used_ids):
     return f"bug-{max_n + 1:03d}"
 
 
-def merge_buglog(ours, theirs):
+def merge_buglog(ours, theirs, ancestor=None):
     """Union bugs[] by id; preserve both entries on a true id collision.
 
     Two parallel sessions can independently allocate the same next-free id
@@ -72,9 +72,20 @@ def merge_buglog(ours, theirs):
     events that merely collided on id, the previous behavior silently
     dropped one; instead, re-id the second under the next free slot so both
     survive the merge. (bug-090)
+
+    ancestor is used to compute occurrence deltas: both ours and theirs
+    already include the common ancestor count, so naively summing them
+    double-counts the shared baseline. The correct formula is
+    ours + theirs - ancestor_count. (bug-137)
     """
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
         return ours
+    ancestor_occ: dict[str, int] = {}
+    if isinstance(ancestor, dict):
+        for bug in ancestor.get("bugs", []):
+            bid = bug.get("id")
+            if bid:
+                ancestor_occ[bid] = bug.get("occurrences", 1) or 1
     used_ids = {
         bug.get("id")
         for src in (ours, theirs)
@@ -111,9 +122,10 @@ def merge_buglog(ours, theirs):
                 # tightening, parallel detections that previously
                 # renumbered now correctly land here, so this branch is
                 # the one that has to preserve the count. (bug-098)
-                summed = (existing.get("occurrences", 1) or 1) + (
-                    bug.get("occurrences", 1) or 1
-                )
+                ours_occ = existing.get("occurrences", 1) or 1
+                theirs_occ = bug.get("occurrences", 1) or 1
+                base_occ = ancestor_occ.get(bid, 0)
+                summed = max(1, ours_occ + theirs_occ - base_occ)
                 if bug.get("last_seen", "") > existing.get("last_seen", ""):
                     winner = dict(bug)
                 else:
@@ -137,7 +149,7 @@ def merge_buglog(ours, theirs):
 def main() -> int:
     if len(sys.argv) < 5:
         return 1
-    _ancestor, ours_path, theirs_path, pathname = sys.argv[1:5]
+    ancestor_path, ours_path, theirs_path, pathname = sys.argv[1:5]
     ours = load(ours_path)
     theirs = load(theirs_path)
 
@@ -151,7 +163,8 @@ def main() -> int:
 
     name = Path(pathname).name
     if name == "buglog.json":
-        result = merge_buglog(ours, theirs)
+        ancestor = load(ancestor_path)
+        result = merge_buglog(ours, theirs, ancestor)
     else:
         result = ours  # token-ledger, _session, others -> keep ours
 

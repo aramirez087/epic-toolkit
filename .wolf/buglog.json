@@ -2602,6 +2602,73 @@
       "related_bugs": [],
       "occurrences": 2,
       "last_seen": "2026-05-07T01:26:12.070Z"
+    },
+    {
+      "error_message": "OpenWolf buglog merge overcounts occurrences by summing ours and theirs without subtracting the common ancestor count.",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "merge_buglog ignores the ancestor file passed to the custom merge driver, so both sides include the same pre-existing occurrence count and the merge double-counts shared history.",
+      "fix": "Pending: load the ancestor buglog and merge occurrence counts as ancestor + ours_delta + theirs_delta, while preserving existing id-collision behavior.",
+      "tags": [
+        "openwolf",
+        "merge-driver",
+        "buglog",
+        "occurrences"
+      ],
+      "id": "bug-137",
+      "timestamp": "2026-05-07T01:42:19+00:00",
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T01:42:19+00:00"
+    },
+    {
+      "error_message": "Session frontmatter cli values outside claude/opencode are accepted and emitted into the Bash runner protocol.",
+      "file": "scripts/epic-dag.py; scripts/run-sessions.sh",
+      "root_cause": "load_sessions stores cli verbatim and run_cli treats any non-claude value as the OpenCode branch, so typos can silently route through the wrong command path.",
+      "fix": "Pending: validate cli frontmatter and --cli overrides against {claude, opencode}; reject anything else before emitting SESSION rows or launching.",
+      "tags": [
+        "dag",
+        "frontmatter",
+        "cli-validation",
+        "runner"
+      ],
+      "id": "bug-138",
+      "timestamp": "2026-05-07T01:42:19+00:00",
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T01:42:19+00:00"
+    },
+    {
+      "error_message": "Malformed session frontmatter such as session: not-a-number raises a Python traceback instead of a clear validation error.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "load_sessions calls int(fm_session) directly outside a try/except block.",
+      "fix": "Pending: wrap session field conversion and raise SystemExit with filename and expected numeric session id.",
+      "tags": [
+        "dag",
+        "frontmatter",
+        "validation",
+        "error-message"
+      ],
+      "id": "bug-139",
+      "timestamp": "2026-05-07T01:42:19+00:00",
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T01:42:19+00:00"
+    },
+    {
+      "id": "bug-140",
+      "timestamp": "2026-05-07T01:45:20.628Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/wolf-merge/merge-wolf-json.py",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 3→4 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T01:45:20.628Z"
     }
   ]
 }

@@ -365,11 +365,19 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
             text = f.read()
         fm, _ = parse_frontmatter(text)
         fm_session = fm.get("session")
-        if fm_session is not None and int(fm_session) != sid:
-            raise SystemExit(
-                f"ERROR: {entry} declares session={fm_session} "
-                f"but filename says {sid:02d}"
-            )
+        if fm_session is not None:
+            try:
+                fm_session_int = int(fm_session)
+            except (TypeError, ValueError):
+                raise SystemExit(
+                    f"ERROR: {entry} session: must be a numeric session id, "
+                    f"got {fm_session!r}"
+                )
+            if fm_session_int != sid:
+                raise SystemExit(
+                    f"ERROR: {entry} declares session={fm_session} "
+                    f"but filename says {sid:02d}"
+                )
         deps_raw = fm.get("depends_on", None)
         implicit = deps_raw is None
         if implicit:
@@ -398,6 +406,12 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"(true/false/yes/no/on/off), got string {ps_raw!r}. "
                 f"Quote the value if you intend it as a literal string."
             )
+        cli_raw = fm.get("cli", "") or ""
+        if cli_raw and cli_raw not in ("claude", "opencode"):
+            raise SystemExit(
+                f"ERROR: {entry} cli must be 'claude' or 'opencode' (or omit for auto-detect), "
+                f"got {cli_raw!r}"
+            )
         sessions.append(
             {
                 "id": sid,
@@ -410,7 +424,7 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 "touches": [str(t) for t in touches],
                 "parallel_safe": bool(ps_raw),
                 "model": fm.get("model", ""),
-                "cli": fm.get("cli", ""),
+                "cli": cli_raw,
                 "has_frontmatter": bool(fm),
             }
         )

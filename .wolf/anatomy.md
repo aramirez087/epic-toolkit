@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T01:26:12.063Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T01:45:40.453Z
 > Files: 41 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -63,7 +63,7 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~8544 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~8714 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~4761 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16121 tok)
@@ -80,5 +80,5 @@
 
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
 - `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
-- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~1778 tok)
+- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~1967 tok)
 - `resolve-wolf.sh` — Helper for resolving in-progress OpenWolf-only merge/rebase conflicts (~650 tok)

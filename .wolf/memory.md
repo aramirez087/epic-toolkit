@@ -498,3 +498,21 @@
 |------|--------|---------|---------|--------|
 | 19:25 | Edited scripts/epic-dag.py | modified in() | ~1607 |
 | 19:26 | Edited scripts/epic-dag.py | enumerate() → len() | ~531 |
+| 19:27 | Session end: 2 writes across 1 files (epic-dag.py) | 4 reads | ~20111 tok |
+
+## Session: 2026-05-07 19:34
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:42 | Bug hunt review | scripts/wolf-merge/merge-wolf-json.py, scripts/epic-dag.py, scripts/run-sessions.sh | found 3 confirmed bugs; logged buglog entries | ~45000 |
+
+## Session: 2026-05-07 19:43
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:45 | Edited scripts/wolf-merge/merge-wolf-json.py | modified merge_buglog() | ~364 |
+| 19:45 | Edited scripts/wolf-merge/merge-wolf-json.py | 3→4 lines | ~69 |
+| 19:45 | Edited scripts/wolf-merge/merge-wolf-json.py | 15→16 lines | ~137 |
+| 19:45 | Edited scripts/epic-dag.py | modified except() | ~162 |
+| 19:45 | Edited scripts/epic-dag.py | modified in() | ~239 |
+| 19:45 | Session end: 5 writes across 2 files (merge-wolf-json.py, epic-dag.py) | 2 reads | ~11293 tok |
