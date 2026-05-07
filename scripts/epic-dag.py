@@ -138,6 +138,49 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 return line[:i].rstrip()
         return line
 
+    def _split_flow_list(s: str) -> list[str]:
+        """Split a `[...]` flow-list body on `,`, respecting quoted spans.
+
+        A blind `s.split(",")` (the previous implementation) splits inside a
+        legitimate quoted item — `["a, b", c]` produced `['a', 'b', 'c']`
+        instead of `['a, b', 'c']`. For a session's `touches:` / `produces:`
+        list this corrupts any path or glob containing a literal comma, and
+        the validator (validate-session-deliverables.py) then false-flags the
+        session because the entries it's matching against were silently
+        rebuilt under different keys. Same defect class as the quote-aware
+        audits already applied to `_strip_inline_comment` (bug-117 apostrophe,
+        bug-123 escaped backslash, bug-124 tab-before-`#`, bug-126
+        tab-after-`:`); this is the remaining unaudited site. (bug-132)
+        """
+        items: list[str] = []
+        buf = ""
+        in_q: str | None = None
+        for i, ch in enumerate(s):
+            if in_q is not None:
+                buf += ch
+                if ch == in_q:
+                    bs = 0
+                    j = i - 1
+                    while j >= 0 and s[j] == "\\":
+                        bs += 1
+                        j -= 1
+                    if bs % 2 == 0:
+                        in_q = None
+            elif ch in ('"', "'"):
+                in_q = ch
+                buf += ch
+            elif ch == ",":
+                cleaned = buf.strip().strip("'\"")
+                if cleaned:
+                    items.append(cleaned)
+                buf = ""
+            else:
+                buf += ch
+        cleaned = buf.strip().strip("'\"")
+        if cleaned:
+            items.append(cleaned)
+        return items
+
     result: dict[str, Any] = {}
     current_key: str | None = None
     for raw in fm_text.splitlines():
@@ -170,11 +213,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             result[k] = []
         elif v.startswith("[") and v.endswith("]"):
             inner = v[1:-1].strip()
-            result[k] = (
-                [x.strip().strip("'\"") for x in inner.split(",") if x.strip()]
-                if inner
-                else []
-            )
+            result[k] = _split_flow_list(inner) if inner else []
         elif v.lower() in ("true", "false", "yes", "no", "on", "off", "y", "n"):
             # YAML 1.1 boolean spellings (yes/no/on/off + y/n shorthand)
             # join true/false in the parser whitelist. Without this, a
@@ -199,6 +238,22 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
     sessions: list[dict[str, Any]] = []
     operator: str | None = None
+    # Track every session id we've already accepted so two files claiming the
+    # same NN are rejected before they can ever reach build_dag/compute_waves.
+    # Without this, sorted(...) by id leaves both files in `sessions`, the
+    # implicit-dep chain at the bottom of this function makes the second one
+    # `depends_on=[N]` (i.e. on itself, since the prior list element shares
+    # the same id) and build_dag prints the misleading error
+    # "session NN cannot depend on itself" — pointing the user at a YAML
+    # frontmatter problem when the actual issue is duplicate filenames.
+    # With explicit `depends_on: []` the misleading error never fires and
+    # the bug is worse: emit_bash writes two SESSION rows with the same id,
+    # the runner's META parser overwrites SESSION_FILE_BASENAME[N] /
+    # SESSION_SLUG_BY_ID[N] with whichever line came last (silently dropping
+    # the first file), AND appends both ids to WAVE_IDS[N], so the wave
+    # loop in run-sessions.sh attempts to create the same per-session
+    # worktree twice — racing against the in-flight first session. (bug-133)
+    seen_ids: dict[int, str] = {}
     for entry in sorted(os.listdir(sessions_dir)):
         m = SESSION_RE.match(entry)
         if not m:
@@ -222,6 +277,12 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"Rename the file using hyphens only "
                 f"(e.g. session-{sid:02d}-{safe_suggestion}.md)"
             )
+        if sid in seen_ids:
+            raise SystemExit(
+                f"ERROR: duplicate session id {sid:02d}: {seen_ids[sid]} and {entry}. "
+                f"Each session-NN-*.md must have a unique NN — rename one file."
+            )
+        seen_ids[sid] = entry
         if sid == 0:
             operator = path
             continue

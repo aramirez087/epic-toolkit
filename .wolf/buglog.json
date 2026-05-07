@@ -2440,6 +2440,83 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-07T00:32:35.290Z"
+    },
+    {
+      "id": "bug-129",
+      "timestamp": "2026-05-07T01:10:53.910Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "5 lines replaced/restructured",
+      "fix": "Rewrote 7→3 lines (5 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T01:10:53.910Z"
+    },
+    {
+      "id": "bug-130",
+      "timestamp": "2026-05-07T01:12:25.688Z",
+      "error_message": "Wrong reference: 129 should be 130",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Used \"129\" instead of \"130\"",
+      "fix": "Changed 129 → 130",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-05-07T01:13:47.554Z"
+    },
+    {
+      "id": "bug-132",
+      "timestamp": "2026-05-07T00:00:00Z",
+      "error_message": "epic-dag.py parse_frontmatter splits flow-list values on every `,` without respecting quotes — `tags: [\"a, b\", c]` parses as ['a', 'b', 'c'] instead of ['a, b', 'c']. For session frontmatter this corrupts any `touches:` or `produces:` flow-list containing a path/glob with a literal comma; the validator (validate-session-deliverables.py) then false-flags the session because the entries it's matching against were silently rebuilt under different keys. Same defect class as the quote-aware audits already applied to _strip_inline_comment in bug-117 (apostrophe), bug-123 (escaped backslash), bug-124 (tab-before-`#`) and bug-126 (tab-after-`:`); this is the remaining unaudited parser site.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "parse_frontmatter at the flow-list branch did `inner.split(\",\")` blindly. The split has no knowledge of quoted spans, so a `,` inside `\"...\"` or `'...'` ended an item prematurely and the tail of the quoted value became its own bogus item. The same pattern was already audited and fixed for the comment-stripping path; the flow-list path was missed.",
+      "fix": "Extracted a small `_split_flow_list` helper inside parse_frontmatter that walks the body character-by-character, tracking single-/double-quote state and respecting backslash escapes (matching the run-of-`\\` parity check from bug-123). Replaced the blind `inner.split(\",\")` with `_split_flow_list(inner)`. Verified: `[\"a, b\", c]`, `['a, b', c]`, `[\"x\", 'y, z', w]`, `[\"a\\\\\\\\\", \"b, c\"]`, `[1, 2, 3]`, `[]`, and trailing-comma forms all parse correctly. Existing block-list (multi-line `- item`) parsing is unchanged.",
+      "tags": [
+        "found-by-bug-hunt",
+        "parser",
+        "yaml",
+        "flow-list",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-124",
+        "bug-126"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T00:00:00Z"
+    },
+    {
+      "id": "bug-133",
+      "timestamp": "2026-05-07T00:00:00Z",
+      "error_message": "load_sessions silently accepts two session files that claim the same NN (e.g. session-01-foo.md AND session-01-bar.md). Two failure modes: (1) implicit deps — sorted-by-id linearization makes the second one depends_on=[N] where N is its own id, and build_dag prints the misleading error 'session NN cannot depend on itself' (real cause: duplicate filenames, not YAML); (2) explicit `depends_on: []` — emit_bash writes two SESSION rows with the same id, the runner META parser overwrites SESSION_FILE_BASENAME[N]/SESSION_SLUG_BY_ID[N] with whichever line came last (silently dropping the first file) AND appends both ids to WAVE_IDS[N], so the wave loop in run-sessions.sh tries to create the same per-session worktree twice — either tripping is_worktree_in_use against the in-flight first session or racing to delete the worktree out from under it.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "load_sessions iterates os.listdir(sessions_dir) and appends every match of SESSION_RE to the sessions list with no per-id uniqueness check. The downstream linearization assumes ids are unique within `sessions`; the sort step doesn't deduplicate; build_dag's `by_id` comprehension silently overwrites collisions; compute_waves keeps both copies in the ready/wave lists. Nothing along the path reports the actual duplicate.",
+      "fix": "Added a `seen_ids: dict[int, str]` map at the top of load_sessions, populated as each filename is matched. On collision, raise SystemExit with the two filenames and a clear remediation (rename one). The check sits AFTER the slug whitelist (so the user sees the slug error first if both apply) and BEFORE the sid==0 short-circuit, so duplicate operator files (two session-00-*.md) are caught too — previously load_sessions silently kept the lexicographically-later one as the operator. Verified: implicit-deps duplicate, explicit-empty-deps duplicate, and duplicate session-00 all now exit with a clear ERROR and rc=1.",
+      "tags": [
+        "found-by-bug-hunt",
+        "session-loader",
+        "dag",
+        "validation",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-062",
+        "bug-080",
+        "bug-081"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T00:00:00Z"
     }
   ]
 }
