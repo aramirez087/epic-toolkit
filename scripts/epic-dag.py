@@ -88,7 +88,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         elif ":" in stripped:
             value_start = line.find(":") + 1
 
-        while 0 <= value_start < len(line) and line[value_start] == " ":
+        # Skip BOTH spaces and tabs between the `:`/`- ` separator and the
+        # opening quote of a value. ASCII-space-only previously left
+        # `key:\t"hello # world"` parsed as `hello` — the tab kept value_start
+        # pointing one byte before the `"`, in_quote never opened, and the
+        # `#`-stripper (which DOES accept tab as a separator since bug-124)
+        # then truncated the value at the first `#` inside the string.
+        # Symmetric to bug-124. (bug-126)
+        while 0 <= value_start < len(line) and line[value_start] in (" ", "\t"):
             value_start += 1
 
         in_quote: str | None = None
@@ -137,8 +144,18 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         raw = _strip_inline_comment(raw)
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
-        if raw.startswith(("  - ", "- ", "    - ")):
-            item = raw.lstrip().lstrip("-").strip().strip("'\"")
+        # Recognise a block-list item at any indent (any mix of spaces and
+        # tabs), and accept either `- value`, `-\tvalue`, or a bare `-` row.
+        # The previous prefix whitelist `("  - ", "- ", "    - ")` only
+        # covered 0/2/4-space indents, so a perfectly normal 3-space or
+        # tab-indented `produces:` list silently dropped every item, leaving
+        # `result['produces'] = []`. Downstream that took
+        # validate-session-deliverables.py through the metadata-only fallback
+        # and rubber-stamped sessions whose `produces:` declaration was being
+        # ignored. (bug-127)
+        lstripped = raw.lstrip(" \t")
+        if lstripped == "-" or lstripped.startswith(("- ", "-\t")):
+            item = lstripped[1:].strip().strip("'\"")
             if current_key is not None:
                 result.setdefault(current_key, []).append(item)
             continue
