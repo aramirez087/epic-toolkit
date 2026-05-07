@@ -1,13 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T13:48:19.231Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T15:14:15.622Z
 > Files: 41 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
 - `bughunt-tests.sh` (~1187 tok)
 - `commit-msg-fix.txt` (~397 tok)
-- `commit-msg.txt` (~308 tok)
+- `commit-msg.txt` — Declares as (~495 tok)
 - `epic-fix-commit-msg.txt` (~453 tok)
 - `epic-toolkit-commit-msg.txt` (~413 tok)
 - `epic-toolkit-fix-msg-2.txt` (~311 tok)
@@ -63,11 +63,11 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~11812 tok)
-- `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~5538 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~13185 tok)
+- `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~6310 tok)
 - `epic-ui.py` — Live terminal TUI dashboard (~3346 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16574 tok)
-- `validate-session-deliverables.py` — /page.tsx` (~3306 tok)
+- `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
 
 ## scripts/lib/
 

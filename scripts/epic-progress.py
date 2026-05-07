@@ -277,11 +277,35 @@ def main():
                     except json.JSONDecodeError:
                         continue
 
+                    # `evt = json.loads(line)` succeeds for any valid JSON value,
+                    # not just objects — `null` → None, `"str"` → str, `[…]` →
+                    # list, `123` → int. The downstream `evt.get("type", "")`
+                    # crashes with AttributeError on every non-dict, propagating
+                    # out of the reader and breaking the producer pipe with
+                    # SIGPIPE — claude/opencode then exits 141 and classify_error
+                    # reports `cli_crash` instead of the real producer-protocol
+                    # cause. Same audit class as bug-167 (`evt.get("error", {})`
+                    # accepted None for `"error": null`); the fix there guarded
+                    # one call site, but the symmetric guard at the OUTER event
+                    # boundary was never added — every nested fetch below
+                    # (content_block, delta, part) was implicitly assuming the
+                    # outer parse already produced a dict. (bug-175)
+                    if not isinstance(evt, dict):
+                        continue
                     evt_type = evt.get("type", "")
 
                     # ── Claude stream-json events ──
                     if evt_type == "content_block_start":
-                        cb = evt.get("content_block", {})
+                        # `evt.get("content_block", {})` returns the literal None
+                        # when the producer emits `"content_block": null` (the
+                        # default ONLY fires for absent keys, not null values)
+                        # — same audit class as bug-167. Without the guard, the
+                        # next `cb.get(...)` raises AttributeError, breaks the
+                        # pipe, and the session is misclassified as cli_crash.
+                        # Mirror the bug-167 isinstance(dict) guard. (bug-175)
+                        cb = evt.get("content_block")
+                        if not isinstance(cb, dict):
+                            continue
                         if cb.get("type") == "tool_use":
                             step += 1
                             tool_calls += 1
@@ -303,7 +327,13 @@ def main():
                                 current_target = ""
 
                     elif evt_type == "content_block_delta":
-                        delta = evt.get("delta", {})
+                        # Same null-safe guard as content_block_start above —
+                        # `evt.get("delta", {})` returns None for `"delta": null`
+                        # and the next `.get(...)` raises AttributeError,
+                        # breaking the producer pipe with SIGPIPE. (bug-175)
+                        delta = evt.get("delta")
+                        if not isinstance(delta, dict):
+                            continue
                         delta_type = delta.get("type", "")
 
                         if delta_type == "input_json_delta":
@@ -343,7 +373,12 @@ def main():
                         current_target = ""
 
                     elif evt_type == "tool_use":
-                        part = evt.get("part", {})
+                        # Same null-safe guard — `"part": null` collapses to
+                        # None and the next `.get(...)` crashes the reader,
+                        # breaking the OpenCode pipe with SIGPIPE. (bug-175)
+                        part = evt.get("part")
+                        if not isinstance(part, dict):
+                            continue
                         raw_tool = part.get("tool", "?")
                         current_tool = OPENCODE_TOOL_ALIASES.get(raw_tool, raw_tool)
                         tool_calls += 1
@@ -360,7 +395,11 @@ def main():
                             last_status_ts = now
 
                     elif evt_type == "text":
-                        part = evt.get("part", {})
+                        # Same null-safe guard for the OpenCode text event.
+                        # (bug-175)
+                        part = evt.get("part")
+                        if not isinstance(part, dict):
+                            continue
                         text = part.get("text", "")
                         if text:
                             log_file.write(text)

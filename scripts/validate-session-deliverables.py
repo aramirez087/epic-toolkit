@@ -226,7 +226,51 @@ def main() -> int:
 
     fm, _ = dag.parse_frontmatter(text)
 
-    if fm.get("skip_deliverables_check") is True:
+    # `fm.get("skip_deliverables_check") is True` silently ignored every shape
+    # parse_frontmatter can emit that ISN'T strictly bool True. The user typed
+    # an opt-out, the parser produced something the consumer couldn't interpret,
+    # the consumer fell through and ran validation — which then most likely
+    # FAILED the session (kickoff/docs-only sessions don't have `produces:`
+    # declared, so they hit the metadata-only heuristic). The user saw a
+    # confusing "deliverables missing" / "metadata-only" error AFTER they
+    # explicitly opted out, with no diagnostic naming the YAML cause. Concrete
+    # silent-ignore shapes:
+    #   • `skip_deliverables_check: 1` — int 1 (parse_frontmatter's numeric
+    #     branch); `1 is True` is False → silent run.
+    #   • `skip_deliverables_check: "true"` (quoted) — _unquote_scalar strips
+    #     the quotes BUT only AFTER the YAML 1.1 boolean check (which keys
+    #     on the unstripped raw v.lower() ∈ {"true","yes",...}); the quoted
+    #     `"true"` is not in that whitelist (it includes the quotes), falls
+    #     through to the string branch, lands as the string "true", and
+    #     `"true" is True` is False → silent run. Same for `"yes"`/`"on"`.
+    #   • `skip_deliverables_check:` empty + indented `- true` block items —
+    #     parse_frontmatter assigns `[]` for the empty value column and then
+    #     appends block-list items, yielding `["true"]`; `["true"] is True`
+    #     is False → silent run, with the user's items thrown away.
+    #   • `skip_deliverables_check:` empty alone — `[]`; `[] is True` is False
+    #     → silent run.
+    # Same audit class as bug-097/142/146/164/165/167/170/171/172/173: every
+    # .get(key, default)-style consumer that interprets a typed value must
+    # reject inputs the parser can produce but the consumer can't interpret,
+    # AND the diagnostic must name the parser cause so the user fixes the
+    # YAML, not the symptom. Mirror the bug-170/171 pattern — name bool
+    # spelling first (the YAML 1.1 trap is rare here since `false` is a
+    # legitimate value, but bool-typed shapes that AREN'T True still need
+    # to fall through cleanly), then reject every other non-bool shape.
+    skip_raw = fm.get("skip_deliverables_check")
+    if skip_raw is not None and not isinstance(skip_raw, bool):
+        print(
+            f"ERROR: skip_deliverables_check must be a boolean (true/false), "
+            f"got {type(skip_raw).__name__} {skip_raw!r}. This usually means "
+            f"the YAML key has a non-bool value (`skip_deliverables_check: 1`, "
+            f"`skip_deliverables_check: \"true\"`) or has accidental indented "
+            f"children below it. Use the unquoted YAML 1.1 spellings — "
+            f"`skip_deliverables_check: true` / `yes` / `on` — to opt out, "
+            f"or omit the key (or set it to `false`) to run validation.",
+            file=sys.stderr,
+        )
+        return 2
+    if skip_raw is True:
         return 0
 
     try:

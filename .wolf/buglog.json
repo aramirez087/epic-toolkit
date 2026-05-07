@@ -3360,6 +3360,76 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T15:00:00Z"
+    },
+    {
+      "id": "bug-174",
+      "timestamp": "2026-05-07T15:13:32.860Z",
+      "error_message": "Wrong return value",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "Was returning: 0",
+      "fix": "Now returns: 2",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:13:32.860Z"
+    },
+    {
+      "id": "bug-175",
+      "timestamp": "2026-05-07T15:30:00Z",
+      "error_message": "validate-session-deliverables.py:229 silently ignored every shape parse_frontmatter can emit for `skip_deliverables_check:` that is NOT strictly bool True. The user typed an opt-out, the parser produced something the consumer couldn't interpret, the consumer fell through to the validation run — which then most likely FAILED the session because kickoff/docs-only sessions don't declare `produces:` and so hit the metadata-only heuristic. The user saw 'session committed only metadata/handoff files — no real deliverables' AFTER they had explicitly opted out, with no diagnostic naming the YAML cause. Concrete silent-ignore shapes: (1) `skip_deliverables_check: 1` — parse_frontmatter's int branch yields int 1; `1 is True` is False (Python: `1 == True` but NOT `1 is True`) → silent run. (2) `skip_deliverables_check: \"true\"` (quoted) — _unquote_scalar strips the quotes BUT only AFTER the YAML 1.1 boolean check, which keys on the unstripped raw v.lower() ∈ {true,yes,...}; the quoted `\"true\"` is not in that whitelist (it includes the quotes), falls through to the string branch, lands as the string \"true\", and `\"true\" is True` is False → silent run. Same for `\"yes\"`, `\"on\"`. (3) `skip_deliverables_check:` empty + indented `- true` block items — parse_frontmatter assigns `[]` for the empty value column then appends the block-list items, yielding `[\"true\"]`; `[\"true\"] is True` is False → silent run, with the user's items thrown away. (4) `skip_deliverables_check:` empty alone → `[]`; `[] is True` is False → silent run.",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "The strict `is True` comparison rejects every non-bool truthy value the YAML parser can produce. parse_frontmatter emits int, str, list, and bool shapes; only bool True passes, so int 1 / str \"true\" / quoted \"yes\" / list shapes from typo'd indented children all silently fall through to the validation run as if the user never wrote the opt-out. Same audit class as bug-097/142/146/164/165/167/170/171/172/173: every .get(key, default)-style consumer that interprets a typed value must reject inputs the parser can produce but the consumer can't interpret, AND the diagnostic must name the parser cause so the user fixes the YAML, not the symptom. This was the last unaudited consumer site for the session-frontmatter shape — bug-170/171 fixed `touches:`/`produces:`, bug-172/173 fixed `model:`/`cli:`, bug-164 fixed `parallel_safe`, bug-165 fixed `depends_on`. `skip_deliverables_check` was the remaining strict-bool consumer left without a non-bool guard.",
+      "fix": "Read raw via `fm.get(\"skip_deliverables_check\")` (no default → None for absent). If non-None and not bool, print a YAML-aware error naming the int / quoted-string / indented-children remediations (use unquoted YAML 1.1 spellings — true/yes/on — to opt out, or omit the key / set false to run validation) and return rc=2. After the guard, `is True` is now exhaustive: only bool True triggers the opt-out path, bool False / absent fall through to validation as documented. Mirrors the bug-170/171 pattern — name the YAML 1.1 cause first, then accept the legitimate shape.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "silent-coerce",
+        "validator",
+        "audit-class:bug-097",
+        "audit-class:bug-167",
+        "audit-class:bug-170"
+      ],
+      "related_bugs": [
+        "bug-097",
+        "bug-164",
+        "bug-167",
+        "bug-170",
+        "bug-171",
+        "bug-172",
+        "bug-173",
+        "bug-174"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:30:00Z"
+    },
+    {
+      "id": "bug-176",
+      "timestamp": "2026-05-07T15:30:30Z",
+      "error_message": "epic-progress.py crashed with uncaught AttributeError on multiple producer-emittable JSON shapes. (1) `evt = json.loads(line)` succeeds for any valid JSON value, not just objects — `null` → None, `\"str\"` → str, `[…]` → list, `123` → int. The downstream `evt.get(\"type\", \"\")` raises AttributeError on every non-dict, propagating out of the reader thread and breaking the producer pipe with SIGPIPE. claude/opencode then exits 141 and classify_error reports `cli_crash` instead of the real producer-protocol cause — the operator chases a phantom CLI failure when the real bug is a single bare `null` line in the stream. (2) Symmetric defect at four nested sites that all use the `evt.get(KEY, {})` pattern: `evt.get(\"content_block\", {})` for content_block_start, `evt.get(\"delta\", {})` for content_block_delta, `evt.get(\"part\", {})` for OpenCode tool_use, `evt.get(\"part\", {})` for OpenCode text. dict.get's default ONLY fires for ABSENT keys, not null values; if the producer emits `\"content_block\": null` / `\"delta\": null` / `\"part\": null`, the .get returns the literal None and the next `.get(...)` on it raises AttributeError — same crash chain.",
+      "file": "scripts/epic-progress.py",
+      "root_cause": "Same audit class as bug-167: every `.get(key, default)` site that consumes a typed value must reject inputs the producer can emit but the consumer can't interpret. The bug-167 fix patched the `evt.get(\"error\", {})` site with an isinstance(dict) guard but missed every other `evt.get(KEY, {})` site that follows the same pattern, AND missed the symmetric guard at the OUTER event boundary (the json.loads result itself, before any .get call). Each of these is a one-line crash waiting for a producer to send a malformed/null value — common during version skew, transient stream-json bugs, or when an upstream framework wraps an error response in a null payload.",
+      "fix": "Add isinstance(dict) guards at all five sites: (a) immediately after json.loads, `if not isinstance(evt, dict): continue` so the rest of the parsing assumes a dict; (b) drop the `{}` defaults from `evt.get(\"content_block\")`, `evt.get(\"delta\")`, and the two `evt.get(\"part\")` calls, then guard each with `isinstance(..., dict)` before the next `.get(...)`. Mirrors the bug-167 fix pattern. Defensive against null/non-dict shapes at every boundary the producer crosses; the alternative — letting the reader thread crash and the pipe break — silently misclassifies the failure mode.",
+      "tags": [
+        "found-by-bug-hunt",
+        "stream-json",
+        "error-handling",
+        "audit-class:bug-167",
+        "audit-class:bug-148"
+      ],
+      "related_bugs": [
+        "bug-148",
+        "bug-162",
+        "bug-166",
+        "bug-167",
+        "bug-175"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:30:30Z"
     }
   ]
 }
