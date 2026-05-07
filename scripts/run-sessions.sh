@@ -209,6 +209,25 @@ if [[ -f "$CONFIG_FILE" ]]; then
   fi
 fi
 
+# Reject MAX_PARALLEL=0 explicitly. The earlier numeric validation accepts 0
+# because `^[0-9]+$` includes the zero case, and the same regex in the config
+# loader above (`"maxParallel"\s*:\s*([0-9]+)`) accepts `"maxParallel": 0` too.
+# But the throttle loop in the wave fan-out is `while [[ ${#JOB_PIDS[@]} -ge
+# $MAX_PARALLEL ]]; do reap_finished_jobs; sleep 1; done` — with MAX_PARALLEL=0
+# the predicate `array_length >= 0` is ALWAYS true (every non-negative array
+# length satisfies it, including the empty-array starting state), so the loop
+# never exits, no session ever spawns, and the runner hangs forever consuming
+# the wave-timeout's idle minutes before SIGKILL ends the wait. The other
+# zero-sentinel flags (`--timeout 0`, `--retry 0`, `--wave-timeout 0`) all
+# have well-defined "disabled / auto" semantics in the runner; MAX_PARALLEL=0
+# is the only one that's pathologically broken because the code path expects
+# a positive concurrency ceiling. Validate after config load so a bad
+# `.epic-config.json "maxParallel": 0` is caught too. (bug-194)
+if [[ "$MAX_PARALLEL" -lt 1 ]]; then
+  err "MAX_PARALLEL must be >= 1 (got '$MAX_PARALLEL'). 0 would hang the throttle loop indefinitely; use 1 for serial execution."
+  exit 1
+fi
+
 # --- Detect CLI ---
 # Prefer --cli override, then the invoking tool's env var, then PATH fallback.
 # OPENCODE_SESSION_ID is set by OpenCode; CLAUDECODE is set by Claude Code.
@@ -467,8 +486,36 @@ while IFS= read -r line; do
       # (bug-076)
       _rest="${line#SESSION }"
       set -- $_rest
-      sw="$1"; sid="$2"; sfile="$3"; sdeps="$4"; sslug="$5"; sparallel="$6"
+      sw="${1:-}"; sid="${2:-}"; sfile="${3:-}"; sdeps="${4:-}"; sslug="${5:-}"; sparallel="${6:-}"
       smodel="${7:-}"; scli="${8:-}"
+      # Skip malformed SESSION rows whose wave/id fields aren't numeric.
+      # Symmetric bash-side defence to bug-192's Python-side guard. Both
+      # consumers (this loop and the status-init heredoc / parse_bash_plan)
+      # read the SAME plan file, so the same producer-emittable corruption
+      # modes apply: a partial-flush from a SIGKILL'd `cp` mid-write, an
+      # NFS read racing the write, schema drift from a future writer, or
+      # a hand-edit for debugging. The bash side runs FIRST (line 455-484)
+      # and uses `$sw`/`$sid` directly as numeric array subscripts at
+      # `WAVE_IDS[$sw]`, `SESSION_FILE_BASENAME[$sid]`, etc. — bash treats
+      # subscripts as arithmetic expressions, and a non-numeric subscript
+      # like `WAVE_IDS[garbage]` looks up a variable named `garbage`,
+      # which under the runner's `set -u` is unbound: bash exits the
+      # entire runner with `garbage: unbound variable` BEFORE bug-192's
+      # heredoc fix ever gets a chance to run. The user sees a cryptic
+      # bash error and the epic never starts. Same audit class as bug-192:
+      # every consumer of producer-emitted data must reject inputs the
+      # producer can emit but the consumer can't interpret, and the audit
+      # must extend to every narrowing predicate the consumer applies —
+      # here, bash array-subscript-as-arithmetic is a string→int narrowing
+      # that crashes on every shape outside the numeric subspace. Mirror
+      # bug-192's coerce-and-skip: the well-formed lines around the
+      # malformed one still register, so the runner degrades gracefully
+      # (dropping ONLY the malformed sessions) instead of failing wholesale.
+      # Also reject empty truncated rows (fewer than 6 fields after split)
+      # for parity with the heredoc's `if len(parts) < 6: continue`. (bug-193)
+      if ! [[ "$sw" =~ ^[0-9]+$ && "$sid" =~ ^[0-9]+$ ]]; then
+        continue
+      fi
       [[ "$smodel" == "-" ]] && smodel=""
       [[ "$scli"   == "-" ]] && scli=""
       WAVE_IDS[$sw]="${WAVE_IDS[$sw]:-} $sid"

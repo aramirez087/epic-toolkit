@@ -1,10 +1,15 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T21:16:20.207Z
-> Files: 51 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T21:35:29.507Z
+> Files: 59 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
+- `append-bugs.py` — Declares as (~2392 tok)
+- `bash-test.sh` (~40 tok)
+- `bash-test2.sh` (~41 tok)
+- `bash-test3.sh` (~40 tok)
+- `bash-test4.sh` (~87 tok)
 - `bug-185-186-msg.txt` — Declares as (~1419 tok)
 - `bug-189-commit-msg.txt` — Declares as (~647 tok)
 - `bughunt-tests.sh` (~1187 tok)
@@ -16,6 +21,9 @@
 - `epic-toolkit-commit-msg.txt` (~413 tok)
 - `epic-toolkit-fix-msg-2.txt` (~311 tok)
 - `epic-toolkit-fix-msg.txt` (~353 tok)
+- `happy-path-194.sh` — Confirm valid MAX_PARALLEL values still work (1, 2, 4) and dry-run completes. (~174 tok)
+- `repro-bug-193.sh` — Reproduce bug-193: malformed plan file causes runner to crash with bash (~527 tok)
+- `repro-bug-194.sh` — Confirm MAX_PARALLEL=0 is now rejected at validation, not silently looping. (~181 tok)
 - `test-bug-181.sh` — Reproduce bug-181: log call inside map_model_shorthand leaks into captured stdout (~461 tok)
 
 ## ../../../../tmp/sprint-test/
@@ -81,7 +89,7 @@
 - `epic-dag.py` — - supabase/migrations/*auth* (~13185 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~7983 tok)
 - `epic-ui.py` — as: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~5832 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~17075 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~17924 tok)
 - `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3013 tok)
 - `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
 

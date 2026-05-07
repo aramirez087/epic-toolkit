@@ -3818,6 +3818,54 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T21:17:35.455421Z"
+    },
+    {
+      "id": "bug-193",
+      "timestamp": "2026-05-07T21:35:32.359274Z",
+      "error_message": "run-sessions.sh bash-side SESSION-row parser at line 462-482 crashes the entire runner with `garbage: unbound variable` (rc=1) under the runner-wide `set -euo pipefail` whenever the shared `.epic-dag-plan.bash` file contains a SESSION line whose wave or id field is non-numeric. Symmetric defect to bug-192: the SAME plan file is consumed by THREE call sites and bug-192 only patched two of them. (a) bash-side parser at run-sessions.sh:462-482 (this bug) \u2014 runs FIRST in the boot sequence, builds WAVE_IDS / SESSION_FILE_BASENAME / SESSION_SLUG_BY_ID / SESSION_DEPS_BY_ID / SESSION_PARALLEL / SESSION_WAVE_OF / SESSION_MODEL_BY_ID / SESSION_CLI_BY_ID. The line `WAVE_IDS[$sw]=...` evaluates `$sw` in arithmetic context (bash array subscripts are arithmetic expressions); a string like `garbage` is a variable lookup that resolves to 0 only when `set -u` is OFF \u2014 under the runner's `set -u` it raises `garbage: unbound variable` and the runner exits non-zero before the bug-192-patched heredoc / dashboard ever launches. The user sees a cryptic bash error far from the YAML / plan-file cause. (b) Same chain for `SESSION 1 abc ...` \u2014 sw=1 passes, but the next line `SESSION_FILE_BASENAME[$sid]=$sfile` has $sid=abc, same arithmetic-subscript-as-variable-lookup, same set -u crash. (c) Truncated SESSION rows where `set -- $_rest` lands fewer than 6 fields leave `sslug`/`sparallel`/etc. empty \u2014 under `set -u` the bare `${5:-}` was already needed to avoid an unbound-variable trip on the original `sslug=\"$5\"`. Producer-emittable corruption modes are exactly bug-192's: partial-flush from a SIGKILL'd `cp` mid-write of the plan file, NFS read racing the write, schema drift from a future writer, hand-edit for debugging.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Same audit class as bug-185/186/188/189/192 \u2014 every consumer of producer-emitted data must reject inputs the producer can emit but the consumer cannot interpret, AND that audit must extend to every narrowing predicate the consumer applies. Bug-192 audited two of the three plan-file consumers (the Python parse_bash_plan in epic-ui.py and the Python status-init heredoc in run-sessions.sh) \u2014 both narrow strings to ints via `int(parts[i])`. The bash-side parser does the SAME narrowing implicitly: bash array subscripts ARE arithmetic, so `WAVE_IDS[$sw]` is a string\u2192int narrowing. It crashes on every shape outside the numeric subspace, and under `set -u` the failure mode is more catastrophic than the heredoc's silent exit-non-zero \u2014 the runner itself exits before the bug-192-protected consumers run. Because the bash side runs FIRST, bug-192's heredoc fix is dead code on a poisoned plan: the bash parser kills the runner before the heredoc spawns. The bug-192 audit thread is incomplete until this third site is patched.",
+      "fix": "Mirror bug-192's coerce-and-skip pattern at the bash-side parser. Two changes inside the SESSION case: (1) pad the field assignments with `${N:-}` defaults (sw/sid/sfile/sdeps/sslug/sparallel) so a truncated row with fewer than 6 fields doesn't trip `set -u` on the bare `$5` / `$6` itself BEFORE the validity check fires; (2) add `if ! [[ \"$sw\" =~ ^[0-9]+$ && \"$sid\" =~ ^[0-9]+$ ]]; then continue; fi` immediately after the field unpacking and BEFORE any array subscript uses $sw / $sid. Well-formed lines around the malformed one still register, so the runner degrades gracefully (dropping ONLY the malformed sessions) instead of failing wholesale \u2014 same coerce-and-skip discipline as bug-192. Verified by reproducing all three crash chains on the pre-patch tree (`SESSION garbage 1 ...`, `SESSION 1 abc ...`, truncated `SESSION 1`) and confirming all three skip cleanly on the patched tree, with a well-formed two-session epic still parsing identically (sid=1 wave=1 slug=foo, sid=2 wave=2 slug=bar).",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-extension",
+        "run-sessions",
+        "plan-file",
+        "producer-consumer",
+        "narrowing-predicate",
+        "bash-arithmetic-subscript",
+        "set-u",
+        "sh"
+      ],
+      "related_bugs": [
+        "bug-185",
+        "bug-186",
+        "bug-188",
+        "bug-189",
+        "bug-192"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T21:35:32.359274Z"
+    },
+    {
+      "id": "bug-194",
+      "timestamp": "2026-05-07T21:35:32.359274Z",
+      "error_message": "run-sessions.sh accepts `--max-parallel 0` (and `\"maxParallel\": 0` from .epic-config.json) at validation time and then hangs forever in the wave-fanout throttle loop. Concrete chain: (1) the early validation at run-sessions.sh:141-147 uses regex `^[0-9]+$`, which matches `0`; (2) the config loader at run-sessions.sh:188-190 uses regex `[0-9]+` for `\"maxParallel\"`, which also matches `0`; (3) the wave loop at run-sessions.sh:937-942 throttles via `while [[ ${#JOB_PIDS[@]} -ge $MAX_PARALLEL ]]; do reap_finished_jobs; [[ ${#JOB_PIDS[@]} -ge $MAX_PARALLEL ]] && sleep 1; done`. With MAX_PARALLEL=0 the predicate `array_length >= 0` is mathematically always true (every non-negative integer >= 0, and bash array length is always >= 0 \u2014 including the empty-array starting state). The loop never exits, no session ever spawns, and the runner hangs at the start of wave 1 consuming every minute of the wave-timeout's idle budget before SIGKILL ends the wait. The user sees a hung process with no diagnostic \u2014 the dashboard launches and shows pending-forever, but the actual cause (a numerically-valid but semantically-invalid concurrency ceiling) is never named.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The runner has four numeric flags whose value column accepts 0 \u2014 `--timeout 0`, `--retry 0`, `--wave-timeout 0`, `--max-parallel 0` \u2014 and three of them have well-defined zero semantics (timeout=disabled, retry=no retries, wave-timeout=auto-derive). Only --max-parallel needs a positive concurrency ceiling because the throttle predicate is a saturating `>= MAX_PARALLEL` check, not a `>` check. The shared `^[0-9]+$` regex in both the cmdline validator and the config-file regex is too permissive for this one flag; it accepts 0 as a syntactically-valid integer when the consumer requires >= 1.",
+      "fix": "Add an explicit `if [[ \"$MAX_PARALLEL\" -lt 1 ]]; then err ...; exit 1; fi` check AFTER the config loader runs (line 211, between the closing `fi` of the config block and the `Detect CLI` section) so a bad `.epic-config.json \"maxParallel\": 0` is caught alongside a bad `--max-parallel 0`. The error message names both the cause (would hang the throttle loop indefinitely) and the remediation (use 1 for serial execution). Verified by confirming `--max-parallel 0` now exits rc=1 with a clear diagnostic, while `--max-parallel 1`, `--max-parallel 2`, and `--max-parallel 4` all complete --dry-run cleanly with rc=0.",
+      "tags": [
+        "found-by-bug-hunt",
+        "run-sessions",
+        "validation",
+        "throttle-loop",
+        "infinite-hang",
+        "off-by-one",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T21:35:32.359274Z"
     }
   ]
 }
