@@ -374,8 +374,31 @@ def main():
                             current_target = ""
 
                     elif evt_type == "error":
-                        err_data = evt.get("error", {})
-                        err_msg = err_data.get("message", "") if isinstance(err_data, dict) else str(err_data)
+                        # `evt.get("error", {})` returns the literal None when the
+                        # producer emits `"error": null` (the default only fires
+                        # for ABSENT keys). The previous `str(err_data)` fallback
+                        # then stringified None to "None", a non-empty string
+                        # that passed the `if err_msg:` gate — corrupting the log
+                        # with `[ERROR] None` and propagating "None" as the
+                        # error_detail in the result file. Same audit class as
+                        # bug-148: every .get(key, default) site that consumes
+                        # a typed value must reject inputs the producer can emit
+                        # but the consumer can't interpret.
+                        # Multi-line messages also need normalisation: classify_error
+                        # uses `grep -oE '^\[ERROR\] .+' | head -1` which truncates
+                        # at the first \n, dropping the rest of the message from
+                        # error_detail (it survives in the log only).
+                        err_data = evt.get("error")
+                        err_msg = ""
+                        if isinstance(err_data, dict):
+                            msg = err_data.get("message", "")
+                            if isinstance(msg, str):
+                                err_msg = msg
+                        elif isinstance(err_data, str):
+                            err_msg = err_data
+                        err_msg = " | ".join(
+                            ln.strip() for ln in err_msg.splitlines() if ln.strip()
+                        )
                         if err_msg:
                             log_file.write(f"\n[ERROR] {err_msg}\n")
                             log_file.flush()
