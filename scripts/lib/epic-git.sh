@@ -309,13 +309,37 @@ session_completed_on_branch() {
   # ${BASE_BRANCH}..${branch} keeps only commits unique to this epic.
   rev_range="$branch"
   if [[ -n "${BASE_BRANCH:-}" ]]; then
+    # Prefer `origin/$BASE_BRANCH` over the local `$BASE_BRANCH` ref. The
+    # auto-rebase at run-sessions.sh:1589 lands HEAD on top of
+    # `origin/$REBASE_DEFAULT`, and `git fetch --prune` (via
+    # cleanup_merged_epic_branches at the run's tail and any user-driven
+    # fetch beforehand) updates the remote-tracking ref but does NOT
+    # fast-forward the local one — so on a resume run after a prior auto-
+    # rebase, the trunk worktree's HEAD ancestry passes through origin's
+    # tip-at-rebase-time, NOT through local `$BASE_BRANCH`. Walking
+    # `local-base..HEAD` then walks back to the lagging local tip and the
+    # rev-range absorbs every commit that landed on origin between the
+    # two refs — re-introducing the exact bug-080 false-positive class
+    # the rev-range scope was supposed to prevent: a previously-merged
+    # epic's `feat: Session N ...` subjects on origin/main get walked
+    # into the scan, the helper returns 0 for sessions that never ran on
+    # this branch, and the runner's end-of-epic check at
+    # run-sessions.sh:1512 silently classifies the run as ALL_SESSIONS_DONE
+    # — triggering the cleanup path (lines 1518-1576) that deletes session
+    # prompt files and roadmap handoffs the user still needs for the next
+    # resume attempt. Same audit gap as bug-122 (cleanup_merged_epic_
+    # branches at epic-git.sh:255-258, where `origin/$default_branch` is
+    # already preferred via the same `rev-parse --verify --quiet` probe)
+    # and bug-204 (the auto-PR shortstat at run-sessions.sh:1651-1654);
+    # session_completed_on_branch was the third local-vs-origin call site
+    # the bug-122/204 audit missed. The same fall-through to the local
+    # ref preserves the worktree-only-checkout case (no local ref
+    # configured) that the original guard was added for.
     local base_ref=""
-    if git -C "$repo" rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
-      base_ref="$BASE_BRANCH"
-    elif git -C "$repo" rev-parse --verify --quiet "origin/$BASE_BRANCH" >/dev/null 2>&1; then
-      # Worktree-only checkouts may not have a local copy of $BASE_BRANCH;
-      # fall back to the remote-tracking ref so the scope still applies.
+    if git -C "$repo" rev-parse --verify --quiet "origin/$BASE_BRANCH" >/dev/null 2>&1; then
       base_ref="origin/$BASE_BRANCH"
+    elif git -C "$repo" rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
+      base_ref="$BASE_BRANCH"
     fi
     if [[ -n "$base_ref" ]]; then
       rev_range="${base_ref}..${branch}"

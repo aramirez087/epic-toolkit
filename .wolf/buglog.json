@@ -4143,6 +4143,47 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T23:06:34Z"
+    },
+    {
+      "id": "bug-206",
+      "timestamp": "2026-05-07T23:29:35.560Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 14\u219238 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T23:29:35.560Z"
+    },
+    {
+      "id": "bug-207",
+      "timestamp": "2026-05-07T23:31:02.000Z",
+      "error_message": "session_completed_on_branch (epic-git.sh:290-333) prefers the LOCAL `$BASE_BRANCH` ref over `origin/$BASE_BRANCH` when both verify, inverting the local-vs-origin preference that bug-122 (cleanup_merged_epic_branches at lines 255-258) and bug-204 (the auto-PR shortstat at run-sessions.sh:1651-1654) already established for symmetric call sites. The auto-rebase at run-sessions.sh:1589 lands the trunk worktree's HEAD on top of `origin/$REBASE_DEFAULT`, and `git fetch --prune` (cleanup_merged_epic_branches at the run's tail and any user-driven fetch beforehand) updates the remote-tracking ref but does NOT fast-forward the local one \u2014 so on a resume run AFTER a prior auto-rebase, the trunk's HEAD ancestry passes through origin's tip-at-rebase-time, NOT through local `$BASE_BRANCH`. The rev-range `$BASE_BRANCH..$branch` then computes `merge-base(local-base, $branch) = local-base-tip` (an ancestor of HEAD because origin's tip-at-rebase-time descends from local-base), and `git log` walks back to that lagging local tip \u2014 absorbing every commit that landed on origin between the local tip and origin's tip-at-rebase-time into the subject scan. If any of those absorbed commits are `feat: Session N <sep>...` from a previously-merged epic on the SAME repo (the exact false-positive class bug-080 went out of its way to prevent), the helper returns 0 for sessions that NEVER ran on this branch, and the runner's end-of-epic check at run-sessions.sh:1512 silently classifies the run as ALL_SESSIONS_DONE \u2014 triggering the cleanup path at lines 1518-1576 that `git rm -r` deletes `docs/claude-sessions/<epic>/` and `docs/roadmap/<epic>/`, destroying the session prompts and roadmap handoffs the user still needs for the next resume attempt. Same producer/consumer audit class as bug-122/204: every site that walks `<base>..<branch>` against a base that the auto-rebase moves to `origin/<base>` must prefer the remote ref over the local one, because the local ref's lag is the common case in worktree workflows. session_completed_on_branch was the third local-vs-origin call site the bug-122 / bug-204 audit chain missed.",
+      "file": "scripts/lib/epic-git.sh",
+      "root_cause": "Symmetric audit gap to bug-122 / bug-204. The bug-080 fix scoped session_completed_on_branch's subject scan to `${BASE_BRANCH}..${branch}` to keep previously-merged epics' `feat: Session N` commits out of the rev-range, but the local-vs-origin preference order was inverted: when both refs verify, the helper picks `$BASE_BRANCH` (local), exactly the variant the bug-122 cleanup helper and the bug-204 PR-stats site already documented as wrong. After auto-rebase moves HEAD onto `origin/$REBASE_DEFAULT`, the rev-range walks back through every commit between the lagging local tip and origin's tip \u2014 and any `feat: Session N` subject in that gap from a sibling merged epic falsely matches, the session is reported as already done, the cleanup path destroys scaffolding the user still needs.",
+      "fix": "Mirror the bug-122/bug-204 pattern exactly. Resolve `base_ref` by trying `origin/$BASE_BRANCH` FIRST via the same `git rev-parse --verify --quiet` probe; only fall through to the local `$BASE_BRANCH` when the remote-tracking ref is missing (worktree-only checkouts). Preserves the bug-080 scope (the rev-range is still bounded), preserves the worktree-only-checkout case the original guard added (the elif still fires when origin/$BASE_BRANCH is unset), and closes the resume-after-rebase false-positive that the inverted preference let through. Verified against the bug-122 fix at epic-git.sh:255-258 and bug-204 at run-sessions.sh:1651-1654 \u2014 same conditional shape (`if rev-parse --verify --quiet origin/$X; then ref=origin/$X; fi`), just adapted to the existing two-ref else-if scaffolding so the worktree-only fall-through is preserved.",
+      "tags": [
+        "found-by-bug-hunt",
+        "epic-git",
+        "session-detection",
+        "rebase",
+        "local-vs-origin",
+        "audit-gap",
+        "symmetric-to-bug-122",
+        "symmetric-to-bug-204"
+      ],
+      "related_bugs": [
+        "bug-080",
+        "bug-122",
+        "bug-204"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T23:31:02.000Z"
     }
   ]
 }
