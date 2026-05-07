@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 3465959,
-    "total_reads": 737,
-    "total_writes": 292,
-    "total_sessions": 66,
-    "anatomy_hits": 705,
+    "total_tokens_estimated": 3526579,
+    "total_reads": 746,
+    "total_writes": 298,
+    "total_sessions": 67,
+    "anatomy_hits": 714,
     "anatomy_misses": 32,
-    "repeated_reads_blocked": 423,
-    "estimated_savings_vs_bare_cli": 6611176
+    "repeated_reads_blocked": 431,
+    "estimated_savings_vs_bare_cli": 6715704
   },
   "sessions": [
     {
@@ -7479,6 +7479,107 @@
         "writes_count": 2,
         "repeated_reads_blocked": 5,
         "anatomy_lookups": 11
+      }
+    },
+    {
+      "id": "session-2026-05-07-0905",
+      "started": "2026-05-07T15:05:56.072Z",
+      "ended": "2026-05-07T15:18:28.040Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 13185,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 3902,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 6160,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh",
+          "tokens_estimated": 3160,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 16574,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
+          "tokens_estimated": 6739,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh",
+          "tokens_estimated": 839,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
+          "tokens_estimated": 4094,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py",
+          "tokens_estimated": 3346,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 866,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 623,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 164,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 160,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py",
+          "tokens_estimated": 100,
+          "action": "edit"
+        },
+        {
+          "file": "/tmp/commit-msg-bughunt.txt",
+          "tokens_estimated": 708,
+          "action": "create"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 57999,
+        "output_tokens_estimated": 2621,
+        "reads_count": 9,
+        "writes_count": 6,
+        "repeated_reads_blocked": 8,
+        "anatomy_lookups": 9
       }
     }
   ],

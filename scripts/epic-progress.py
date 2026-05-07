@@ -309,7 +309,21 @@ def main():
                         if cb.get("type") == "tool_use":
                             step += 1
                             tool_calls += 1
-                            current_tool = cb.get("name", "?")
+                            # `cb.get("name", "?")` returns whatever the producer
+                            # sent for `name`. If non-str (None, int, list, dict)
+                            # the value flows into `parse_target(current_tool, …)`
+                            # → `patterns.get(current_tool)` — which raises
+                            # `TypeError: unhashable type` for list/dict,
+                            # breaking the main loop and triggering the SIGPIPE
+                            # → cli_crash chain. Bug-175/176 added isinstance
+                            # guards at the OUTER dict-shaped values (evt,
+                            # content_block, delta, part); this is the symmetric
+                            # guard for the INNER scalar fields. Coerce at the
+                            # boundary so downstream code stays str-safe and
+                            # non-str shapes degrade to the existing `?`
+                            # sentinel. Same audit class. (bug-180)
+                            raw_name = cb.get("name", "?")
+                            current_tool = raw_name if isinstance(raw_name, str) else "?"
                             current_target = ""
                             input_buf = ""
                             activity = "tool"
@@ -337,7 +351,25 @@ def main():
                         delta_type = delta.get("type", "")
 
                         if delta_type == "input_json_delta":
-                            input_buf += delta.get("partial_json", "")
+                            # `partial_json` is supposed to be a string fragment
+                            # of the tool's input JSON. dict.get's default fires
+                            # only for ABSENT keys, not null values:
+                            # `"partial_json": null` lands None and `input_buf
+                            # += None` raises TypeError (str-concat with
+                            # NoneType), propagates out of the main loop,
+                            # breaks the producer pipe with SIGPIPE, the AI CLI
+                            # exits 141 and classify_error reports `cli_crash`
+                            # instead of the real producer-protocol cause.
+                            # Truthy non-str shapes (`"partial_json": 5`,
+                            # `["x"]`) crash the same way. Bug-175/176 added
+                            # isinstance(dict) guards at the OUTER dict-shaped
+                            # values (evt, content_block, delta, part); this is
+                            # the symmetric guard for the INNER scalar field
+                            # the earlier audit missed. Same audit class.
+                            # (bug-178)
+                            pj = delta.get("partial_json", "")
+                            if isinstance(pj, str):
+                                input_buf += pj
                             new_target = parse_target(current_tool, input_buf)
                             if new_target and new_target != current_target:
                                 current_target = new_target
@@ -351,11 +383,21 @@ def main():
                                         last_status_ts = now
 
                         elif delta_type == "text_delta":
+                            # Same str-safe guard as the partial_json site
+                            # above. dict.get's default fires only for ABSENT
+                            # keys: `"text": null` lands None and
+                            # `log_file.write(None)` raises TypeError
+                            # ("write() argument must be str, not NoneType"),
+                            # propagates out, SIGPIPE, cli_crash. Truthy
+                            # non-str shapes (`"text": 5`, `["x"]`) raise the
+                            # same TypeError on log_file.write. Same audit
+                            # class as bug-175/176/178. (bug-179)
                             text = delta.get("text", "")
-                            log_file.write(text)
-                            log_file.flush()
-                            if activity != "tool":
-                                activity = "text"
+                            if isinstance(text, str):
+                                log_file.write(text)
+                                log_file.flush()
+                                if activity != "tool":
+                                    activity = "text"
 
                     elif evt_type == "content_block_stop":
                         if activity == "tool":
@@ -379,7 +421,18 @@ def main():
                         part = evt.get("part")
                         if not isinstance(part, dict):
                             continue
+                        # Same str-coerce guard as the Claude
+                        # content_block_start site above.
+                        # `OPENCODE_TOOL_ALIASES.get(raw_tool, raw_tool)` and
+                        # `field_map.get(tool_name, "")` inside
+                        # parse_opencode_target both raise TypeError when
+                        # raw_tool is unhashable (list/dict from a malformed
+                        # producer event). Coerce non-str to the `?` sentinel
+                        # at the boundary so downstream code stays str-safe.
+                        # (bug-180)
                         raw_tool = part.get("tool", "?")
+                        if not isinstance(raw_tool, str):
+                            raw_tool = "?"
                         current_tool = OPENCODE_TOOL_ALIASES.get(raw_tool, raw_tool)
                         tool_calls += 1
                         state = part.get("state", {})
@@ -400,8 +453,15 @@ def main():
                         part = evt.get("part")
                         if not isinstance(part, dict):
                             continue
+                        # `if text:` (the previous guard) catches None and
+                        # "" but NOT truthy non-str shapes — `"text": 5`,
+                        # `["x"]`, `{"a":1}` all pass through and crash
+                        # log_file.write with TypeError, breaking the
+                        # OpenCode pipe with SIGPIPE. Reject non-str
+                        # alongside the truthy check. Same audit class
+                        # as bug-179 in the Claude branch. (bug-179)
                         text = part.get("text", "")
-                        if text:
+                        if isinstance(text, str) and text:
                             log_file.write(text)
                             log_file.flush()
                         activity = "text"

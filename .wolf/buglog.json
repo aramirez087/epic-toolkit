@@ -3430,6 +3430,97 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T15:30:30Z"
+    },
+    {
+      "id": "bug-177",
+      "timestamp": "2026-05-07T15:40:39.923Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "scripts/epic-progress.py",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:40:39.923Z"
+    },
+    {
+      "id": "bug-178",
+      "timestamp": "2026-05-07T15:50:00.000Z",
+      "error_message": "epic-progress.py crashes the reader main loop with TypeError: can only concatenate str (not 'NoneType') to str whenever the producer emits a Claude input_json_delta with `\"partial_json\": null`. dict.get's default fires only for ABSENT keys, not null values, so `delta.get(\"partial_json\", \"\")` lands None and `input_buf += None` raises immediately. Truthy non-str shapes (`5`, `[\"x\"]`, `{}`) crash the same way. The exception propagates out of the main loop, breaks the producer pipe with SIGPIPE, the AI CLI exits 141 and classify_error reports the surrogate `cli_crash` instead of the real producer-protocol cause.",
+      "file": "scripts/epic-progress.py",
+      "root_cause": "Same audit class as bug-167/175/176: every consumer of a typed value must reject inputs the producer can emit but the consumer can't interpret. The bug-176 audit added isinstance(dict) guards at the OUTER dict-shaped values (evt, content_block, delta, part) but never extended to the INNER scalar fields. `partial_json` is one of those scalar fields — the value is concatenated directly into `input_buf` without any shape check, and any non-str value crashes the str-concat.",
+      "fix": "Read the value into a local, gate the `input_buf +=` on `isinstance(pj, str)`, and unconditionally re-call parse_target so the cached target stays correct. Comment names the producer-null cause and points at the full audit chain (bug-175/176/178). Verified by reproducing the original TypeError on the pre-patch tree against null/unhashable/int payloads, then confirming all five repro cases exit rc=0 on the patched tree.",
+      "tags": [
+        "found-by-bug-hunt",
+        "producer-protocol",
+        "type-coercion",
+        "epic-progress",
+        "py",
+        "audit-class-bug-167-175-176"
+      ],
+      "related_bugs": [
+        "bug-167",
+        "bug-175",
+        "bug-176",
+        "bug-177"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:50:00.000Z"
+    },
+    {
+      "id": "bug-179",
+      "timestamp": "2026-05-07T15:50:00.000Z",
+      "error_message": "Symmetric defect to bug-178 at two text-event sites: Claude `text_delta` with `\"text\": null` lands None and `log_file.write(None)` raises TypeError ('write() argument must be str, not NoneType'); OpenCode `text` events use the existing `if text:` guard which catches None and \"\" but allows truthy non-str (`5`, `[\"x\"]`, `{}`) to slip through and crash log_file.write the same way. Both crash chains break the producer pipe with SIGPIPE and corrupt classify_error's verdict to `cli_crash`.",
+      "file": "scripts/epic-progress.py",
+      "root_cause": "Same scalar-shape audit gap as bug-178 — `delta.get(\"text\", \"\")` and `part.get(\"text\", \"\")` both feed log_file.write directly. The Claude branch had no shape guard at all; the OpenCode branch had a truthy guard that catches None but not non-str truthy values. Producer protocol error → consumer crash → SIGPIPE → cli_crash misclassification, identical to bug-167/175/176/178.",
+      "fix": "On the Claude side gate the write/flush AND the activity transition on `isinstance(text, str)`. On the OpenCode side replace `if text:` with `if isinstance(text, str) and text:` so the same shape rejection applies. Repro suite covers `text: null` (Claude) and `text: 5` (OpenCode); both crash on the pre-patch tree and pass on the patched tree.",
+      "tags": [
+        "found-by-bug-hunt",
+        "producer-protocol",
+        "type-coercion",
+        "epic-progress",
+        "py",
+        "audit-class-bug-167-175-176"
+      ],
+      "related_bugs": [
+        "bug-167",
+        "bug-175",
+        "bug-176",
+        "bug-177",
+        "bug-178"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:50:00.000Z"
+    },
+    {
+      "id": "bug-180",
+      "timestamp": "2026-05-07T15:50:00.000Z",
+      "error_message": "epic-progress.py crashes with `TypeError: unhashable type: 'list'` when the producer emits a tool name as a list or dict. Two sites: Claude `content_block_start.name` flows into `parse_target(current_tool, …)` → `patterns.get(current_tool)` (dict.get with an unhashable key); OpenCode `tool_use.part.tool` flows directly into `OPENCODE_TOOL_ALIASES.get(raw_tool, raw_tool)` and then `field_map.get(tool_name, \"\")` inside parse_opencode_target. Either crash propagates out of the main loop, breaks the pipe with SIGPIPE, and corrupts classify_error to cli_crash.",
+      "file": "scripts/epic-progress.py",
+      "root_cause": "Same scalar-shape audit gap as bug-178/179: `cb.get(\"name\", \"?\")` and `part.get(\"tool\", \"?\")` are typed-value consumers that never validated the shape of the value they received. Hashable non-str values (None, int) survive intact and merely produce ugly UI; unhashable shapes (list, dict) crash the next dict.get key-lookup. Same producer-protocol-error → consumer-crash → cli_crash chain as the rest of the audit class.",
+      "fix": "Coerce non-str at the boundary in both events: `current_tool = raw_name if isinstance(raw_name, str) else \"?\"` for Claude, and `if not isinstance(raw_tool, str): raw_tool = \"?\"` before the OPENCODE_TOOL_ALIASES.get call for OpenCode. Downstream code stays str-safe and malformed events degrade to the existing `?` sentinel instead of crashing the reader. Repro suite verified.",
+      "tags": [
+        "found-by-bug-hunt",
+        "producer-protocol",
+        "type-coercion",
+        "epic-progress",
+        "py",
+        "audit-class-bug-167-175-176"
+      ],
+      "related_bugs": [
+        "bug-167",
+        "bug-175",
+        "bug-176",
+        "bug-177",
+        "bug-178",
+        "bug-179"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T15:50:00.000Z"
     }
   ]
 }
