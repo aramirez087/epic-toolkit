@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T16:40:42.894Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T17:26:25.823Z
 > Files: 43 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -82,5 +82,5 @@
 
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
 - `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
-- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~2594 tok)
+- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~3373 tok)
 - `resolve-wolf.sh` — resolve-wolf.sh — One-shot resolver for in-progress merge/rebase conflicts (~975 tok)

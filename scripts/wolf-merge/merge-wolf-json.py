@@ -49,6 +49,19 @@ def _bug_signature(bug):
     )
 
 
+def _bug_id(bug) -> str:
+    """Return the bug's id as a string, or '' for missing/non-string ids.
+
+    Centralises the "is this id usable as a dict key / set member" check so
+    the merge loop never tries to index `by_id[unhashable]` or compute a
+    set membership against a list/dict id. Returning '' funnels malformed
+    ids through the same extras-renumbering path as missing ids — the entry
+    survives the merge with a fresh id rather than crashing the driver.
+    """
+    bid = bug.get("id")
+    return bid if isinstance(bid, str) and bid else ""
+
+
 def _next_free_bug_id(used_ids):
     max_n = 0
     for bid in used_ids:
@@ -88,12 +101,48 @@ def merge_buglog(ours, theirs, ancestor=None):
     # driver exits 1, and git records the file as unresolvable. Same audit
     # class as bug-035's "audit every open() site" — extended here to "audit
     # every .get(key, default) site that consumes an iterable". (bug-148)
-    def _bugs_of(src: dict) -> list:
-        return src.get("bugs") or []
+    #
+    # The bug-148 fix used `or []` which catches null + missing key but does
+    # NOT reject truthy non-list shapes the producer can emit:
+    #   • `"bugs": {"a": 1}` (dict) — `or []` returns the dict; `for bug in
+    #     <dict>` iterates KEYS (strings), then `bug.get("id")` raises
+    #     `AttributeError: 'str' object has no attribute 'get'`.
+    #   • `"bugs": "malformed"` (str) — same path: iterates CHARACTERS,
+    #     same AttributeError on `bug.get`.
+    #   • `"bugs": 5` (int) — `for bug in 5` raises `TypeError: 'int' object
+    #     is not iterable`.
+    #   • `"bugs": [42, "oops"]` (list with non-dict items) — iteration is
+    #     fine, but `42.get("id")` / `"oops".get("id")` raises AttributeError
+    #     on the first non-dict item.
+    #   • `"bugs": [{"id": ["list-id"], ...}]` (dict bug with unhashable id)
+    #     — passes the dict-item filter, but `used_ids = {bug.get("id") ...}`
+    #     tries to add a list to a set, raising
+    #     `TypeError: unhashable type: 'list'`. Same chain at `by_id[bid]`
+    #     (dict subscript with unhashable key) and the final `sorted(...,
+    #     key=lambda b: b.get("id", ""))` (TypeError comparing list and str
+    #     in Python 3).
+    # All six crash chains end the same way: driver exits 1, git records the
+    # file as unresolvable, the user sees a `.wolf/buglog.json` merge conflict
+    # the auto-merge driver was supposed to silently handle. Same audit class
+    # as bug-148/154/167/175/176 — every consumer of `.get(key, default)` must
+    # reject inputs the parser/producer can emit but the consumer can't
+    # interpret. Reject non-list `bugs` and skip non-dict items so the merge
+    # treats the malformed side as if it had no bugs (conservative fallback —
+    # the data on the other side still merges in cleanly). Pair with `_bug_id`
+    # to coerce non-string ids to '' so they route through the same fresh-id
+    # rescue path as missing ids (bug-105) instead of crashing the driver.
+    # (bug-182)
+    def _bugs_of(src) -> list:
+        if not isinstance(src, dict):
+            return []
+        bugs = src.get("bugs")
+        if not isinstance(bugs, list):
+            return []
+        return [b for b in bugs if isinstance(b, dict)]
     ancestor_occ: dict[str, int] = {}
     if isinstance(ancestor, dict):
         for bug in _bugs_of(ancestor):
-            bid = bug.get("id")
+            bid = _bug_id(bug)
             if bid:
                 ancestor_occ[bid] = bug.get("occurrences", 1) or 1
     else:
@@ -114,23 +163,23 @@ def merge_buglog(ours, theirs, ancestor=None):
         # added more than the other (acceptable trade-off when the
         # ancestor is genuinely unreadable). Same audit class as
         # bug-148. (bug-154)
-        ours_by_id = {b.get("id"): b for b in _bugs_of(ours) if b.get("id")}
-        theirs_by_id = {b.get("id"): b for b in _bugs_of(theirs) if b.get("id")}
+        ours_by_id = {_bug_id(b): b for b in _bugs_of(ours) if _bug_id(b)}
+        theirs_by_id = {_bug_id(b): b for b in _bugs_of(theirs) if _bug_id(b)}
         for bid in ours_by_id.keys() & theirs_by_id.keys():
             ours_occ = ours_by_id[bid].get("occurrences", 1) or 1
             theirs_occ = theirs_by_id[bid].get("occurrences", 1) or 1
             ancestor_occ[bid] = min(ours_occ, theirs_occ)
     used_ids = {
-        bug.get("id")
+        _bug_id(bug)
         for src in (ours, theirs)
         for bug in _bugs_of(src)
-        if bug.get("id")
+        if _bug_id(bug)
     }
     by_id = {}
     extras = []
     for src in (ours, theirs):
         for bug in _bugs_of(src):
-            bid = bug.get("id")
+            bid = _bug_id(bug)
             if not bid:
                 # Same data-loss class as bug-090's id-collision case: a
                 # bug entry without an id (malformed write, partially-flushed

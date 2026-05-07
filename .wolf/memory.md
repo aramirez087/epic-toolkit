@@ -661,3 +661,14 @@
 |------|--------|---------|---------|--------|
 | 10:40 | Edited scripts/run-sessions.sh | modified in() | ~480 |
 | 10:40 | Created ../../../../tmp/test-bug-181.sh | — | ~461 |
+| 10:42 | Session end: 2 writes across 2 files (run-sessions.sh, test-bug-181.sh) | 10 reads | ~61250 tok |
+
+## Session: 2026-05-07 11:05
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 11:25 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bug_signature() | ~365 |
+| 11:26 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bugs_of() | ~818 |
+| 11:26 | Edited scripts/wolf-merge/merge-wolf-json.py | modified isinstance() | ~69 |
+| 11:26 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bug_id() | ~155 |
+| 11:26 | Edited scripts/wolf-merge/merge-wolf-json.py | get() → _bug_id() | ~43 |
