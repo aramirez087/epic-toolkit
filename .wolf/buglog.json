@@ -3918,6 +3918,76 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T21:48:40.650437Z"
+    },
+    {
+      "id": "bug-197",
+      "timestamp": "2026-05-07T22:05:23.902Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 6→12 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T22:05:23.902Z"
+    },
+    {
+      "id": "bug-198",
+      "timestamp": "2026-05-07T22:30:00Z",
+      "error_message": "run-sessions.sh's numeric-flag validation regex `^[0-9]+$` accepts leading-zero values (`08`, `09`, `010`, `019`...) that bash arithmetic later silently re-interprets as octal. Three concrete failure modes: (1) `--max-parallel 010` silently reads as decimal 8 — user gets ⅕ less parallelism than asked for with no diagnostic; (2) `--max-parallel 08`/`09` raise `value too great for base` to stderr at every arithmetic site (bug-194/108 guards at lines 226/410 AND the wave throttle `[[ ${#JOB_PIDS[@]} -ge $MAX_PARALLEL ]]` on every wave-fanout iteration), with `[[ ]]` returning false on the bash error so the throttle never engages and ALL sessions in the wave fan out concurrently regardless of the cap; (3) `--wave-timeout 08` crashes the runner mid-wave with `wave_timeout: unbound variable` when `wave_timeout=$((_effective_wtm * 60))` fails on the octal decode and the next `[[ $wave_timeout -gt 0 ]]` references the unbound result under set -u. Symmetric audit gaps in the META wave_count parser (corruption-emitted `010` silently truncates a 10-wave plan to 8) and SESSION row sw/sid parser (corruption-emitted `010` silently registers in WAVE_IDS[8] / SESSION_*[8] instead of [10], DAG silently mis-routes). Same producer-emittable corruption modes as bug-192/193/195/196 for the META and SESSION sites.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Bash arithmetic context interprets leading-zero strings as octal (POSIX). The `^[0-9]+$` validation regex is too permissive for the consumer — it accepts every digit shape the user can type, but bash arithmetic can only correctly read decimal-without-leading-zero values. Same audit class as bug-194 (numeric flag the validator accepts but the consumer can't interpret correctly): every numeric value that flows into bash arithmetic must produce the user's apparent intent, not be silently semantically-different. The audit must extend to BOTH cmdline flags AND producer-emitted scalars (META wave_count, SESSION row sw/sid) AND .epic-config.json extracts.",
+      "fix": "Normalize via `10#` immediately after each regex passes, forcing base-10 interpretation regardless of leading zeros (`10#08` = 8, `10#010` = 10, `10#0` = 0). At the cmdline validation loop (line ~141), use `printf -v \"$_arg_name\" '%d' \"$((10#$_val))\"` to reassign each named integer flag in place (bash 3.2+ compatible). At the .epic-config.json extracts (lines ~176-204), wrap each `BASH_REMATCH[1]` in `$((10#...))`. At the META wave_count parser, normalize `WAVE_COUNT=$((10#$_wc_raw))`. At the SESSION row sw/sid validation, add `sw=$((10#$sw)); sid=$((10#$sid))` after the regex passes. Verified: `--max-parallel 08`/`09`/`010`/`4` all return rc=0 with no bash errors on the patched tree; `--max-parallel 0` still rejected by the bug-194 guard; happy-path `--dry-run` and `--show-dag` parse identically.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-extension",
+        "run-sessions",
+        "cmdline",
+        "bash-arithmetic",
+        "octal",
+        "narrowing-predicate",
+        "set-u",
+        "sh"
+      ],
+      "related_bugs": [
+        "bug-194",
+        "bug-193",
+        "bug-196",
+        "bug-197"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T22:30:00Z"
+    },
+    {
+      "id": "bug-199",
+      "timestamp": "2026-05-07T22:30:01Z",
+      "error_message": "run-sessions.sh's stale-worktree-cleanup loop at line ~715 reads DAG_TMP for a second pass (collecting current session ids) and runs `set -- $line; case \"$1\"` without first guarding `[[ -z \"$line\" ]]`. With an empty/blank `$line`, `set -- ` (no args) clears positional params, and the next `\"$1\"` references an unset positional under the runner-wide `set -u` — raising `$1: unbound variable` and crashing the entire runner with rc=1 before any worktree is touched. Reproduced by injecting a blank line into a well-formed DAG_TMP fixture: pre-patch crash with `$1: unbound variable` rc=1; post-patch the well-formed SESSION rows around the blank line still parse to `current_session_ids=' 1 2'`.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "epic-dag.py emit_bash never emits blank lines under happy path, but the same producer-emittable corruption modes bug-192/193/195/196 already enumerate (partial-flush from a SIGKILL'd `cp` mid-write, NFS read racing the write, schema drift from a future writer that adds blank-line padding for readability, hand-edit for debugging) all leave a blank line in an otherwise well-formed plan file. Both Python consumers of the plan file (`parse_bash_plan` in epic-ui.py and the status-init heredoc) call `line.strip()` before any `startswith` check, so blank lines skip cleanly there. The bash-side SESSION-row parser at line ~474 also handles blank lines cleanly via `case \"$line\" in ... \"SESSION \"*) ... esac` (none of the patterns match an empty string, so the whole case falls through). This cleanup loop was the only consumer running with `set -- $line` AHEAD of any whitespace/non-empty check — same audit class as bug-192/193/195/196, the only bash-side reader still vulnerable to the corruption shapes those bugs already documented.",
+      "fix": "Add `[[ -z \"$line\" ]] && continue` at the top of the loop body before `set -- $line`. Same coerce-and-skip discipline as bug-192/193/195/196 — the well-formed lines around the blank one still register, so the runner degrades gracefully (dropping ONLY the blank line) instead of failing wholesale with the misleading `$1: unbound variable` diagnostic that doesn't name the malformed plan as the cause.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-extension",
+        "run-sessions",
+        "plan-file",
+        "set-u",
+        "blank-line",
+        "cleanup",
+        "producer-consumer",
+        "sh"
+      ],
+      "related_bugs": [
+        "bug-192",
+        "bug-193",
+        "bug-195",
+        "bug-196"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-07T22:30:01Z"
     }
   ]
 }

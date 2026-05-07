@@ -144,6 +144,38 @@ for _arg_name in "START_FROM" "END_AT" "MAX_PARALLEL" "TIMEOUT" "RETRY" "WAVE_TI
     err "$_arg_name must be a non-negative integer (got '$_val')"
     exit 1
   fi
+  # Normalize to base-10 so leading-zero values produce the user's apparent
+  # decimal intent rather than being silently bash-octal-decoded by downstream
+  # arithmetic. The validation regex `^[0-9]+$` accepts `08`, `09`, `010`,
+  # `019`, etc.; bash arithmetic context (`[[ x -OP y ]]`, `(( ))`, array
+  # subscripts) then treats the value as octal:
+  #   • `--max-parallel 08` / `09` → `[[ 08 -lt 1 ]]` raises `value too great
+  #     for base` to stderr and returns false; the bug-194 / bug-108 guards
+  #     never fire, the wave loop's throttle `[[ ${#JOB_PIDS[@]} -ge $MAX_
+  #     PARALLEL ]]` ALSO raises the same error on every iteration and
+  #     returns false, so the throttle never engages and ALL sessions fan
+  #     out concurrently regardless of the cap the user asked for, with the
+  #     bash error spammed to stderr on every wave-fanout iteration.
+  #   • `--max-parallel 010` → silently re-interpreted as decimal 8; the
+  #     user gets ⅕ less parallelism than they asked for with no diagnostic.
+  #   • `--wave-timeout 08` → at line ~1119, `wave_timeout=$((_effective_wtm
+  #     * 60))` triggers `value too great for base`, the assignment fails,
+  #     `$wave_timeout` stays unbound, and the next `[[ $wave_timeout -gt 0
+  #     ]]` raises `wave_timeout: unbound variable` under `set -u` and
+  #     crashes the entire runner mid-wave.
+  #   • `--start 08` / `--end 09` → range filters silently no-op (bash
+  #     error → false → no skip); user's resume-from-N intent is silently
+  #     ignored.
+  #   • `--timeout 010` / `--retry 010` → silent decimal-8 reinterpretation.
+  # Same audit class as bug-194 (numeric flag the validator accepts but the
+  # consumer can't interpret correctly) and bug-193/196 (bash arithmetic-as-
+  # int narrowing on producer-emitted scalars) — every numeric value that
+  # later flows into bash arithmetic context must be normalized here so the
+  # consumer sees what the user wrote, not what bash's octal heuristic
+  # invents. `printf -v VAR '%d' VAL` works on bash 3.2+ and reassigns the
+  # named variable; `10#$_val` forces base-10 interpretation regardless of
+  # leading zeros (`10#08` = 8, `10#010` = 10, `10#0` = 0).
+  printf -v "$_arg_name" '%d' "$((10#$_val))"
 done
 
 if [[ -z "$SESSIONS_DIR" ]]; then
@@ -173,11 +205,17 @@ if [[ -f "$CONFIG_FILE" ]]; then
     # Only override defaults if CLI didn't specify the value. Use _USER_SET
     # flags (not sentinel comparisons) for flags whose default value is also
     # a valid explicit user choice (e.g. --timeout 0, --model sonnet).
+    # Same `10#` normalization as the cmdline validator above — JSON forbids
+    # leading zeros in numeric literals, but the bash regex `[0-9]+` accepts
+    # them, so a hand-edited config (`"timeout": 010`) would otherwise
+    # silently bash-octal-decode to decimal 8 (or crash with `08`/`09`'s
+    # `value too great for base`) at every downstream arithmetic site.
+    # (bug-197)
     if ! $TIMEOUT_USER_SET && [[ "$config_content" =~ \"timeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
-      TIMEOUT="${BASH_REMATCH[1]}"
+      TIMEOUT=$((10#${BASH_REMATCH[1]}))
     fi
     if ! $RETRY_USER_SET && [[ "$config_content" =~ \"retry\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
-      RETRY="${BASH_REMATCH[1]}"
+      RETRY=$((10#${BASH_REMATCH[1]}))
     fi
     if [[ -z "$CLI_OVERRIDE" && "$config_content" =~ \"cli\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
       CLI_OVERRIDE="${BASH_REMATCH[1]}"
@@ -186,7 +224,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
       MODEL="${BASH_REMATCH[1]}"
     fi
     if ! $MAX_PARALLEL_USER_SET && [[ "$config_content" =~ \"maxParallel\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
-      MAX_PARALLEL="${BASH_REMATCH[1]}"
+      MAX_PARALLEL=$((10#${BASH_REMATCH[1]}))
     fi
     if [[ "$AUTO_COMMIT" == "true" && "$config_content" =~ \"autoCommit\"[[:space:]]*:[[:space:]]*false ]]; then
       AUTO_COMMIT=false
@@ -201,7 +239,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
       KEEP_WORKTREE=true
     fi
     if ! $WAVE_TIMEOUT_USER_SET && [[ "$config_content" =~ \"waveTimeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
-      WAVE_TIMEOUT_MINUTES="${BASH_REMATCH[1]}"
+      WAVE_TIMEOUT_MINUTES=$((10#${BASH_REMATCH[1]}))
       WAVE_TIMEOUT_USER_SET=true
     fi
   else
@@ -495,7 +533,14 @@ while IFS= read -r line; do
       # the existing line-534 guard then exits with the proper diagnostic.
       _wc_raw="${line#META wave_count=}"
       if [[ "$_wc_raw" =~ ^[0-9]+$ ]]; then
-        WAVE_COUNT="$_wc_raw"
+        # `10#` normalization — bug-196 patched the non-numeric crash but
+        # left the leading-zero silent-octal hole. A producer-emittable
+        # corruption (partial-flush, NFS read race, schema drift, hand-
+        # edit) lands `META wave_count=010` and the wave loop's `for ((
+        # wn=1; wn<=WAVE_COUNT; wn++ ))` arithmetic-decodes the value as
+        # octal 8, silently truncating a 10-wave plan to 8 waves with no
+        # diagnostic. Same audit class as bug-194/196/197. (bug-197)
+        WAVE_COUNT=$((10#$_wc_raw))
       fi
       unset _wc_raw
       ;;
@@ -539,6 +584,17 @@ while IFS= read -r line; do
       if ! [[ "$sw" =~ ^[0-9]+$ && "$sid" =~ ^[0-9]+$ ]]; then
         continue
       fi
+      # `10#` normalization — bug-193 patched the non-numeric subscript
+      # crash but left the leading-zero silent-octal hole. A producer-
+      # emittable corruption (partial-flush, NFS read race, schema drift,
+      # hand-edit) lands `SESSION 010 5 ...` (wave field with leading
+      # zero) and bash arithmetic-as-subscript decodes `WAVE_IDS[010]` as
+      # octal 8 — the session intended for wave 10 silently registers in
+      # wave 8 instead, silently corrupting the DAG with no diagnostic.
+      # Same hole on `SESSION 1 010 ...` for the sid → SESSION_*[010] sites.
+      # Same audit class as bug-194/196/197. (bug-197)
+      sw=$((10#$sw))
+      sid=$((10#$sid))
       # bug-193's stated intent included this length check ("Also reject
       # empty truncated rows ... for parity with the heredoc's `if
       # len(parts) < 6: continue`"), but the implementation only added
@@ -713,6 +769,32 @@ if [[ -d "$WORKTREE_BASE" ]]; then
   # Get list of current session IDs from DAG
   current_session_ids=""
   while IFS= read -r line; do
+    # Skip empty/blank lines BEFORE `set -- $line`. With an empty $line, the
+    # `set --` (no args) clears positional params, and the next `case "$1"`
+    # references an unset positional under the runner-wide `set -u` —
+    # raising `$1: unbound variable` and crashing the entire runner with
+    # rc=1 before any worktree is touched.
+    #
+    # epic-dag.py emit_bash never emits blank lines under happy path, but
+    # the same producer-emittable corruption modes bug-192/193/195/196
+    # already enumerate (partial-flush from a SIGKILL'd `cp` mid-write of
+    # the plan file, NFS read racing the write, schema drift from a future
+    # writer that adds blank-line padding for readability, hand-edit for
+    # debugging) all leave a blank line in the otherwise well-formed
+    # plan file. The two PYTHON consumers of the same plan file
+    # (parse_bash_plan in epic-ui.py and the status-init heredoc in
+    # run-sessions.sh) both `line.strip()` before any startswith check, so
+    # blank lines are skipped cleanly there. The bash-side SESSION-row
+    # parser at line ~474 also handles blank lines cleanly via `case
+    # "$line" in "META "*) ... "WAVE "*) ... "SESSION "*) ...` (none of
+    # which match an empty pattern, so the whole case falls through). This
+    # cleanup loop was the only consumer that ran with `set -- $line`
+    # AHEAD of any whitespace/non-empty check — same audit class as
+    # bug-192/193/195/196 (every consumer of producer-emitted plan-file
+    # data must reject inputs the consumer can't interpret), and the only
+    # bash-side reader still vulnerable to the corruption shapes those
+    # bugs already documented. (bug-198)
+    [[ -z "$line" ]] && continue
     set -- $line
     case "$1" in
       SESSION) current_session_ids="$current_session_ids $3" ;;
