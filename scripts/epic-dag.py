@@ -83,7 +83,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         leading_ws = len(line) - len(stripped)
 
         value_start = -1
-        if stripped.startswith("- "):
+        # Accept both `- ` (dash-space) AND `-\t` (dash-tab) as block-list-item
+        # value starts. The block-list parser at the bottom of parse_frontmatter
+        # has accepted `-\t` since bug-127, but the comment-stripper still only
+        # matched ASCII-space, so a `\t-\t"x # y"` row fell through to scalar
+        # mode, in_quote never opened on the following `"`, and the
+        # `#`-stripper truncated the value at the first `#`. Symmetric to
+        # bug-126 in the block-list-item branch. (bug-135)
+        if len(stripped) >= 2 and stripped[0] == "-" and stripped[1] in (" ", "\t"):
             value_start = leading_ws + 2
         elif ":" in stripped:
             value_start = line.find(":") + 1
@@ -99,33 +106,73 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             value_start += 1
 
         in_quote: str | None = None
+        flow_depth = 0  # nested `[`/`{` levels; quotes inside open mid-line
         scan_start = max(value_start, 1)
-        if 0 <= value_start < len(line) and line[value_start] in ('"', "'"):
-            in_quote = line[value_start]
-            scan_start = value_start + 1
+        if 0 <= value_start < len(line):
+            c0 = line[value_start]
+            if c0 in ('"', "'"):
+                in_quote = c0
+                scan_start = value_start + 1
+            elif c0 in ("[", "{"):
+                # Flow-list / flow-map context. Quotes inside `[...]` open
+                # mid-line, not at value_start, so the value-start quote test
+                # above never fires for flow contents. Without explicit flow
+                # tracking, every `"` inside the brackets was walked past as a
+                # scalar character and the first ` #` inside any quoted entry
+                # truncated the line — corrupting the value before the
+                # (quote-aware since bug-132) `_split_flow_list` ever saw it.
+                # `tags: ["a # b", c]` parsed as the string `["a` instead of
+                # the 2-element list, and load_sessions then surfaced the
+                # misleading error 'touches must be a list of globs' against
+                # syntactically valid YAML. (bug-134)
+                flow_depth = 1
+                scan_start = value_start + 1
 
-        for i in range(scan_start, len(line)):
+        i = scan_start
+        while i < len(line):
             ch = line[i]
             if in_quote is not None:
                 if ch == in_quote:
-                    # Count the run of consecutive `\` immediately before i.
-                    # A bare `line[i-1] != "\\"` check treated EVERY preceding
-                    # backslash as escaping the quote, so a YAML double-quoted
-                    # value ending in `\\"` (escaped backslash then real
-                    # terminator) never closed — the trailing `# comment` was
-                    # silently absorbed into the value, and the value retained
-                    # its closing quote. Even count (incl. zero) means the
-                    # quote is the actual terminator; odd count means the
-                    # quote is escaped. Same class as bug-117 in the
-                    # apostrophe branch. (bug-123)
-                    bs = 0
-                    j = i - 1
-                    while j >= 0 and line[j] == "\\":
-                        bs += 1
-                        j -= 1
-                    if bs % 2 == 0:
+                    if in_quote == "'":
+                        # YAML 1.2 §7.3.2: backslash is LITERAL inside single-
+                        # quoted strings; the only escape is `''` (two
+                        # apostrophes) for a literal apostrophe. Reusing the
+                        # bug-123 backslash-parity rule for single quotes
+                        # silently kept any value that legitimately ended in
+                        # `\` (Windows-ish paths, regex literals) open and
+                        # leaked the trailing `# comment` into the value.
+                        # Detect `''` and skip both characters; otherwise
+                        # close unconditionally. (bug-136)
+                        if i + 1 < len(line) and line[i + 1] == "'":
+                            i += 2
+                            continue
                         in_quote = None
-            elif ch == "#" and line[i - 1] in (" ", "\t"):
+                    else:
+                        # Double-quoted: backslash escapes apply. Count the
+                        # run of consecutive `\` immediately before i. Even
+                        # count (incl. zero) means the quote is the actual
+                        # terminator; odd count means the quote is escaped.
+                        # Preserves the bug-123 fix for `\\"` endings. Same
+                        # class as bug-117 in the apostrophe branch. (bug-123)
+                        bs = 0
+                        j = i - 1
+                        while j >= 0 and line[j] == "\\":
+                            bs += 1
+                            j -= 1
+                        if bs % 2 == 0:
+                            in_quote = None
+                i += 1
+                continue
+            if flow_depth > 0:
+                if ch in ('"', "'"):
+                    in_quote = ch
+                elif ch in ("[", "{"):
+                    flow_depth += 1
+                elif ch in ("]", "}"):
+                    flow_depth -= 1
+                i += 1
+                continue
+            if ch == "#" and line[i - 1] in (" ", "\t"):
                 # YAML 1.2 §6.6 requires whitespace before `#`. The previous
                 # check only matched ASCII space, so a tab-separated comment
                 # (`key: value\t# note`) silently leaked the comment text into
@@ -136,6 +183,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 # or stray Unicode whitespace can't be misinterpreted as a
                 # separator. (bug-124)
                 return line[:i].rstrip()
+            i += 1
         return line
 
     def _split_flow_list(s: str) -> list[str]:
@@ -155,18 +203,38 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         items: list[str] = []
         buf = ""
         in_q: str | None = None
-        for i, ch in enumerate(s):
+        i = 0
+        n = len(s)
+        while i < n:
+            ch = s[i]
             if in_q is not None:
                 buf += ch
                 if ch == in_q:
-                    bs = 0
-                    j = i - 1
-                    while j >= 0 and s[j] == "\\":
-                        bs += 1
-                        j -= 1
-                    if bs % 2 == 0:
+                    if in_q == "'":
+                        # YAML 1.2 single-quoted: backslash is literal; the
+                        # only escape is `''`. Mirror the bug-136 fix in
+                        # `_strip_inline_comment` so a single-quoted entry
+                        # ending in `\` (e.g. a Windows-ish path) closes
+                        # correctly here too. Without this the bug-132
+                        # backslash-parity check kept the entry "open",
+                        # absorbed the comma into the buffer, and merged
+                        # what should have been two list items into one.
+                        if i + 1 < n and s[i + 1] == "'":
+                            buf += "'"
+                            i += 2
+                            continue
                         in_q = None
-            elif ch in ('"', "'"):
+                    else:
+                        bs = 0
+                        j = i - 1
+                        while j >= 0 and s[j] == "\\":
+                            bs += 1
+                            j -= 1
+                        if bs % 2 == 0:
+                            in_q = None
+                i += 1
+                continue
+            if ch in ('"', "'"):
                 in_q = ch
                 buf += ch
             elif ch == ",":
@@ -176,6 +244,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 buf = ""
             else:
                 buf += ch
+            i += 1
         cleaned = buf.strip().strip("'\"")
         if cleaned:
             items.append(cleaned)

@@ -2517,6 +2517,91 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T00:00:00Z"
+    },
+    {
+      "id": "bug-134",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "epic-dag.py _strip_inline_comment silently truncates a YAML flow-list (`key: [...]`) at the first `#` that appears inside a quoted entry. Same-line frontmatter like `touches: [\"src/a.py\", \"src/b # c.py\"]` is parsed as the string `'[\"src/a.py\", \"src/b'` instead of a 2-element list; load_sessions then trips its `if not isinstance(touches, list)` guard and exits with the misleading message 'touches must be a list of globs', pointing the user at YAML syntax that is in fact valid. Same defect also affects `tags`, `produces`, and any other flow-list field. The audit chain bug-117/123/124/126/132 was supposed to harden every YAML token-boundary site against quotes; bug-132 added a quote-aware `_split_flow_list`, but that fix is dead code for any flow-list whose contents contain `#`, because `_strip_inline_comment` runs first and corrupts the line before _split_flow_list ever sees it.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "`_strip_inline_comment` only opens `in_quote` when the value's FIRST non-space character (after `:` or `- `) is `\"` or `'`. A flow list starts with `[`, which is neither, so `in_quote` stays None for the entire scan; quotes that appear later inside the brackets (the legitimate openers for individual entries) are walked past as ordinary characters. Once any of those entries contains a ` # ` (space-hash, the YAML comment trigger), the `elif ch == \"#\" and line[i-1] in (\" \", \"\\t\")` branch fires and the line is truncated mid-flow-list. The function has no flow-context state machine — the existing scalar-context quote tracking is structurally unable to handle `[...]` content.",
+      "fix": "Extend `_strip_inline_comment` with flow-list awareness: when the first non-space char at value_start is `[` or `{`, enter flow mode. While in flow mode, track `in_quote` on every `\"`/`'` (with the same backslash-parity check used in the bug-123 fix) and DO NOT strip `#`. Exit flow mode on the matching `]` / `}` outside quotes; thereafter the existing scalar `#`-strip resumes so a trailing `# comment` after the flow close still works. Add fixtures: `tags: [\"a # b\", c]` → `['a # b', 'c']`; `tags: ['a # b', c] # trailing`  → `['a # b', 'c']` with comment stripped; `tags: [\"a # b\"]\\t# c` → comment stripped (tab-before-#, intersect with bug-124).",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "parser",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-124",
+        "bug-126",
+        "bug-132"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-135",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "epic-dag.py _strip_inline_comment recognises only `- ` (dash-space) as a YAML block-list-item value-start; `-\\t` (dash-tab) falls through to scalar-mode and silently truncates any quoted item that contains a `#`. A `produces:` (or `touches:`) entry written as `\\t-\\t\"src/path # weird.py\"` parses as `['src/path']`, dropping `# weird.py\"` from the path. The block-list parser at lines 199-204 already accepts `-\\t` (it was part of the bug-127 fix), so the post-strip check is happy with the truncated raw — the comment-stripper just never realised it was inside a list item, never opened in_quote on the following `\"`, and the unanchored `#`-stripper cut the value short. Result: validate-session-deliverables.py false-flags the session because the produces entry it's trying to match is no longer the path the session actually wrote. Symmetric to bug-126 (tab between `:` and value) but in the block-list-item branch — same audit class the bug-126 cerebrum note explicitly calls out.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "Line 86: `if stripped.startswith(\"- \"):` admits only the ASCII-space variant. The bug-127 fix taught the *block-list parser* to recognise `-\\t` and bare `-`, but the prior comment-stripper pass was never updated to match, so the stripper still uses the ASCII-space-only test and misclassifies any tab-separated list item as a scalar.",
+      "fix": "Replace `if stripped.startswith(\"- \"):` with a check that mirrors the block-list parser's tolerance: detect `- ` OR `-\\t` (and treat a bare `-` row as having no value, so value_start stays -1 and there is nothing for the `#`-stripper to match against quoted-value rules). Concretely: `if len(stripped) >= 2 and stripped[0] == \"-\" and stripped[1] in (\" \", \"\\t\"): value_start = leading_ws + 2`. Skip-ws step at line 98 already handles either character. Add a fixture covering `\\t-\\t\"a # b\"` and confirm `\\t- \"a # b\"` (existing) still passes.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "parser",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-124",
+        "bug-126",
+        "bug-127",
+        "bug-132"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-136",
+      "timestamp": "2026-05-06T00:00:00Z",
+      "error_message": "epic-dag.py _strip_inline_comment uses the same `\\\\`-parity check (`bs % 2 == 0` to decide whether a quote terminates the string) for BOTH double-quoted and single-quoted YAML strings. YAML 1.2 single-quoted scalars do not honour backslash escapes — `\\\\` is a literal backslash and the only escape is `''` for an embedded apostrophe — so a frontmatter line like `key: 'C:\\\\path\\\\' # comment` (a literal Windows-ish path that legitimately ends in a backslash) leaves bs=1 (odd) at the closing apostrophe, in_quote never closes, and the trailing ` # comment` is silently absorbed into the value. The end-of-line return path keeps in_quote open and `result[k]` retains both the closing quote and the comment text. Lower impact than bug-134/135 (rare to terminate a single-quoted YAML scalar with `\\`), but it is the third member of the same audit class and the docstring's claim that the function obeys YAML 1.2 §6.6 is no longer accurate for single-quoted strings.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "The bug-123 fix added `bs % 2 == 0` parity tracking to handle `\\\\\"` (escaped backslash followed by real terminator) inside double-quoted scalars. The same `for i in range(scan_start, len(line))` block uses one branch for both quote styles and applies the same parity check unconditionally. Single-quoted YAML treats `\\` as literal, so the parity check is wrong: any `\\` immediately before the closing `'` falsely keeps the string open.",
+      "fix": "Branch the quote-close logic by quote style. If `in_quote == \"'\"`, the closer is unconditional (any `'`) UNLESS the next char is also `'`, in which case it is a YAML-style escaped apostrophe and we skip both. If `in_quote == '\"'`, keep the existing backslash-parity rule (preserves bug-123's fix). Same change is needed in `_split_flow_list`'s walker for symmetry — same single-vs-double asymmetry exists there. Fixtures: `key: 'a\\\\' # c` → `'a\\\\'` (comment stripped); `key: 'a''b' # c` → `\"a'b\"` (comment stripped); existing `key: \"a\\\\\\\\\" # c` (bug-123) still passes.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml",
+        "frontmatter",
+        "parser",
+        "py"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-132"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-06T00:00:00Z"
+    },
+    {
+      "id": "bug-136",
+      "timestamp": "2026-05-07T01:25:57.763Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "15 lines replaced/restructured",
+      "fix": "Rewrote 58→106 lines (15 removed) | Also: for i, ch in enumerate(s):; elif ch in ('\"', \"'\"):",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-07T01:26:12.070Z"
     }
   ]
 }

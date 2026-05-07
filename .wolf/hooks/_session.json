@@ -1,114 +1,48 @@
 {
-  "session_id": "session-2026-05-07-1853",
-  "started": "2026-05-07T00:53:04.222Z",
+  "session_id": "session-2026-05-07-1915",
+  "started": "2026-05-07T01:15:31.438Z",
   "files_read": {
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
-      "count": 2,
+      "count": 1,
       "tokens": 7492,
-      "first_read": "2026-05-07T00:53:30.127Z"
+      "first_read": "2026-05-07T01:16:07.959Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
       "count": 1,
       "tokens": 2560,
-      "first_read": "2026-05-07T00:54:19.331Z"
+      "first_read": "2026-05-07T01:18:14.548Z"
     },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
       "count": 1,
-      "tokens": 839,
-      "first_read": "2026-05-07T00:54:34.319Z"
+      "tokens": 4761,
+      "first_read": "2026-05-07T01:18:39.377Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
       "count": 1,
       "tokens": 3160,
-      "first_read": "2026-05-07T00:54:47.559Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 1,
-      "tokens": 6565,
-      "first_read": "2026-05-07T00:55:12.339Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
-      "count": 1,
-      "tokens": 4094,
-      "first_read": "2026-05-07T00:55:40.566Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 5,
-      "tokens": 16121,
-      "first_read": "2026-05-07T00:56:44.302Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
-      "count": 1,
-      "tokens": 1778,
-      "first_read": "2026-05-07T00:58:06.013Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
-      "count": 2,
-      "tokens": 4761,
-      "first_read": "2026-05-07T00:58:23.635Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
-      "count": 2,
-      "tokens": 3346,
-      "first_read": "2026-05-07T01:00:17.818Z"
+      "first_read": "2026-05-07T01:19:15.133Z"
     }
   },
   "files_written": [
     {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
       "action": "edit",
+      "tokens": 1607,
+      "at": "2026-05-07T01:25:57.762Z"
+    },
+    {
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+      "action": "edit",
       "tokens": 531,
-      "at": "2026-05-07T01:10:48.229Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 44,
-      "at": "2026-05-07T01:10:53.908Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 436,
-      "at": "2026-05-07T01:11:12.532Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 199,
-      "at": "2026-05-07T01:11:20.234Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 40,
-      "at": "2026-05-07T01:12:25.686Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 16,
-      "at": "2026-05-07T01:12:42.340Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 18,
-      "at": "2026-05-07T01:13:44.111Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
-      "action": "edit",
-      "tokens": 16,
-      "at": "2026-05-07T01:13:47.553Z"
+      "at": "2026-05-07T01:26:12.068Z"
     }
   ],
   "edit_counts": {
-    "scripts/epic-dag.py": 8
+    "scripts/epic-dag.py": 2
   },
-  "anatomy_hits": 10,
+  "anatomy_hits": 4,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 7,
+  "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
   "stop_count": 1
 }
