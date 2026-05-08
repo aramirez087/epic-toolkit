@@ -5208,6 +5208,56 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T15:25:00Z"
+    },
+    {
+      "id": "bug-258",
+      "timestamp": "2026-05-08T15:27:07Z",
+      "error_message": "AGENTS.md:10 'guidance to Codex (Codex.ai/code)' carried two errors at once. (1) `Codex.ai/code` is a fabricated URL — no such hostname exists; the line was a mechanical search-replace of CLAUDE.md:10's `claude.ai/code` with literal token 'Codex' substituted at the host position. A reader who clicked the URL got a DNS failure or a parked-domain redirect. (2) Singling out 'Codex' contradicts the file's purpose. Per the agents.md spec AGENTS.md is consumed by every AGENTS.md-aware agent (Codex CLI, OpenCode, others); the sibling bug-256 fix already accepted this premise by replacing 'Codex' with 'claude' on the Requirements line at AGENTS.md:46 (no Codex CLI branch exists in run-sessions.sh). The line-10 attribution remained as the last 'this file is for Codex specifically' claim in the file.",
+      "file": "AGENTS.md",
+      "root_cause": "AGENTS.md was forked from CLAUDE.md by `s/Claude Code/Codex/g; s/claude\\.ai/Codex.ai/`; the host-token substitution invented a URL that was never validated. The bug-256 sweep patched the Requirements line but did not audit the rest of the file for the same Codex-specific framing, so the attribution line at line 10 stayed broken. Same audit class as bugs 247/254/255/256/257 (user-facing string drift) and 256's specific AGENTS.md template-fork lineage.",
+      "fix": "Rewrote AGENTS.md:10 to be tool-neutral: 'This file provides guidance to AGENTS.md-aware AI coding agents (Codex, OpenCode, and others) when working with code in this repository.' Removes the fabricated URL and aligns the attribution with the file's actual consumer set (matching the Requirements line's claude/opencode whitelist patched in bug-256). Doc-only; no behavioural impact.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "user-facing-string",
+        "agents-md",
+        "fabricated-url",
+        "symmetric-to-bug-256"
+      ],
+      "related_bugs": [
+        "bug-247",
+        "bug-254",
+        "bug-255",
+        "bug-256",
+        "bug-257"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:27:07Z"
+    },
+    {
+      "id": "bug-259",
+      "timestamp": "2026-05-08T15:27:07Z",
+      "error_message": "commands/epic.md:24-28 and .opencode/commands/epic.md:24-28 'Multi-epic' section instructed the operator to run epics manually one at a time (`/epic-toolkit:epic epic-1-name` then `/epic-toolkit:epic epic-2-name`) and never mentioned the sprint command. /epic-toolkit:sprint and /sprint already exist (commands/sprint.md, .opencode/commands/sprint.md, scripts/run-sprint.sh) and automate exactly this workflow on a shared trunk branch with a single PR for the whole sprint. The earlier audit chain — bug-254 (README.md), bug-255 (docs/epic-guide.md), bug-257 (CLAUDE.md + AGENTS.md) — patched every long-form description site to surface /sprint as the preferred multi-epic path, but the per-command source-of-truth files (commands/epic.md and .opencode/commands/epic.md) shipped to users via the Claude Code marketplace install / OpenCode commands directory were missed. Both are loaded INTO the operator agent's context as the active Multi-epic instruction every time /epic is invoked, so the resulting plan keeps recommending the manual two-PR workflow even though /sprint is the documented preference everywhere else.",
+      "file": "commands/epic.md, .opencode/commands/epic.md",
+      "root_cause": "Same audit class as bugs 254/255/257: when the sprint command was added (commit 64078a0), the Multi-epic example in the per-command instruction files was not updated to reference it. The sweep that fixed README.md / docs/epic-guide.md / CLAUDE.md / AGENTS.md walked the long-form references but did not extend to the command-prompt sources that the operator actually executes. Both Claude Code and OpenCode read these files verbatim into the slash-command context, so a stale Multi-epic block here outweighed the patched references in the documentation tree.",
+      "fix": "Updated the Multi-epic section in both files to lead with /epic-toolkit:sprint (and /sprint for OpenCode) as the preferred multi-epic workflow, including the one-PR-per-sprint behaviour and the canonical `<sprint-name>.sprint.json` invocation, while retaining the manual sequential example as the alternative (noted as 'one PR per epic'). Verified the sprint command files exist at commands/sprint.md / .opencode/commands/sprint.md and that scripts/run-sprint.sh is wired up. Doc-only; no behavioural impact.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "user-facing-string",
+        "command-prompt",
+        "sprint-not-mentioned",
+        "symmetric-to-bug-254",
+        "symmetric-to-bug-255",
+        "symmetric-to-bug-257"
+      ],
+      "related_bugs": [
+        "bug-254",
+        "bug-255",
+        "bug-257"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:27:07Z"
     }
   ]
 }

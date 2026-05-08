@@ -7,7 +7,7 @@ This project uses OpenWolf for context management. Read and follow .wolf/OPENWOL
 
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AGENTS.md-aware AI coding agents (Codex, OpenCode, and others) when working with code in this repository.
 
 @.wolf/OPENWOLF.md
 

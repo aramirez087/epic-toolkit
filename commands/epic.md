@@ -21,7 +21,11 @@ touches: ["analysis/**"]
 parallel_safe: true
 ```
 
-**Multi-epic:** For problems spanning multiple independent subsystems, use `/epic-toolkit:epic.generate` to split into separate epic directories under `docs/claude-sessions/`. Run each epic sequentially — each must complete and merge to trunk before the next starts:
+**Multi-epic:** For problems spanning multiple independent subsystems, use `/epic-toolkit:epic.generate` to split into separate epic directories under `docs/claude-sessions/`. Prefer `/epic-toolkit:sprint` — it runs them back-to-back on a shared trunk branch and opens a single PR for the whole sprint:
+```bash
+/epic-toolkit:sprint docs/claude-sessions/<sprint-name>.sprint.json
+```
+Or run each epic sequentially with manual invocations — each must complete and merge to trunk before the next starts (one PR per epic):
 ```bash
 /epic-toolkit:epic epic-1-name
 /epic-toolkit:epic epic-2-name
