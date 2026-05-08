@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T15:18:27.906Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T15:41:27.262Z
 > Files: 71 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -58,7 +58,7 @@
 ## ./
 
 - `.gitignore` — Git ignore rules (~15 tok)
-- `AGENTS.md` — OpenWolf (~604 tok)
+- `AGENTS.md` — OpenWolf (~614 tok)
 - `CLAUDE.md` — OpenWolf (~726 tok)
 - `LICENSE` — Project license (~290 tok)
 - `README.md` — Project documentation (~1817 tok)
@@ -76,7 +76,7 @@
 ## .opencode/commands/
 
 - `epic.generate.md` — /epic.generate - Generate session files (~4515 tok)
-- `epic.md` — Validate (~842 tok)
+- `epic.md` — Validate (~898 tok)
 - `sprint.md` — Validate (~854 tok)
 
 ## .wolf/
@@ -88,12 +88,12 @@
 ## commands/
 
 - `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4608 tok)
-- `epic.md` — Validate (~881 tok)
+- `epic.md` — Validate (~945 tok)
 - `sprint.md` — Validate (~889 tok)
 
 ## docs/
 
-- `epic-guide.md` — Epic Sessions Guide (~3663 tok)
+- `epic-guide.md` — Epic Sessions Guide (~3684 tok)
 - `epic-prompt-template.md` — Epic Prompt Template (~2170 tok)
 
 ## scripts/
@@ -101,7 +101,7 @@
 - `epic-dag.py` — - supabase/migrations/*auth* (~8000 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~5269 tok)
 - `epic-ui.py` — EpicUI: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~4333 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16148 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16149 tok)
 - `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3415 tok)
 - `validate-session-deliverables.py` — /", PH_MID) (~3028 tok)
 

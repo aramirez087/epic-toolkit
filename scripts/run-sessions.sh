@@ -60,7 +60,7 @@ NC='\033[0m'
 
 log()  { echo -e "${BLUE}[epic]${NC} $*"; }
 ok()   { echo -e "${GREEN}[epic]${NC} $*"; }
-warn() { echo -e "${YELLOW}[epic]${NC} $*"; }
+warn() { echo -e "${YELLOW}[epic]${NC} $*" >&2; }
 err()  { echo -e "${RED}[epic]${NC} $*" >&2; }
 dim()  { echo -e "${DIM}$*${NC}"; }
 

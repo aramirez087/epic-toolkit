@@ -15,8 +15,10 @@ bash scripts/run-sessions.sh docs/claude-sessions/x-api-surface-expansion
 ```
 
 Claude Code marketplace installs expose namespaced commands:
-`/epic-toolkit:epic.generate` and `/epic-toolkit:epic`. OpenCode uses the
-un-namespaced equivalents: `/epic.generate` and `/epic`.
+`/epic-toolkit:epic.generate`, `/epic-toolkit:epic`, and
+`/epic-toolkit:sprint` (multi-epic orchestrator — one PR for N epics).
+OpenCode uses the un-namespaced equivalents: `/epic.generate`, `/epic`,
+and `/sprint`.
 
 ## Directory convention
 

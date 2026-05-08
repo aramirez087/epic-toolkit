@@ -1137,3 +1137,20 @@
 | 09:18 | Edited AGENTS.md | 13→15 lines | ~341 |
 | 09:18 | Edited AGENTS.md | inline fix | ~44 |
 | 09:18 | Edited CLAUDE.md | 13→15 lines | ~341 |
+| 09:20 | Session end: 3 writes across 2 files (AGENTS.md, CLAUDE.md) | 5 reads | ~9402 tok |
+
+## Session: 2026-05-08 09:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:24 | Edited AGENTS.md | inline fix | ~37 |
+| 09:24 | Edited commands/epic.md | modified starts() | ~158 |
+| 09:24 | Edited .opencode/commands/epic.md | modified starts() | ~141 |
+| 09:27 | Session end: 3 writes across 2 files (AGENTS.md, epic.md) | 10 reads | ~17933 tok |
+
+## Session: 2026-05-08 09:36
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 09:41 | Edited scripts/run-sessions.sh | inline fix | ~14 |
+| 09:41 | Edited docs/epic-guide.md | 3→5 lines | ~74 |
