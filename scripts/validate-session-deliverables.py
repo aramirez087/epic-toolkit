@@ -20,7 +20,8 @@ Frontmatter the validator reads:
 Modes:
   1. produces: declared
        Every entry must match at least one path in the session's diff
-       (any status except D). Globs use fnmatch semantics.
+       (any status — including deletions and rename source paths).
+       Globs use fnmatch semantics.
   2. produces: not declared
        Metadata-only heuristic: if every changed AND deleted path matches
        ^\\.wolf/ or ^docs/roadmap/.*-handoff\\.md$ AND no external repo
@@ -445,14 +446,30 @@ def main() -> int:
                     # missing — repo gone, git failed, or invalid baseline.
                     missing.append((decl, "external repo could not be diffed"))
                     continue
-                if not _matches_declared(rel, ch_for_repo):
+                # Match against changes AND deletions. Symmetric to bug-286/
+                # 287: those extended the metadata-only fallback to count
+                # real-source deletions as legitimate deliverables, but the
+                # explicit `produces:` branch was the un-audited mirror —
+                # `produces: ["../sibling/Old.cs"]` with `git rm ../sibling/
+                # Old.cs` (or `git mv old new`, whose source lands in
+                # `deleted` per bug-289's rename decomposition) was falsely
+                # flagged "not in repo diff".
+                de_for_repo = ext_deleted.get(repo_root, [])
+                if (
+                    not _matches_declared(rel, ch_for_repo)
+                    and not _matches_declared(rel, de_for_repo)
+                ):
                     missing.append((decl, f"not in {repo_root} diff"))
             else:
                 # Either truly internal, or external-but-not-snapshotted
                 # (older runner, snapshot helper failed, or sibling repo
                 # didn't exist). Try the worktree diff; if it's clearly
                 # outside the worktree, report which case we're in.
-                if not _matches_declared(decl, changed):
+                # Match against deletions too — bug-286 audit-gap mirror.
+                if (
+                    not _matches_declared(decl, changed)
+                    and not _matches_declared(decl, deleted)
+                ):
                     looks_external = decl.startswith("../") or os.path.isabs(decl)
                     if looks_external and args.external_baselines is None:
                         missing.append((

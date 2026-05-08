@@ -1263,3 +1263,13 @@
 |------|--------|---------|---------|--------|
 | 14:54 | Edited scripts/epic-dag.py | modified range() | ~471 |
 | 14:55 | Edited scripts/run-sessions.sh | expanded (+10 lines) | ~262 |
+| 14:57 | Session end: 2 writes across 2 files (epic-dag.py, run-sessions.sh) | 12 reads | ~62787 tok |
+
+## Session: 2026-05-08 16:00
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:09 | Edited scripts/validate-session-deliverables.py | 4→5 lines | ~58 |
+| 16:10 | Edited scripts/validate-session-deliverables.py | added 1 condition(s) | ~348 |
+| 16:10 | Edited scripts/validate-session-deliverables.py | added 1 condition(s) | ~177 |
+| 16:10 | Edited scripts/resolve-wolf.sh | expanded (+8 lines) | ~176 |

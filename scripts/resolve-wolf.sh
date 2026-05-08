@@ -51,7 +51,15 @@ if [[ -z "$SIDE" ]]; then
   fi
 fi
 
-CONFLICTED="$(git diff --name-only --diff-filter=U)"
+# core.quotePath=false — git's default wraps any path with bytes >= 0x80
+# (and whitespace / control chars) in `"..."` with C-string escapes, so a
+# conflicted `.wolf/foo—bar.md` arrives as `".wolf/foo\342\200\224bar.md"`
+# and the downstream `^\.wolf/` filter misclassifies it as a non-wolf
+# conflict, sending the operator down a "Refusing to auto-resolve" path
+# that names the quoted-and-escaped form back at them. Same audit chain
+# as bug-213, which patched the merge-driver call sites in epic-git.sh
+# and scripts/wolf-merge/resolve-wolf.sh but missed this standalone copy.
+CONFLICTED="$(git -c core.quotePath=false diff --name-only --diff-filter=U)"
 if [[ -z "$CONFLICTED" ]]; then
   echo "No conflicts to resolve."
   exit 0
