@@ -5486,6 +5486,30 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-08T16:33:44Z"
+    },
+    {
+      "id": "bug-270",
+      "timestamp": "2026-05-08T17:03:44Z",
+      "error_message": "scripts/run-sessions.sh:276 comment claimed `map_model_shorthand` is 'called at line 246, before sourcing' \u2014 but line 246 is `exit 1` inside the `--cli` override validation block, NOT a call site. The actual earliest call (the one that requires the function to be defined before the `source \"$_LIB_DIR/\u2026\"` block at line 333) is `MODEL=\"$(map_model_shorthand \"$MODEL\" \"$CLI_CMD\")\"` at line 302. The line number drifted whenever this file shifted \u2014 same comment-rot class as bug-225 (do not hard-code result-file paths in command docs because they drift) but inside source comments rather than user docs.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Hard-coded absolute line number in a maintainer-facing source comment, with no mechanism to keep it synced when the surrounding code grows. The comment rationale (function must be defined before lib sourcing) stayed accurate, but the bare `line 246` reference rotted as the file expanded between the original write and now (current early call is at line 302, line 246 is now `exit 1` inside the `--cli` override validation block \u2014 a misleading pointer that confuses any reader who follows it). Audit class: every absolute line-number reference in a source comment is a future-rot site by construction; either drop the number (rely on the rationale) or anchor it to a stable token grep can find. `grep -rn \"line [0-9]\\{3\\}\" scripts/` surfaced this site (only one in the codebase; epic-git.sh:244's `(line ~212)` reference still happens to be accurate today, kept as-is because the `~` already marks it approximate).",
+      "fix": "Replaced the comment at scripts/run-sessions.sh:276 with a future-proof rationale: name the actual mechanism (function called as part of model resolution above the `source \"$_LIB_DIR/\u2026\"` block) and the failure mode (previous `line 246` had drifted to an unrelated exit site), then explicitly state the convention going forward \u2014 keep the rationale, drop the line number. No behavioural change; sed range in `usage()` (the only OTHER hard-coded line range in this file, at scripts/run-sessions.sh:77) was already protected by bug-240's audit-coverage comment so it's regenerated when options change. `bash -n scripts/run-sessions.sh` clean. Same future-proofing pattern as bug-225's RESULT_FILE-printing fix.",
+      "tags": [
+        "found-by-bug-hunt",
+        "comment-rot",
+        "audit-gap",
+        "shell",
+        "line-number-drift",
+        "maintainer-facing-comment",
+        "symmetric-to-bug-225"
+      ],
+      "related_bugs": [
+        "bug-225",
+        "bug-240",
+        "bug-269"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T17:03:44Z"
     }
   ]
 }

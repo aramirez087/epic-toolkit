@@ -273,7 +273,11 @@ log "Using CLI: $CLI_CMD"
 # qualified IDs in provider/model format (opencode/claude-sonnet-4).
 # If the user passed a slash-containing ID (e.g. opencode/glm-5.1) we
 # leave it untouched — it's already a full ID.
-# Kept here (not in a lib) because it is called at line 246, before sourcing.
+# Kept here (not in a lib) because it is called before the lib/ sources
+# below — `MODEL="$(map_model_shorthand …)"` runs as part of model resolution
+# above the `source "$_LIB_DIR/…"` block. Bare line numbers rot every time
+# this file changes (the previous note pointed at line 246, which had drifted
+# to an unrelated `exit 1` site); keep the rationale, drop the line number.
 map_model_shorthand() {
   local model="$1"
   local cli="$2"
