@@ -27,14 +27,19 @@ parallel_safe: true
 /epic-toolkit:epic epic-2-name
 ```
 
-Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base main`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`.
+Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base main`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`, `--keep-session-docs false`, `--no-pr false`, `--no-rebase false`, `--no-commit false`, `--skip-plan false`, `--wave-timeout 0` (auto), `--fresh false`.
 
 ## Validate
 1. Confirm `docs/claude-sessions/<name>/` exists. If not, list available under `docs/claude-sessions/` and ask user to pick.
 
 ## Execute
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-sessions.sh" docs/claude-sessions/<name>/ [--start N] [--end N] [--timeout M] [--retry N] [--max-parallel N] [--strict] [--sequential] [--show-dag] [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run] [--no-worktree] [--keep-worktree] [--keep-session-worktrees]
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/run-sessions.sh" docs/claude-sessions/<name>/ \
+  [--start N] [--end N] [--timeout MINS] [--retry N] [--max-parallel N] [--wave-timeout MINS] \
+  [--strict] [--sequential] [--skip-plan] [--no-worktree] [--no-rebase] \
+  [--no-commit] [--no-pr] [--keep-worktree] [--keep-session-worktrees] \
+  [--keep-session-docs] [--fresh] [--show-dag] \
+  [--model M] [--cli opencode|claude] [--branch B] [--base B] [--dry-run]
 ```
 
 Run via Bash tool with `run_in_background: true` (long-running). For `--show-dag` only, no background needed.

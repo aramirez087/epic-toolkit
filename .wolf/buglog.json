@@ -4859,6 +4859,91 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T13:00:00Z"
+    },
+    {
+      "id": "bug-242",
+      "timestamp": "2026-05-08T13:41:30.272Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 9\u219213 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T13:41:30.272Z"
+    },
+    {
+      "id": "bug-243",
+      "timestamp": "2026-05-08T13:41:46.216Z",
+      "error_message": "Significant refactor of ",
+      "file": "commands/epic.md",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 9\u219214 lines (2 removed) | Also: Defaults: `name` (required), `--start 1`, `--end a; bash scripts/run-sessions.sh docs/claude-sessions/",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-08T13:41:54.842Z"
+    },
+    {
+      "id": "bug-244",
+      "timestamp": "2026-05-08T15:00:00Z",
+      "error_message": "scripts/run-sessions.sh:23-46 usage() comment header was missing --keep-session-docs even though the flag is fully wired (default at line 95, parsing at line 143, runtime use at lines 1212/1228/1233/1236, AND run-sprint.sh's pass-through whitelist at line 127 plus its header at line 43 already list it). Users running `bash run-sessions.sh --help` saw NO mention of --keep-session-docs, so the only way to discover the flag was reading the source \u2014 `--help` could not surface it even though the bug-240 sed range was now technically correct (the range `2,46p` did include the header's last line, but no comment line for the option had ever been added).",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Audit-gap symmetric to bug-240/bug-218/bug-205 \u2014 every user-facing string must reflect the actual code shape \u2014 but a NEW shape: bug-240 was 'header has the option, sed range cuts it off' (sed-truncated three options); bug-242 (this) is the OPPOSITE shape: 'code has the option, header doesn't list it at all'. The bug-240 fix updated the docblock to name the convention 'keep the sed range in sync with the last `# ` line above `set -euo pipefail`' \u2014 that convention is sound and unchanged here, but it is necessary not sufficient: the convention only covers the SED RANGE side. The header CONTENT side (every parseable flag must have a `# ` line) was previously implicit. --keep-session-docs was added to the runner's parser without anyone updating the header, and the existing convention's wording didn't catch it because the sed range was honest about what the header contained \u2014 the header itself was incomplete. Same audit class as bug-218 (cleanup-commit body fired in BOTH branches while OK message branched correctly), bug-211/212/217 (push-site messages hard-coded one case while surrounding code branched on local-vs-remote state), and bug-241 (Next-step advice fired regardless of AUTO_PR success).",
+      "fix": "Insert `--keep-session-docs  Skip removing session prompts and roadmap handoffs from the epic branch on success` between line 43 (--keep-session-worktrees) and line 44 (--wave-timeout) so flags appear in the same order the parser sees them at lines 141-145. Bump sed range from `2,46p` to `2,47p` to match the new last `# ` line. Update the bug-240 docblock at lines 67-71 to name BOTH audit-gap shapes (header-content drift AND sed-range drift) so future audits know to check both directions: the comment header must list every parseable flag AND the sed span must match the last `# ` line above `set -euo pipefail`. Verified by `bash -n` (passes) and by `sed -n '2,47p' scripts/run-sessions.sh | sed 's/^# \\{0,1\\}//' | tail -10` \u2014 the help output now includes --keep-session-docs alongside the bug-240-recovered options. Same minimum-scope discipline as bug-205/218/240/241: the fix is purely additive (one comment line, one number change in sed, one docblock update); zero behavioural change for any code path other than --help.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "symmetric-to-bug-240",
+        "symmetric-to-bug-218",
+        "symmetric-to-bug-205",
+        "user-facing-string",
+        "help-text",
+        "comment-header",
+        "keep-session-docs"
+      ],
+      "related_bugs": [
+        "bug-242",
+        "bug-240",
+        "bug-218",
+        "bug-205"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:00:00Z"
+    },
+    {
+      "id": "bug-245",
+      "timestamp": "2026-05-08T15:00:00Z",
+      "error_message": "commands/epic.md:30 Defaults list and commands/epic.md:37 Execute syntax (and the symmetric .opencode/commands/epic.md:30/37) were missing seven options that scripts/run-sessions.sh accepts: --no-pr, --no-rebase, --no-commit, --skip-plan, --keep-session-docs, --wave-timeout, --fresh. The companion commands/sprint.md:23-26 (and .opencode/commands/sprint.md) already list the full set as pass-throughs, proving the audit reached the sprint docs but missed the epic docs. Users invoking /epic-toolkit:epic (Claude Code) or /epic (OpenCode) saw only ~16 options in the Defaults line and Execute syntax even though the runner accepts ~23, so the orchestrator AI rendering the doc would never suggest these flags to the user \u2014 they were effectively undiscoverable from the slash-command surface.",
+      "file": "commands/epic.md",
+      "root_cause": "Asymmetric audit drift across sibling docs. commands/epic.md and .opencode/commands/epic.md were authored from the original option set; later flags (--keep-session-docs / --wave-timeout / --fresh added in the worktree-cleanup and resume work; --no-pr / --no-rebase / --no-commit / --skip-plan added during the auto-PR/auto-commit/auto-rebase work) all updated the runner's parser AND the sprint docs' pass-through whitelist (commands/sprint.md:23-26, which mirrors run-sprint.sh:127's case statement) but never propagated to the epic docs. Same audit-gap shape as bug-242 and bug-240: a user-facing template that hard-codes one set of flags while the underlying code grew. The asymmetry between epic.md (stale) and sprint.md (current) is the diagnostic \u2014 both surfaces should list every flag the underlying script accepts.",
+      "fix": "Update line 30 (Defaults) of both commands/epic.md and .opencode/commands/epic.md to append `--keep-session-docs false`, `--no-pr false`, `--no-rebase false`, `--no-commit false`, `--skip-plan false`, `--wave-timeout 0` (auto), `--fresh false`. Reformat line 37 (Execute syntax) into a multi-line continuation matching commands/sprint.md:22-27's shape so the full flag set is readable: value-bearing flags (--start/--end/--timeout/--retry/--max-parallel/--wave-timeout) on one line, boolean flags (--strict/--sequential/--skip-plan/--no-worktree/--no-rebase/--no-commit/--no-pr/--keep-worktree/--keep-session-worktrees/--keep-session-docs/--fresh/--show-dag) grouped, and string-value flags (--model/--cli/--branch/--base/--dry-run) last. Verified by grep that all seven added flags actually parse in run-sessions.sh: --no-pr (line 137), --no-rebase (138), --no-commit (136), --skip-plan (139), --keep-session-docs (143), --wave-timeout (144), --fresh (145). Purely doc-only change; no behavioural impact on the runner or sprint orchestrator. Same minimum-scope discipline as bug-205/218/240/241/244 \u2014 fix every drifted surface symmetrically (Claude Code AND OpenCode docs) so the audit closure is complete.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "symmetric-to-bug-244",
+        "symmetric-to-bug-240",
+        "user-facing-string",
+        "command-docs",
+        "epic-md",
+        "asymmetric-drift"
+      ],
+      "related_bugs": [
+        "bug-243",
+        "bug-244",
+        "bug-242",
+        "bug-240"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:00:00Z"
     }
   ]
 }

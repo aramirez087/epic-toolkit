@@ -41,6 +41,7 @@
 #   --no-worktree        Run trunk in CWD (forces --max-parallel 1)
 #   --keep-worktree      Retain trunk worktree on success
 #   --keep-session-worktrees  Retain per-session worktrees on success
+#   --keep-session-docs  Skip removing session prompts and roadmap handoffs from the epic branch on success
 #   --wave-timeout MINS  Max minutes before the entire wave is killed (default: auto)
 #   --fresh              Disable resume: ignore cached plans and re-run already-committed sessions
 #   -h, --help           Show this help
@@ -64,12 +65,16 @@ err()  { echo -e "${RED}[epic]${NC} $*" >&2; }
 dim()  { echo -e "${DIM}$*${NC}"; }
 
 usage() {
-  # Range tracks the comment header above. Three options were appended to
-  # the header (--wave-timeout / --fresh / -h) without updating `2,43p`,
-  # silently truncating them from `--help` output. Same shape as bug-205/218
-  # — every user-facing string must reflect the actual code shape, here
-  # the actual header span.
-  sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'
+  # Range tracks the comment header above. Two prior audit-gaps:
+  # bug-240 — three options (--wave-timeout/--fresh/-h) appended to the
+  # header without updating `2,43p`, so they were sed-truncated from
+  # --help. bug-242 — --keep-session-docs was wired (parsing + runtime)
+  # but never added to the header at all, so --help omitted it silently
+  # even after the sed range was correct. Same audit class as bug-205/218
+  # — every user-facing string must reflect the actual code shape: BOTH
+  # the comment header (every parseable flag listed) AND the sed span
+  # (matches the last `# ` line above `set -euo pipefail`).
+  sed -n '2,47p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
