@@ -1,6 +1,6 @@
 {
   "name": "epic-toolkit",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "DAG-scheduled multi-session epics with parallel-worktree execution. Adds /epic-toolkit:epic and /epic-toolkit:epic.generate for Claude Code.",
   "author": {
     "name": "Alexander Ramirez"
