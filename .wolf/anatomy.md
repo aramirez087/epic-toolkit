@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T18:17:18.067Z
-> Files: 71 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T18:18:59.538Z
+> Files: 73 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -29,6 +29,8 @@
 - `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` — Declares as (~1512 tok)
 - `epic-fix-commit-msg.txt` (~453 tok)
+- `epic-toolkit-commit-msg-1.txt` (~418 tok)
+- `epic-toolkit-commit-msg-2.txt` (~161 tok)
 - `epic-toolkit-commit-msg.txt` (~413 tok)
 - `epic-toolkit-fix-msg-2.txt` (~311 tok)
 - `epic-toolkit-fix-msg.txt` (~353 tok)
