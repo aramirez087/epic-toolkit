@@ -1643,10 +1643,34 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
       EXISTING_PR="$(gh pr view "$CURRENT_BRANCH" --json url -q '.url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
         ok "PR already exists: $EXISTING_PR"
-        # Even if PR exists, push the rebased history so the PR becomes mergeable
+        # Push so the existing PR reflects the latest commits. Three cases:
+        #   1. REBASE_RESULT="ok" — history was rewritten onto a fresh
+        #      origin/<base>; force-with-lease updates the diverged remote.
+        #   2. REBASE_RESULT in {skipped,fetch-failed,conflict} but the
+        #      local branch has commits ahead of `@{u}` — a plain push
+        #      fast-forwards the remote and the PR shows the new commits.
+        #   3. Nothing ahead of `@{u}` — no-op.
+        # Pre-fix, only case 1 fired: the existing-PR branch was missing
+        # the "commits ahead of @{u}" fallback that the symmetric new-PR
+        # block immediately below already had. So a re-run with `--no-
+        # rebase` (REBASE_RESULT=skipped), an offline rebase (fetch-failed),
+        # or a non-.wolf rebase conflict (conflict) — combined with new
+        # local commits and a still-open PR — silently dropped the push.
+        # The runner reported "PR already exists: <url>" and exited 0;
+        # the PR stayed at the prior tip, the new commits never landed
+        # on origin, and the user (who copy-pasted the URL expecting the
+        # latest state) saw a stale PR with no diagnostic naming the cause.
+        # Same audit class as the bug-204..210 chain: every push site that
+        # expects to update an existing remote ref must reflect the actual
+        # local-vs-remote state, not a single REBASE_RESULT branch the
+        # ok-case happens to satisfy. Mirror the new-PR path's third elif
+        # (line 1659) so the existing-PR path covers the same shape.
         if [[ "$REBASE_RESULT" == "ok" ]]; then
           log "Force-pushing rebased history to existing PR..."
           git -C "$REPO_ROOT" push --force-with-lease 2>&1 | tail -5 || warn "Force-push failed; PR may still show conflicts"
+        elif [[ -n "$(git -C "$REPO_ROOT" log '@{u}..HEAD' --oneline 2>/dev/null)" ]]; then
+          log "Pushing new commits to existing PR..."
+          git -C "$REPO_ROOT" push 2>&1 | tail -5 || warn "Push failed; new commits may not appear in PR"
         fi
       else
         log "Creating pull request..."

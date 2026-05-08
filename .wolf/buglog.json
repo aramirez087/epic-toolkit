@@ -4257,6 +4257,30 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T00:14:09Z"
+    },
+    {
+      "id": "bug-211",
+      "timestamp": "2026-05-08T00:29:43Z",
+      "error_message": "run-sessions.sh:1644-1650 auto-PR existing-PR branch only pushed when REBASE_RESULT==\"ok\". The symmetric new-PR branch immediately below (lines 1655-1661) handled three cases \u2014 no upstream (push -u), rebase ok (force-with-lease), or commits ahead of @{u} (plain push) \u2014 but the existing-PR branch covered only the rebase-ok case. So when a re-run produced new local commits AND the PR already existed AND REBASE_RESULT was anything other than \"ok\" (`--no-rebase` \u2192 \"skipped\", offline fetch \u2192 \"fetch-failed\", non-.wolf rebase conflict \u2192 \"conflict\"), the runner printed \"PR already exists: <url>\" and skipped the push entirely. New session commits stayed local, the remote epic/<branch> stayed at the prior tip, and the existing PR kept showing stale state with no diagnostic naming the missed push.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Asymmetric audit gap with the new-PR push block. bug-204..210 audit chain repeatedly closed paths where a base-branch consumer or origin-preference fell through silently; the parallel push-on-existing-PR consumer was the unaudited site. The new-PR block correctly handled all three push shapes (`push -u` for fresh, `--force-with-lease` for rebased, plain `push` for fast-forward), but the existing-PR block kept its single-case `if REBASE_RESULT == ok` guard from when the auto-rebase was the only way new history landed. After the bug-208 audit moved every PR-target consumer to BASE_BRANCH and bug-210 removed the dead gh gate, this remained the last guard in the auto-PR block that didn't reflect what the code below it actually needed to do \u2014 push commits the remote doesn't have yet.",
+      "fix": "Add an `elif` mirroring the new-PR block's third arm: when REBASE_RESULT != \"ok\" but `git log '@{u}..HEAD' --oneline` is non-empty, plain-push to fast-forward the remote. Wrapped in `|| warn` so a failed push surfaces a diagnostic instead of crashing under set -e (matching the existing force-with-lease site's failure handling). Verified by inspection: pre-patch a `--no-rebase` resume run with new local commits and an open PR exited with the PR untouched; post-patch the same invocation pushes the new commits and the existing PR shows the latest state. No behavioral change for the common case (REBASE_RESULT==\"ok\"; force-with-lease still fires first).",
+      "tags": [
+        "auto-pr",
+        "existing-pr",
+        "push",
+        "rebase-result",
+        "audit-gap",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-204",
+        "bug-205",
+        "bug-208",
+        "bug-210"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T00:29:43Z"
     }
   ]
 }
