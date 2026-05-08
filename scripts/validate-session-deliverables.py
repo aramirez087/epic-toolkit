@@ -180,7 +180,7 @@ def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
 def _load_external_baselines(path: str | None) -> dict[str, Any]:
     """Load the sidecar JSON; return an empty shell when absent or
     malformed so callers can stay shape-agnostic."""
-    empty = {"external_paths": {}, "repos": {}}
+    empty = {"external_paths": {}, "repos": {}, "warnings": []}
     if not path:
         return empty
     if not os.path.isfile(path):
@@ -208,7 +208,15 @@ def _load_external_baselines(path: str | None) -> dict[str, Any]:
     repos = data.get("repos")
     if not isinstance(repos, dict):
         repos = {}
-    return {"external_paths": external_paths, "repos": repos}
+    # Snapshot helper records per-decl classification failures here
+    # (e.g. "could not resolve git toplevel for '../typo/foo'"). Without
+    # surfacing these the user sees a downstream "not in session diff"
+    # error with no clue why their cross-repo path wasn't classified.
+    warnings_raw = data.get("warnings")
+    if not isinstance(warnings_raw, list):
+        warnings_raw = []
+    warnings = [w for w in warnings_raw if isinstance(w, str)]
+    return {"external_paths": external_paths, "repos": repos, "warnings": warnings}
 
 
 def _read_external_diffs(
@@ -335,8 +343,9 @@ def main() -> int:
         return 2
 
     baselines = _load_external_baselines(args.external_baselines)
-    external_paths: dict[str, dict[str, str]] = baselines["external_paths"]
+    external_paths: dict[str, Any] = baselines["external_paths"]
     repos: dict[str, Any] = baselines["repos"]
+    snapshot_warnings: list[str] = baselines["warnings"]
     ext_changed, ext_deleted, ext_errors = _read_external_diffs(repos)
     for e in ext_errors:
         print(f"WARNING: {e}", file=sys.stderr)
@@ -371,7 +380,14 @@ def main() -> int:
         missing: list[tuple[str, str]] = []
         for decl in produces:
             ext = external_paths.get(decl)
-            if ext:
+            # Inner-shape guard: hand-edited or corrupt sidecar can have
+            # `external_paths[decl]` set to a non-dict (string, list, null,
+            # ...). Without this check `ext.get(...)` raises AttributeError
+            # and the validator crashes on what should be a soft failure.
+            # Same audit class as bug-178/179/180 — outer container shape
+            # is guarded in _load_external_baselines but inner values were
+            # trusted.
+            if isinstance(ext, dict):
                 repo_root = ext.get("repo_root", "")
                 rel = ext.get("relative", decl)
                 ch_for_repo = ext_changed.get(repo_root)
@@ -384,16 +400,26 @@ def main() -> int:
                     missing.append((decl, f"not in {repo_root} diff"))
             else:
                 # Either truly internal, or external-but-not-snapshotted
-                # (older runner, or snapshot helper failed). Try the
-                # worktree diff; if it's clearly outside the worktree we'll
-                # report a clearer error below.
+                # (older runner, snapshot helper failed, or sibling repo
+                # didn't exist). Try the worktree diff; if it's clearly
+                # outside the worktree, report which case we're in.
                 if not _matches_declared(decl, changed):
                     looks_external = decl.startswith("../") or os.path.isabs(decl)
-                    if looks_external and not external_paths:
+                    if looks_external and args.external_baselines is None:
                         missing.append((
                             decl,
                             "looks external but no --external-baselines was "
                             "provided to the validator",
+                        ))
+                    elif looks_external:
+                        # Flag was passed, but this specific decl wasn't
+                        # in the snapshot's external_paths. Snapshot
+                        # helper warnings printed below explain why
+                        # (sibling dir missing, not in a git repo, etc.).
+                        missing.append((
+                            decl,
+                            "looks external but snapshot did not classify "
+                            "it as external — see snapshot warnings below",
                         ))
                     else:
                         missing.append((decl, "not in session diff"))
@@ -414,7 +440,14 @@ def main() -> int:
                     f"External diff in {repo_root} vs baseline {short}:",
                     ch_for_repo, de_for_repo,
                 )
-            if not external_paths:
+            if snapshot_warnings:
+                print(
+                    "\nSnapshot warnings (from session-start baseline capture):",
+                    file=sys.stderr,
+                )
+                for w in snapshot_warnings:
+                    print(f"  - {w}", file=sys.stderr)
+            if args.external_baselines is None:
                 print(
                     "\nHint: produces: entries that point outside the epic "
                     "repo (e.g. `../sibling-repo/...`) need the runner to "

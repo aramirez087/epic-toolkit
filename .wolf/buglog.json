@@ -5630,6 +5630,49 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T18:41:28.000Z"
+    },
+    {
+      "id": "bug-278",
+      "timestamp": "2026-05-08T19:24:37.055Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 32\u219240 lines (2 removed) | Also: if ext:; # (older runner, or snapshot helper failed). Try t",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-08T19:25:00.558Z"
+    },
+    {
+      "id": "bug-279",
+      "timestamp": "2026-05-08T19:26:55.000Z",
+      "error_message": "Cross-repo deliverables (bug-277): four bug-hunt findings on the freshly-landed feature \u2014 silent snapshot warnings, misleading validator error, crash-on-malformed-sidecar inner shape, and a stale docstring kind that's never returned.",
+      "file": "scripts/validate-session-deliverables.py + scripts/lib/epic-session.sh + scripts/epic-external-baselines.py",
+      "root_cause": "(1) `epic-session.sh` invoked the snapshot helper without `--warn`, so per-decl classification failures (e.g. `../typo-sibling/foo.cs` \u2192 'could not resolve git toplevel') were written to the JSON sidecar's `warnings` field but never surfaced; the user only saw a downstream 'not in session diff' with no diagnostic. (2) `validate-session-deliverables.py` had two issues at the missing-deliverable site: the lookup `external_paths.get(decl)` was followed by `ext.get('repo_root', '')` with no isinstance guard on `ext`, so a corrupt/hand-edited sidecar where `external_paths[decl]` is a non-dict (string/list/null) crashes the validator with AttributeError instead of falling through gracefully \u2014 same audit class as bug-178/179/180 (outer container shape was guarded in `_load_external_baselines`, inner values were trusted). The other miss: the missing-reason check `if looks_external and not external_paths` reads true ONLY when the dict is fully empty, so when at least one OTHER external path was successfully classified, an unclassified-external path silently fell through to 'not in session diff' \u2014 and even when the dict WAS empty, the message said 'no --external-baselines was provided' which lies when the flag was passed but the snapshot just couldn't resolve any siblings. (3) `_load_external_baselines` discarded the JSON's `warnings` list entirely, so the actual cause of classification failures was never reachable from the validator's error path. (4) `epic-external-baselines.py:classify` docstring claimed kind \u2208 {internal, external, unresolvable} but the function only ever returns internal/external \u2014 the unresolvable case is handled in `cmd_snapshot` via `git_toplevel`/`git_head` returning None, not in classify itself. Doc rot.",
+      "fix": "(1) Added `--warn` to the snapshot invocation in `scripts/lib/epic-session.sh` so warnings hit `exec_log` at session start instead of being buried in the JSON. (2) In `scripts/validate-session-deliverables.py`: replaced the truthiness check `if ext:` with `if isinstance(ext, dict):` so a malformed sidecar falls through gracefully instead of crashing on `.get(...)`; rewrote the missing-reason logic to gate on `args.external_baselines is None` (flag-not-passed) vs `looks_external` with the flag passed (path-not-classified \u2014 pointer to snapshot warnings); extended `_load_external_baselines` to read and validate the `warnings` list and added a `Snapshot warnings (from session-start baseline capture):` block to the validator's missing-deliverable output so the actual cause is surfaced verbatim alongside the failure. (3) Updated `classify()` docstring to accurately enumerate `internal | external` and explain that the unresolvable case is handled at the cmd_snapshot layer. Verified end-to-end with three fixtures: (a) typo-sibling reference now reports 'looks external but snapshot did not classify it as external \u2014 see snapshot warnings below' followed by the actual git-toplevel warning; (b) happy-path cross-repo (sibling repo commits, validator passes rc=0); (c) hand-crafted malformed sidecar where external_paths[decl] is a string instead of a dict \u2014 pre-fix AttributeError-crashes, post-fix gracefully falls through to internal-path matching. `bash -n` and `python3 -c 'import ast; ast.parse(...)'` clean on all three files.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "silent-failure",
+        "user-facing-string",
+        "cross-repo",
+        "bug-277",
+        "symmetric-to-bug-178",
+        "symmetric-to-bug-179",
+        "symmetric-to-bug-180"
+      ],
+      "related_bugs": [
+        "bug-277",
+        "bug-178",
+        "bug-179",
+        "bug-180"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T19:26:55.000Z"
     }
   ]
 }

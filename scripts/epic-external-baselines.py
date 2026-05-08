@@ -123,13 +123,17 @@ def classify(decl: str, orig_repo_root_abs: str) -> dict[str, Any]:
     """Classify a single declared path string.
 
     Returns a dict with keys:
-        kind: "internal" | "external" | "unresolvable"
+        kind: "internal" | "external"
         anchor_abs: absolute directory used to discover the enclosing repo
                     (only meaningful for kind=="external")
         full_abs:   absolute path/glob for the declaration
                     (used to compute repo-relative form once we know the
                     repo root). For globs this is the resolved form of the
                     raw declaration, NOT just the literal prefix.
+
+    cmd_snapshot handles the "external but no enclosing git repo" case
+    via git_toplevel returning None and recording a warning — classify
+    itself never produces an "unresolvable" kind.
     """
     s = _normalise_path_string(decl)
     if os.path.isabs(decl) or os.path.isabs(s):

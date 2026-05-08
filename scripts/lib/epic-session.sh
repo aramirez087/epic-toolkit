@@ -359,10 +359,16 @@ run_one_session() {
   local ext_baselines_file="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-external-baselines.json"
   local ext_helper="$CLAUDE_PLUGIN_ROOT/scripts/epic-external-baselines.py"
   if [[ -f "$ext_helper" && -n "${ORIG_REPO_ROOT:-}" ]]; then
+    # --warn surfaces per-decl classification failures (e.g. sibling
+    # directory missing or not in a git repo) into the exec log at
+    # session start, instead of leaving them buried in the JSON
+    # sidecar's `warnings` field where the user only sees a downstream
+    # "not in session diff" with no diagnostic.
     if ! "$PYTHON_CMD" "$ext_helper" snapshot \
          --session-md "$session_path" \
          --orig-repo-root "$ORIG_REPO_ROOT" \
-         --output "$ext_baselines_file" 2>>"$exec_log"; then
+         --output "$ext_baselines_file" \
+         --warn 2>>"$exec_log"; then
       warn "  ⚠ session $sid: external baseline snapshot failed (continuing; cross-repo deliverables won't be validated)"
       rm -f "$ext_baselines_file"
     fi
