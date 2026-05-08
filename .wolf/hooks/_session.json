@@ -1,75 +1,18 @@
 {
-  "session_id": "session-2026-05-07-1614",
-  "started": "2026-05-07T22:14:21.289Z",
+  "session_id": "session-2026-05-08-2147",
+  "started": "2026-05-08T03:47:06.565Z",
   "files_read": {
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh": {
-      "count": 1,
-      "tokens": 3013,
-      "first_read": "2026-05-07T22:14:59.483Z"
-    },
     "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 6,
-      "tokens": 20169,
-      "first_read": "2026-05-07T22:15:19.202Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 2,
-      "tokens": 7175,
-      "first_read": "2026-05-07T22:16:27.846Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
-      "count": 3,
-      "tokens": 5832,
-      "first_read": "2026-05-07T22:18:34.702Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
       "count": 1,
-      "tokens": 7983,
-      "first_read": "2026-05-07T22:18:52.569Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
-      "count": 1,
-      "tokens": 3160,
-      "first_read": "2026-05-07T22:19:36.187Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
-      "count": 1,
-      "tokens": 13185,
-      "first_read": "2026-05-07T22:20:10.329Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
-      "count": 1,
-      "tokens": 4116,
-      "first_read": "2026-05-07T22:20:30.436Z"
+      "tokens": 24869,
+      "first_read": "2026-05-08T03:47:44.339Z"
     }
   },
-  "files_written": [
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 372,
-      "at": "2026-05-07T22:23:05.075Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
-      "action": "edit",
-      "tokens": 802,
-      "at": "2026-05-07T22:23:27.591Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh",
-      "action": "edit",
-      "tokens": 532,
-      "at": "2026-05-07T22:23:42.131Z"
-    }
-  ],
-  "edit_counts": {
-    "scripts/run-sessions.sh": 2,
-    "scripts/run-sprint.sh": 1
-  },
-  "anatomy_hits": 8,
+  "files_written": [],
+  "edit_counts": {},
+  "anatomy_hits": 1,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 8,
+  "repeated_reads_warned": 0,
   "cerebrum_warnings": 0,
   "stop_count": 0
 }

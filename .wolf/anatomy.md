@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-07T22:23:42.126Z
-> Files: 59 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T03:46:34.157Z
+> Files: 68 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -13,7 +13,15 @@
 - `bug-185-186-msg.txt` — Declares as (~1419 tok)
 - `bug-189-commit-msg.txt` — Declares as (~647 tok)
 - `bughunt-tests.sh` (~1187 tok)
+- `commit-msg-204-205.txt` — Declares already (~940 tok)
 - `commit-msg-bug-182.txt` — Declares as (~894 tok)
+- `commit-msg-bug-200-201.txt` — Declares as (~1535 tok)
+- `commit-msg-bug-207.txt` — Declares bug (~1088 tok)
+- `commit-msg-bug-208.txt` — Declares as (~1162 tok)
+- `commit-msg-bug-209.txt` — Declares reintroduced (~1358 tok)
+- `commit-msg-bug-211.txt` — Declares as (~1013 tok)
+- `commit-msg-bug-212.txt` — Declares as (~1366 tok)
+- `commit-msg-bug-213.txt` — Declares as (~1198 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
 - `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` — Declares as (~1512 tok)
@@ -24,6 +32,7 @@
 - `happy-path-194.sh` — Confirm valid MAX_PARALLEL values still work (1, 2, 4) and dry-run completes. (~174 tok)
 - `repro-bug-193.sh` — Reproduce bug-193: malformed plan file causes runner to crash with bash (~527 tok)
 - `repro-bug-194.sh` — Confirm MAX_PARALLEL=0 is now rejected at validation, not silently looping. (~181 tok)
+- `test-arr.sh` (~172 tok)
 - `test-bug-181.sh` — Reproduce bug-181: log call inside map_model_shorthand leaks into captured stdout (~461 tok)
 
 ## ../../../../tmp/sprint-test/
@@ -86,16 +95,16 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~13185 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~13510 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~7983 tok)
 - `epic-ui.py` — as: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~5832 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~20805 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~24869 tok)
 - `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3238 tok)
 - `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
 
 ## scripts/lib/
 
-- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~4094 tok)
+- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~4805 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~3160 tok)
 - `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~7175 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
@@ -105,4 +114,4 @@
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
 - `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
 - `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~4116 tok)
-- `resolve-wolf.sh` — resolve-wolf.sh — One-shot resolver for in-progress merge/rebase conflicts (~975 tok)
+- `resolve-wolf.sh` — resolve-wolf.sh — One-shot resolver for in-progress merge/rebase conflicts (~1214 tok)

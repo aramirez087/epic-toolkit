@@ -4382,6 +4382,43 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T03:23:57.000Z"
+    },
+    {
+      "id": "bug-216",
+      "timestamp": "2026-05-08T03:46:34.165Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "20 lines replaced/restructured",
+      "fix": "Rewrote 32\u219244 lines (20 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "sh"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T03:46:34.165Z"
+    },
+    {
+      "id": "bug-217",
+      "timestamp": "2026-05-08T03:47:20Z",
+      "error_message": "run-sessions.sh:1689-1695 existing-PR push block was missing the no-`@{u}` arm that the symmetric new-PR block at line 1712 already had. When the local branch had no upstream tracking configured (most common cause: trunk worktree created fresh from BASE_BRANCH at line 959 while an open PR for the same branch name predated this run), all three existing arms failed silently: `push --force-with-lease` errors with `fatal: The current branch <name> has no upstream branch.` and the `|| warn` reports the misleading 'Force-push failed; PR may still show conflicts' instead of naming the upstream-missing cause; `git log '@{u}..HEAD'` cannot resolve `@{u}`, the `2>/dev/null` swallows the error, the elif test is False, no push fires, and the runner reports `PR already exists: <url>` with no diagnostic \u2014 the user copy-pastes the URL expecting their new commits and finds the prior PR's stale state.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Symmetric audit gap to bug-204..212. Bug-211's commit message said 'Three cases' (REBASE_RESULT=ok / commits-ahead / nothing-ahead) and assumed `@{u}` was always configured by the time the existing-PR branch fired. The new-PR block immediately below ALREADY had the no-`@{u}` arm at line 1712 because brand-new branches obviously need upstream tracking \u2014 but the same condition fires in the existing-PR scenario when (a) the local branch was just created from BASE_BRANCH (line 959 path) and a remote PR for the same branch name predated this run from a prior runner instance / a different machine / manual `gh pr create`, (b) the user manually deleted the local branch (`git branch -D`) but kept the remote PR open, or (c) `git worktree add` reused a local branch that itself had never had upstream tracking set. In all three sub-cases EXISTING_PR resolves (the gh query is against the remote, not local) but the local branch has no `@{u}`. Bug-211 fixed the case-3 arm (commits-ahead-of-`@{u}`) but didn't audit case 1 (no-`@{u}`); the same audit class as bug-204..212 \u2014 every push site that expects to update an existing remote ref must reflect the actual local-vs-remote state, including the 'no upstream tracking configured' case.",
+      "fix": "Add a fourth arm at the top of the existing-PR if/elif chain that detects no-`@{u}` and runs `push -u origin \"$CURRENT_BRANCH\" 2>&1 | tail -5 || warn ...`, mirroring the new-PR block's first arm at line 1712. The new arm goes FIRST (highest priority) because without upstream tracking the next two arms both fail. The fallback `|| warn` includes guidance naming the most likely cause (local branch created from BASE_BRANCH while remote PR has divergent history \u2192 non-FF rejection) and the inspection command (`git log $CURRENT_BRANCH..origin/$CURRENT_BRANCH`) so the user has a clear next step. The `2>&1 | tail -5` shows git's actual error (e.g., 'Updates were rejected because the tip of your current branch is behind') verbatim. Updates the leading comment to enumerate FOUR cases, names the bug-211 audit gap explicitly, and references the symmetric new-PR arm. `bash -n scripts/run-sessions.sh` passes; no behavioural change for the happy path (existing-PR with @{u} configured + REBASE_RESULT=ok / commits-ahead / nothing-ahead all behave identically); change is scoped to the previously-silent gap when @{u} is unconfigured.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "symmetric-to-bug-211",
+        "no-upstream",
+        "auto-pr"
+      ],
+      "related_bugs": [
+        "bug-211",
+        "bug-212"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T03:47:20Z"
     }
   ]
 }

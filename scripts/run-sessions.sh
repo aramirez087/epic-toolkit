@@ -1664,29 +1664,41 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
       EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --state open --json url -q '.[0].url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
         ok "PR already exists: $EXISTING_PR"
-        # Push so the existing PR reflects the latest commits. Three cases:
-        #   1. REBASE_RESULT="ok" — history was rewritten onto a fresh
+        # Push so the existing PR reflects the latest commits. Four cases:
+        #   1. `@{u}` is not configured — the local branch was created fresh
+        #      from BASE_BRANCH (line 956 path: `git worktree add -b ...`)
+        #      while a PR already exists on the remote. `push -u` sets
+        #      upstream and pushes; if the remote diverges, push fails
+        #      non-FF and `|| warn` surfaces the cause. Without this arm
+        #      the next two arms BOTH fail silently when @{u} is missing:
+        #      `push --force-with-lease` errors with "no upstream branch",
+        #      and `git log '@{u}..HEAD'` returns empty (the 2>/dev/null
+        #      swallows the unresolvable-ref error), the elif test is
+        #      False, no push happens, and the PR stays stale with no
+        #      diagnostic naming the cause.
+        #   2. REBASE_RESULT="ok" — history was rewritten onto a fresh
         #      origin/<base>; force-with-lease updates the diverged remote.
-        #   2. REBASE_RESULT in {skipped,fetch-failed,conflict} but the
+        #   3. REBASE_RESULT in {skipped,fetch-failed,conflict} but the
         #      local branch has commits ahead of `@{u}` — a plain push
         #      fast-forwards the remote and the PR shows the new commits.
-        #   3. Nothing ahead of `@{u}` — no-op.
-        # Pre-fix, only case 1 fired: the existing-PR branch was missing
-        # the "commits ahead of @{u}" fallback that the symmetric new-PR
-        # block immediately below already had. So a re-run with `--no-
-        # rebase` (REBASE_RESULT=skipped), an offline rebase (fetch-failed),
-        # or a non-.wolf rebase conflict (conflict) — combined with new
-        # local commits and a still-open PR — silently dropped the push.
-        # The runner reported "PR already exists: <url>" and exited 0;
-        # the PR stayed at the prior tip, the new commits never landed
-        # on origin, and the user (who copy-pasted the URL expecting the
-        # latest state) saw a stale PR with no diagnostic naming the cause.
-        # Same audit class as the bug-204..210 chain: every push site that
-        # expects to update an existing remote ref must reflect the actual
-        # local-vs-remote state, not a single REBASE_RESULT branch the
-        # ok-case happens to satisfy. Mirror the new-PR path's third elif
-        # (line 1659) so the existing-PR path covers the same shape.
-        if [[ "$REBASE_RESULT" == "ok" ]]; then
+        #   4. Nothing ahead of `@{u}` — no-op.
+        # Symmetric audit gap to bug-211/212: bug-211 added the case-3
+        # arm but assumed `@{u}` was always configured (the comment
+        # said "Three cases" not naming case 1); the no-upstream case
+        # fell through silently. The new-PR block immediately below
+        # already has the no-`@{u}` arm at line 1712 because brand-new
+        # branches obviously need upstream tracking — but the same
+        # condition also fires in the existing-PR scenario when the
+        # local branch was just created and the remote PR predates it.
+        # Same audit class as bug-204..212: every push site that expects
+        # to update an existing remote ref must reflect the actual
+        # local-vs-remote state, including the "no upstream tracking
+        # configured" case the bug-211 fix didn't reach.
+        if ! git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' &>/dev/null; then
+          log "Setting upstream for existing PR branch and pushing..."
+          git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH" 2>&1 | tail -5 \
+            || warn "Push -u to existing PR failed (likely non-FF: local branch was created from \$BASE_BRANCH but remote PR has divergent history). Inspect with: git -C $REPO_ROOT log $CURRENT_BRANCH..origin/$CURRENT_BRANCH"
+        elif [[ "$REBASE_RESULT" == "ok" ]]; then
           log "Force-pushing rebased history to existing PR..."
           git -C "$REPO_ROOT" push --force-with-lease 2>&1 | tail -5 || warn "Force-push failed; PR may still show conflicts"
         elif [[ -n "$(git -C "$REPO_ROOT" log '@{u}..HEAD' --oneline 2>/dev/null)" ]]; then

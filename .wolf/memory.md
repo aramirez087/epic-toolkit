@@ -798,3 +798,100 @@
 | 16:23 | Edited scripts/run-sessions.sh | expanded (+17 lines) | ~347 |
 | 16:23 | Edited scripts/run-sessions.sh | added 1 condition(s) | ~748 |
 | 16:23 | Edited scripts/run-sprint.sh | added 1 condition(s) | ~496 |
+| 16:27 | Created ../../../../tmp/commit-msg-bug-200-201.txt | — | ~1638 |
+| 16:27 | Session end: 4 writes across 3 files (run-sessions.sh, run-sprint.sh, commit-msg-bug-200-201.txt) | 8 reads | ~68093 tok |
+
+## Session: 2026-05-07 16:28
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 16:42 | Edited scripts/run-sessions.sh | expanded (+25 lines) | ~494 |
+| 16:42 | Edited scripts/run-sessions.sh | expanded (+27 lines) | ~464 |
+| 16:45 | Session end: 2 writes across 1 files (run-sessions.sh) | 14 reads | ~77506 tok |
+
+## Session: 2026-05-07 16:47
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:04 | Edited scripts/run-sessions.sh | expanded (+17 lines) | ~330 |
+| 17:06 | Edited scripts/run-sessions.sh | expanded (+8 lines) | ~181 |
+| 17:08 | Created ../../../../tmp/commit-msg-204-205.txt | — | ~1002 |
+| 17:08 | Session end: 3 writes across 2 files (run-sessions.sh, commit-msg-204-205.txt) | 13 reads | ~79317 tok |
+
+## Session: 2026-05-07 17:16
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:29 | Edited scripts/lib/epic-git.sh | expanded (+24 lines) | ~600 |
+| 17:32 | Created ../../../../tmp/commit-msg-bug-207.txt | — | ~1160 |
+| 17:32 | Session end: 2 writes across 2 files (epic-git.sh, commit-msg-bug-207.txt) | 12 reads | ~79396 tok |
+
+## Session: 2026-05-07 17:33
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:38 | Edited scripts/run-sessions.sh | expanded (+14 lines) | ~324 |
+| 17:39 | Edited scripts/run-sessions.sh | expanded (+7 lines) | ~185 |
+| 17:39 | Edited scripts/run-sessions.sh | expanded (+11 lines) | ~240 |
+| 17:41 | Created ../../../../tmp/commit-msg-bug-208.txt | — | ~1240 |
+| 17:41 | Session end: 4 writes across 2 files (run-sessions.sh, commit-msg-bug-208.txt) | 3 reads | ~32086 tok |
+
+## Session: 2026-05-07 17:41
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:53 | Edited scripts/run-sessions.sh | expanded (+19 lines) | ~401 |
+| 17:57 | Created ../../../../tmp/commit-msg-bug-209.txt | — | ~1448 |
+| 17:57 | Session end: 2 writes across 2 files (run-sessions.sh, commit-msg-bug-209.txt) | 15 reads | ~80976 tok |
+
+## Session: 2026-05-07 17:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:13 | Edited scripts/run-sessions.sh | modified installed() | ~594 |
+| 18:15 | Session end: 1 writes across 1 files (run-sessions.sh) | 13 reads | ~79884 tok |
+
+## Session: 2026-05-08 18:16
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:29 | Edited scripts/run-sessions.sh | expanded (+24 lines) | ~606 |
+| 18:30 | Created ../../../../tmp/commit-msg-bug-211.txt | — | ~1080 |
+| 18:31 | Session end: 2 writes across 2 files (run-sessions.sh, commit-msg-bug-211.txt) | 7 reads | ~44173 tok |
+
+## Session: 2026-05-08 18:31
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:37 | Edited scripts/run-sessions.sh | expanded (+16 lines) | ~498 |
+| 18:40 | Created ../../../../tmp/commit-msg-bug-212.txt | — | ~1457 |
+| 18:40 | Session end: 2 writes across 2 files (run-sessions.sh, commit-msg-bug-212.txt) | 3 reads | ~33754 tok |
+
+## Session: 2026-05-08 18:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 19:16 | Edited scripts/lib/epic-git.sh | modified returns() | ~355 |
+| 19:16 | Edited scripts/wolf-merge/resolve-wolf.sh | expanded (+13 lines) | ~298 |
+| 19:19 | Created ../../../../tmp/commit-msg-bug-213.txt | — | ~1278 |
+| 19:19 | Session end: 3 writes across 3 files (epic-git.sh, resolve-wolf.sh, commit-msg-bug-213.txt) | 15 reads | ~83967 tok |
+
+## Session: 2026-05-08 19:24
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:22 | Edited scripts/run-sessions.sh | expanded (+21 lines) | ~479 |
+| 21:22 | Edited scripts/epic-dag.py | modified _stem() | ~345 |
+| 21:25 | Session end: 2 writes across 2 files (run-sessions.sh, epic-dag.py) | 13 reads | ~75852 tok |
+
+## Session: 2026-05-08 21:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 21:38 | Created ../../../../tmp/test-arr.sh | — | ~172 |
+| 21:46 | Edited scripts/run-sessions.sh | expanded (+12 lines) | ~842 |
+
+## Session: 2026-05-08 21:47
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
