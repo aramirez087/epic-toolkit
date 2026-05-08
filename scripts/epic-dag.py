@@ -84,17 +84,28 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         # parse_frontmatter then partitions at the comment's `:` and
         # records a bogus key/value pair. Unquoted YAML keys have no
         # quoted regions, so a plain linear scan is sufficient here.
-        # Skip when there is no `:` on the line — block-list items
-        # (`- "src/Issue#42.cs"`, `- 'docs/note # historical.md'`) have
-        # no key/value boundary, and a whole-line scan would silently
-        # truncate at any `#` preceded by whitespace, including ones
-        # legitimately inside the quoted value. The main scanner's
-        # quote-aware state machine below handles those correctly. (bug-288)
-        _colon_pos = line.find(":")
-        if _colon_pos >= 0:
-            for _j in range(1, _colon_pos):
-                if line[_j] == "#" and line[_j - 1] in (" ", "\t"):
-                    return line[:_j].rstrip()
+        # Skip when the line is a block-list item — value_start is
+        # computed from the `- ` prefix, NOT from the colon, and the
+        # main scanner's quote-aware state machine below already protects
+        # quoted values. Bug-288 only skipped when the line had no colon
+        # at all, but block-list items can legitimately contain BOTH `#`
+        # and `:` inside a quoted value (e.g. `- "docs/note # ref : ok.md"`,
+        # `- "url: https://… # comment"`); the pre-scan would then match
+        # ` #` before the in-value `:` and silently truncate the value. (bug-290)
+        _is_block_list = (
+            stripped == "-"
+            or (
+                len(stripped) >= 2
+                and stripped[0] == "-"
+                and stripped[1] in (" ", "\t")
+            )
+        )
+        if not _is_block_list:
+            _colon_pos = line.find(":")
+            if _colon_pos >= 0:
+                for _j in range(1, _colon_pos):
+                    if line[_j] == "#" and line[_j - 1] in (" ", "\t"):
+                        return line[:_j].rstrip()
 
         value_start = -1
         if len(stripped) >= 2 and stripped[0] == "-" and stripped[1] in (" ", "\t"):

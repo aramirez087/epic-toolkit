@@ -638,8 +638,18 @@ if [[ -d "$WORKTREE_BASE" ]]; then
     [[ ! -d "$stale_wt" ]] && continue
 
     stale_basename="$(basename "$stale_wt")"
-    # Extract session ID from worktree name; [0-9]+ matches 2- and 3-digit ids.
-    if [[ "$stale_basename" =~ --s([0-9]+)- ]]; then
+    # Extract session ID from the SUFFIX after BRANCH_SANITIZED — the
+    # whole-basename regex `--s([0-9]+)-` returns the FIRST `--s<digits>-`
+    # match, which lives inside BRANCH_SANITIZED itself when the user
+    # branched something like `epic/s05-fix` or `epic/foo--s10-bar`. The
+    # extracted id then points at a session id that doesn't belong to
+    # this run, the `current_session_ids` membership check misses, and
+    # the cleanup logic deletes a CURRENT-DAG worktree (data loss for
+    # any uncommitted in-progress work). Anchor with `^--s…-` of the
+    # post-prefix-strip suffix, mirroring the (correct) prefix-strip used
+    # below to recover stale_branch. [0-9]+ matches 2- and 3-digit ids.
+    stale_suffix="${stale_basename#${BRANCH_SANITIZED}}"
+    if [[ "$stale_suffix" =~ ^--s([0-9]+)- ]]; then
       stale_id="${BASH_REMATCH[1]}"
       # Remove leading zero for comparison
       stale_id="$((10#$stale_id))"
