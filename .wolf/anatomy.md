@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T19:35:59.660Z
-> Files: 75 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T19:48:22.630Z
+> Files: 76 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -25,6 +25,7 @@
 - `commit-msg-bug-213.txt` — Declares as (~1198 tok)
 - `commit-msg-bug-218.txt` — Declares as (~954 tok)
 - `commit-msg-bug-246-247.txt` — Declares as (~1027 tok)
+- `commit-msg-bug-283-284.txt` — Declares as (~509 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
 - `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` — Declares as (~1512 tok)
@@ -107,7 +108,7 @@
 - `epic-ui.py` — EpicUI: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~4333 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16231 tok)
 - `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3415 tok)
-- `validate-session-deliverables.py` — /", PH_MID) (~6080 tok)
+- `validate-session-deliverables.py` — /", PH_MID) (~6426 tok)
 
 ## scripts/lib/
 

@@ -1230,3 +1230,13 @@
 | 13:35 | Edited scripts/validate-session-deliverables.py | added error handling | ~197 |
 | 13:35 | Edited scripts/validate-session-deliverables.py | modified isinstance() | ~501 |
 | 13:35 | Edited scripts/epic-external-baselines.py | added error handling | ~197 |
+| 13:37 | Created ../../../../tmp/commit-msg-bug-283-284.txt | — | ~543 |
+| 13:38 | Session end: 4 writes across 3 files (validate-session-deliverables.py, epic-external-baselines.py, commit-msg-bug-283-284.txt) | 4 reads | ~33362 tok |
+
+## Session: 2026-05-08 13:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:48 | Edited scripts/validate-session-deliverables.py | 4→7 lines | ~128 |
+| 13:48 | Edited scripts/validate-session-deliverables.py | modified _is_metadata_only() | ~263 |
+| 13:48 | Edited scripts/validate-session-deliverables.py | modified _is_metadata_only() | ~407 |

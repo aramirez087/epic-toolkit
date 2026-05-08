@@ -22,9 +22,12 @@ Modes:
        Every entry must match at least one path in the session's diff
        (any status except D). Globs use fnmatch semantics.
   2. produces: not declared
-       Metadata-only heuristic: if every changed path matches
+       Metadata-only heuristic: if every changed AND deleted path matches
        ^\\.wolf/ or ^docs/roadmap/.*-handoff\\.md$ AND no external repo
-       advanced, the session is rejected — it committed nothing real.
+       advanced (in changes or deletions), the session is rejected — it
+       committed nothing real. Deletions of real (non-metadata) source
+       files count as legitimate deliverables: a refactor whose only
+       output is `git rm src/old.cs` has produced something.
 
 Cross-repo (`../sibling/...` or absolute) paths:
   When the runner captured `--external-baselines <json>` at session start,
@@ -128,10 +131,20 @@ def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
     return [p for p in changed_paths if rx.match(p)]
 
 
-def _is_metadata_only(changed_paths: list[str]) -> bool:
+def _is_metadata_only(changed_paths: list[str], deleted_paths: list[str]) -> bool:
     # Empty diff also counts as metadata-only — HEAD moved (no-op guard
     # passed) but no real files changed.
+    # Deletions of non-metadata files count as legitimate deliverables
+    # (refactor that removes deprecated source). Without inspecting
+    # `deleted_paths` here, a session whose only commit was `git rm
+    # src/old.cs` was misclassified as "no real deliverables" and the
+    # error message ("empty commit(s)" / "metadata/handoff files only")
+    # blamed an empty diff that wasn't empty. Same audit class as the
+    # `any_external_advance` site below.
     for p in changed_paths:
+        if not any(rx.match(p) for rx in HEURISTIC_METADATA_PATTERNS):
+            return False
+    for p in deleted_paths:
         if not any(rx.match(p) for rx in HEURISTIC_METADATA_PATTERNS):
             return False
     return True
@@ -485,13 +498,18 @@ def main() -> int:
     # No produces: declared. Run the metadata-only heuristic, but only if
     # nothing real happened in any external repo either — otherwise a
     # session that legitimately committed only to a sibling repo would be
-    # falsely rejected.
-    any_external_advance = any(bool(v) for v in ext_changed.values())
+    # falsely rejected. Deletions in external repos count too: a session
+    # whose only sibling-repo work was `git rm path/old` would otherwise
+    # land in this branch with `ext_changed[repo]=[]` and get flagged.
+    any_external_advance = (
+        any(bool(v) for v in ext_changed.values())
+        or any(bool(v) for v in ext_deleted.values())
+    )
     if any_external_advance:
         return 0
 
-    if _is_metadata_only(changed):
-        if not changed:
+    if _is_metadata_only(changed, deleted):
+        if not changed and not deleted:
             print(
                 "ERROR: session HEAD advanced but produced no changed paths — "
                 "likely empty commit(s) with no real deliverables",
@@ -503,11 +521,13 @@ def main() -> int:
                 file=sys.stderr,
             )
             print(
-                "All changed paths matched .wolf/* or docs/roadmap/*-handoff.md:",
+                "All changed/deleted paths matched .wolf/* or docs/roadmap/*-handoff.md:",
                 file=sys.stderr,
             )
             for p in changed:
                 print(f"  + {p}", file=sys.stderr)
+            for p in deleted:
+                print(f"  - {p} (deleted)", file=sys.stderr)
         print("", file=sys.stderr)
         print(
             "If this is intentional (kickoff or docs-only session), add to frontmatter:",

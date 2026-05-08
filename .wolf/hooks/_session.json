@@ -1,55 +1,64 @@
 {
-  "session_id": "session-2026-05-08-1329",
-  "started": "2026-05-08T19:29:49.020Z",
+  "session_id": "session-2026-05-08-1338",
+  "started": "2026-05-08T19:38:39.499Z",
   "files_read": {
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-external-baselines.py": {
       "count": 1,
-      "tokens": 4118,
-      "first_read": "2026-05-08T19:30:13.871Z"
+      "tokens": 4263,
+      "first_read": "2026-05-08T19:39:09.193Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
-      "count": 1,
-      "tokens": 5663,
-      "first_read": "2026-05-08T19:30:35.956Z"
+      "count": 2,
+      "tokens": 6080,
+      "first_read": "2026-05-08T19:39:12.707Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 1,
+      "count": 2,
       "tokens": 5874,
-      "first_read": "2026-05-08T19:31:20.899Z"
+      "first_read": "2026-05-08T19:39:54.415Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 2,
+      "count": 3,
       "tokens": 16231,
-      "first_read": "2026-05-08T19:33:47.462Z"
+      "first_read": "2026-05-08T19:40:13.147Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
+      "count": 1,
+      "tokens": 8243,
+      "first_read": "2026-05-08T19:40:35.599Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
+      "count": 1,
+      "tokens": 409,
+      "first_read": "2026-05-08T19:41:14.076Z"
     }
   },
   "files_written": [
     {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
       "action": "edit",
-      "tokens": 197,
-      "at": "2026-05-08T19:35:38.300Z"
+      "tokens": 128,
+      "at": "2026-05-08T19:48:02.424Z"
     },
     {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
       "action": "edit",
-      "tokens": 501,
-      "at": "2026-05-08T19:35:50.926Z"
+      "tokens": 263,
+      "at": "2026-05-08T19:48:10.709Z"
     },
     {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-external-baselines.py",
+      "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
       "action": "edit",
-      "tokens": 197,
-      "at": "2026-05-08T19:35:59.665Z"
+      "tokens": 407,
+      "at": "2026-05-08T19:48:22.635Z"
     }
   ],
   "edit_counts": {
-    "scripts/validate-session-deliverables.py": 2,
-    "scripts/epic-external-baselines.py": 1
+    "scripts/validate-session-deliverables.py": 3
   },
-  "anatomy_hits": 4,
+  "anatomy_hits": 6,
   "anatomy_misses": 0,
-  "repeated_reads_warned": 1,
+  "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
   "stop_count": 0
 }
