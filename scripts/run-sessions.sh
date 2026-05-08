@@ -1676,12 +1676,28 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
         log "Creating pull request..."
         # If we rebased, the local branch has diverged from any remote tracking ref;
         # use force-with-lease to update. For a brand-new branch, plain push -u.
+        # Every push site MUST end in `|| warn ...` so a transient push failure
+        # (network blip, hook rejection, large-file rejection, lacking push
+        # permission, etc.) does not crash the runner under `set -euo pipefail`
+        # — the symmetric existing-PR block above (bug-211) already wraps each
+        # push in `2>&1 | tail -5 || warn`, but the new-PR push arms here were
+        # left bare. A bare-push failure aborts the runner BEFORE `gh pr create`
+        # (which has `|| true` to swallow gh's own non-zero exits at line 1743)
+        # AND BEFORE the post-PR cleanup at lines 1758-1819 (trunk worktree
+        # removal, per-session worktree leak detection, cleanup_merged_epic_
+        # branches), leaking the trunk worktree and surfacing a low-level
+        # `git push` stderr instead of a runner-level diagnostic naming what
+        # actually failed. (bug-212)
         if ! git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' &>/dev/null; then
-          git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH"
+          git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH" 2>&1 | tail -5 \
+            || warn "Initial push failed; PR creation will likely fail"
         elif [[ "$REBASE_RESULT" == "ok" ]]; then
-          git -C "$REPO_ROOT" push --force-with-lease 2>&1 | tail -5 || git -C "$REPO_ROOT" push
+          git -C "$REPO_ROOT" push --force-with-lease 2>&1 | tail -5 \
+            || git -C "$REPO_ROOT" push 2>&1 | tail -5 \
+            || warn "Force-push and fallback push both failed; PR will likely show stale state"
         elif [[ -n "$(git -C "$REPO_ROOT" log '@{u}..HEAD' --oneline 2>/dev/null)" ]]; then
-          git -C "$REPO_ROOT" push
+          git -C "$REPO_ROOT" push 2>&1 | tail -5 \
+            || warn "Push failed; new commits may not appear in the PR"
         fi
 
         EPIC_NAME="$(basename "$TRUNK_SESSIONS_DIR" | tr '-' ' ')"

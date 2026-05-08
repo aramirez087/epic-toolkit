@@ -4281,6 +4281,37 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T00:29:43Z"
+    },
+    {
+      "id": "bug-212",
+      "timestamp": "2026-05-08T00:39:10Z",
+      "error_message": "run-sessions.sh:1679-1685 new-PR push block had three push arms but only the middle one had any failure handler \u2014 and even that one's fallback (`|| git push`) could itself crash. The first arm (`git push -u origin \"$CURRENT_BRANCH\"`, the no-upstream / fresh-branch case) and the third arm (`git push`, the commits-ahead-of-@{u} case after `--no-rebase` / fetch-failed / non-.wolf rebase conflict) were both bare. Under `set -euo pipefail`, any push failure (transient network blip, push permission denied, pre-receive hook rejection, large-file / LFS rejection, force-push lease invalidated, server-side timeout) crashed the runner mid-PR-creation, BYPASSING (a) `gh pr create` immediately below at line 1743 (which has `|| true` to swallow gh's own non-zero exits) and (b) the post-PR cleanup at lines 1758-1819 (trunk worktree removal via `git worktree remove --force` then `rm -rf` fallback, per-session worktree leak detection, `cleanup_merged_epic_branches` stale-branch sweep). The user's symptoms: a low-level `git push` stderr line surfaces with no runner-level diagnostic naming the auto-PR phase as the cause; no PR exists; the trunk worktree at `.epic-worktrees/<repo>/epic--<name>/` leaks (every subsequent run hits the 'Reusing trunk worktree' branch at line 951 and inherits whatever stale state was in it); stale `epic/*` branches from prior runs whose PRs were merged or closed are NOT swept by `cleanup_merged_epic_branches` (line 1819) because the trap only kills subshell jobs and does not run the post-PR cleanup. Asymmetric with the bug-211 fix's symmetric site \u2014 the existing-PR push block immediately above (lines 1668-1674) wraps EVERY push arm in `2>&1 | tail -5 || warn \"...\"` so a push failure surfaces as a warn diagnostic and the runner continues past the auto-PR phase to do its cleanup; the new-PR push block had the same code shape but missed the same failure-handler discipline. The bug-211 commit message named this gap implicitly when it said 'every push site that expects to update an existing remote ref must reflect the actual local-vs-remote state, not a single REBASE_RESULT branch the ok-case happens to satisfy' \u2014 but it stopped at the existing-PR block; the new-PR block had a similar set of REBASE_RESULT/upstream branches and similar bare-push-on-failure exposure that the audit chain didn't reach. Same audit class as bug-077 (auto-resolve commit failure crashing the runner mid-wave under set -e, fixed by wrapping the commit in an `if`) and bug-211 (asymmetric existing-PR vs new-PR push handling): every command whose failure SHOULD be a warn-level diagnostic and not a runner-aborting fault must end with `|| warn` (or another non-failing terminator) under set -e, especially when the next code path (cleanup, post-PR teardown) is load-bearing for the user's workflow.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "The new-PR push block at lines 1679-1685 had three branches selecting the right `git push` shape based on upstream / REBASE_RESULT / commits-ahead state \u2014 mirroring the bug-211 existing-PR block's three-arm shape \u2014 but only the middle arm (REBASE_RESULT==\"ok\") had any failure handling, and even that handling was a fallback `|| git push` that itself can fail and crash the runner under set -e. The other two arms (no-upstream `push -u`, and commits-ahead `push`) were truly bare. Under set -euo pipefail, push failure on either bare arm aborts the runner before `gh pr create`'s `|| true` (line 1743) can swallow its own failures and before the post-PR cleanup at lines 1758-1819 can run. The EXIT trap (`_on_exit` at line 491) only walks JOB_PIDS to SIGKILL in-flight session subshells and kills the UI process \u2014 it does NOT run the trunk worktree removal, per-session leak detection, or `cleanup_merged_epic_branches` sweep, all of which live in the post-PR sequential code path. So a push failure that should be a warn-level diagnostic (the user wanted a PR; the push step failed; we should report it and continue tearing down) instead leaves the user with an opaque git error AND a leaked trunk worktree AND uncleaned stale epic/* branches. Symmetric audit gap to bug-211: bug-211 fixed the parallel push-on-existing-PR block to handle three push shapes (force-with-lease, plain-push fast-forward via `@{u}..HEAD`, and the no-op when ahead-count is zero) and made every push end in `|| warn`, but the parallel new-PR block's three push shapes (no-upstream `push -u`, force-with-lease, plain-push) were left with their pre-bug-211 shape \u2014 only the middle arm had any failure handling, and that handling was incomplete.",
+      "fix": "Mirror the bug-211 existing-PR block's failure-handler discipline: every push arm in the new-PR block now ends with `2>&1 | tail -5 || warn \"...\"` so push failure surfaces as a warn-level diagnostic and the runner proceeds past the auto-PR phase to its cleanup. (1) The no-upstream arm becomes `git push -u origin \"$CURRENT_BRANCH\" 2>&1 | tail -5 || warn \"Initial push failed; PR creation will likely fail\"`. (2) The REBASE_RESULT==\"ok\" arm becomes a chained fallback: `git push --force-with-lease 2>&1 | tail -5 || git push 2>&1 | tail -5 || warn \"Force-push and fallback push both failed; PR will likely show stale state\"` \u2014 preserves the original force-with-lease-then-plain-push fallback semantics, but adds the terminal `|| warn` so a double-failure warns rather than crashes. (3) The commits-ahead arm becomes `git push 2>&1 | tail -5 || warn \"Push failed; new commits may not appear in the PR\"`. The `2>&1 | tail -5` pattern matches the existing-PR block exactly: pipefail makes the pipe's exit status reflect the underlying git push (the bug-211 lines already rely on this), `tail -5` limits the noise to the last 5 lines, and `|| warn` catches the failure as a non-fatal warning. After the change, gh pr create at line 1743 still runs (with its existing `|| true`) and reports its own warn at line 1747 if the missing commits make it fail; the post-PR cleanup at lines 1758-1819 always runs to completion; the runner exits cleanly even when the push step failed. No behavioural change for the happy path (push succeeds \u2192 tail -5 shows 'To origin \u2026 <range>', the `|| warn` short-circuits, runner continues). `bash -n scripts/run-sessions.sh` passes; visual diff confirms the three new arms match the existing-PR block's idiom. Same minimum-scope discipline as bug-211: the fix is purely additive failure handling on three lines; no behavioral change to which push command runs in which case.",
+      "tags": [
+        "found-by-bug-hunt",
+        "run-sessions",
+        "auto-pr",
+        "new-pr",
+        "push",
+        "set-e",
+        "audit-gap",
+        "symmetric-to-bug-211",
+        "symmetric-to-bug-077",
+        "cleanup-skipped",
+        "trunk-worktree-leak"
+      ],
+      "related_bugs": [
+        "bug-077",
+        "bug-204",
+        "bug-205",
+        "bug-208",
+        "bug-210",
+        "bug-211"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T00:39:10Z"
     }
   ]
 }
