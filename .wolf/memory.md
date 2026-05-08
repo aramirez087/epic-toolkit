@@ -1172,3 +1172,20 @@
 |------|--------|---------|---------|--------|
 | 10:32 | Edited scripts/epic-dag.py | modified _strip_inline_comment() | ~430 |
 | 10:32 | Edited scripts/run-sessions.sh | 2→2 lines | ~38 |
+| 10:34 | Session end: 2 writes across 2 files (epic-dag.py, run-sessions.sh) | 16 reads | ~57081 tok |
+
+## Session: 2026-05-08 10:38
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 11:02 | Edited scripts/run-sessions.sh | 1→5 lines | ~101 |
+| 11:04 | Session end: 1 writes across 1 files (run-sessions.sh) | 17 reads | ~62458 tok |
+
+## Session: 2026-05-08 11:46
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 11:53 | Edited .claude-plugin/plugin.json | inline fix | ~6 |
+| 11:55 | Edited .claude-plugin/plugin.json | inline fix | ~8 |
+| 12:01 | Session end: 2 writes across 1 files (plugin.json) | 20 reads | ~53723 tok |
+| 12:17 | Edited scripts/wolf-merge/install-merge-driver.sh | expanded (+12 lines) | ~198 |
