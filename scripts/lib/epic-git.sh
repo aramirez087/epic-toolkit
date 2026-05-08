@@ -218,21 +218,36 @@ session_completed_on_branch() {
   # Scope to ${BASE_BRANCH}..${branch}. An unscoped log walks back into
   # main's history and any prior epic's `feat: Session N` subject would
   # falsely match, silently skipping every session this run. (bug-080)
-  rev_range="$branch"
+  local base_ref=""
   if [[ -n "${BASE_BRANCH:-}" ]]; then
     # Prefer origin/<base> over the local ref — auto-rebase lands HEAD
     # on origin's tip and `fetch --prune` doesn't fast-forward the local
     # branch, so a lagging local `main` would re-introduce bug-080.
-    local base_ref=""
     if git -C "$repo" rev-parse --verify --quiet "origin/$BASE_BRANCH" >/dev/null 2>&1; then
       base_ref="origin/$BASE_BRANCH"
     elif git -C "$repo" rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
       base_ref="$BASE_BRANCH"
     fi
-    if [[ -n "$base_ref" ]]; then
-      rev_range="${base_ref}..${branch}"
-    fi
   fi
+  # Audit-gap closure for bug-080: when BOTH origin/$BASE_BRANCH AND
+  # local $BASE_BRANCH fail to resolve (no `origin` remote / no
+  # `origin/HEAD` symbolic ref AND `BASE_BRANCH` defaulted to "main"
+  # but the repo uses `master`/`develop`/`trunk`; or a typo'd `--base
+  # nonexistent-branch`), the previous code degraded `rev_range` back
+  # to a bare `$branch` walk — which IS the exact shape bug-080 was
+  # patched against. A prior epic's `feat: Session N` commit on base
+  # history then falsely matches, silently skipping every session this
+  # run while the runner reports "merged" for empty no-op merges.
+  # Treat unresolvable base_ref as "not completed" so the session
+  # re-runs — wasting work is recoverable; silently skipping a never-
+  # executed session is data loss. The in-memory `SESSION_STATUS[$sid]
+  # == done` check above (line ~212) still short-circuits sessions
+  # completed in THIS run, so the only sessions affected are those
+  # claimed-done by a previous run on a now-broken base setup.
+  if [[ -z "$base_ref" ]]; then
+    return 1
+  fi
+  rev_range="${base_ref}..${branch}"
 
   subjects="$(git -C "$repo" log --format='%s' "$rev_range" 2>/dev/null || true)"
   if grep -qE "^Merge session ${padded} \(" <<<"$subjects"; then

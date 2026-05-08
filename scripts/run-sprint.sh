@@ -179,6 +179,23 @@ branch = cfg.get("branch") or ""
 if not isinstance(branch, str):
     sys.stderr.write("sprint config 'branch' must be a string\n")
     sys.exit(2)
+# Reject \r alongside \t/\n: the bash side reads with `read -r` which
+# does NOT strip trailing CR, so a Windows-edited sprint.json (Notepad,
+# autocrlf=true, IDE that forces CRLF on save) would smuggle \r into
+# BRANCH / dir / model and surface as a misleading "Epic directory not
+# found: foo\r" error or pass `--branch epic/foo\r` and `--model
+# sonnet\r` to run-sessions.sh, where the model regex check fails with
+# a confusing `model={!r}` message that does not name CRLF as the cause.
+# Same audit class as bug-024/025 (CRLF normalization) — the audit
+# chain reached the YAML/markdown parsers but missed the JSON sprint
+# config consumer.
+if any(ch in branch for ch in ("\t", "\n", "\r")):
+    sys.stderr.write(
+        "sprint config 'branch' may not contain tab, newline, or carriage "
+        "return — Windows editors often inject \\r when saving JSON; "
+        "re-save the sprint config with LF line endings: " + repr(branch) + "\n"
+    )
+    sys.exit(2)
 epics = cfg.get("epics")
 if not isinstance(epics, list) or not epics:
     sys.stderr.write("sprint config has no non-empty 'epics' list\n")
@@ -196,8 +213,13 @@ for e in epics:
     if not isinstance(m, str):
         sys.stderr.write("epic 'model' must be a string: " + repr(e) + "\n")
         sys.exit(2)
-    if "\t" in d or "\n" in d or "\t" in m or "\n" in m:
-        sys.stderr.write("epic dir/model may not contain tab or newline: " + d + "\n")
+    if any(ch in d or ch in m for ch in ("\t", "\n", "\r")):
+        sys.stderr.write(
+            "epic dir/model may not contain tab, newline, or carriage "
+            "return — Windows editors often inject \\r when saving JSON; "
+            "re-save the sprint config with LF line endings: dir="
+            + repr(d) + " model=" + repr(m) + "\n"
+        )
         sys.exit(2)
     print(d + "\t" + m)
 PYEOF
