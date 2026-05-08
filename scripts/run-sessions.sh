@@ -64,7 +64,12 @@ err()  { echo -e "${RED}[epic]${NC} $*" >&2; }
 dim()  { echo -e "${DIM}$*${NC}"; }
 
 usage() {
-  sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
+  # Range tracks the comment header above. Three options were appended to
+  # the header (--wave-timeout / --fresh / -h) without updating `2,43p`,
+  # silently truncating them from `--help` output. Same shape as bug-205/218
+  # — every user-facing string must reflect the actual code shape, here
+  # the actual header span.
+  sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
@@ -1267,6 +1272,12 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
   fi
 
   # --- Auto-PR ---
+  # Track whether a PR was found / created so the post-PR "Next step"
+  # advice below reflects the actual code path. Stays false on:
+  # AUTO_PR=false (--no-pr), gh missing, on-default-branch skip, and
+  # `gh pr create` failure — every case where the user genuinely needs
+  # to run `gh pr create` themselves.
+  AUTO_PR_HANDLED=false
   if $AUTO_PR && command -v gh &>/dev/null; then
     CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
     DEFAULT_BRANCH="$BASE_BRANCH"
@@ -1277,6 +1288,7 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
       EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --base "$BASE_BRANCH" --state open --json url -q '.[0].url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
         ok "PR already exists: $EXISTING_PR"
+        AUTO_PR_HANDLED=true
         # Four push cases, ordered by precondition:
         #   1. no @{u} — set upstream first (push --force-with-lease and
         #      `git log @{u}..HEAD` both fail silently otherwise).
@@ -1351,6 +1363,7 @@ ${DIFF_STATS}
         PR_URL="$(gh pr create --base "$BASE_BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2>&1)" || true
         if [[ "$PR_URL" == http* ]]; then
           ok "Pull request created: $PR_URL"
+          AUTO_PR_HANDLED=true
         else
           warn "Could not create PR: $PR_URL"
         fi
@@ -1419,7 +1432,17 @@ ${DIFF_STATS}
   ok "Branch ready: $BRANCH"
   # $BASE_BRANCH not "main" — repos using master/develop/trunk would
   # otherwise get an unrunnable command. (bug-205)
-  ok "Next step  : gh pr create --base $BASE_BRANCH --head $BRANCH"
+  # Skip the "Next step" advice when AUTO_PR already created or pushed
+  # to a PR — same audit class as bug-205/218: the message hard-coded
+  # the create-PR case while the surrounding code branched on whether a
+  # PR was already handled. With AUTO_PR_HANDLED=true, suggesting `gh pr
+  # create` is misleading: the user would either get "PR already exists"
+  # from gh or duplicate-base errors. Falls through (prints "Next step")
+  # for --no-pr, gh-missing, on-default-branch, and create-failed cases —
+  # exactly the situations where the user does need to run it manually.
+  if ! $AUTO_PR_HANDLED; then
+    ok "Next step  : gh pr create --base $BASE_BRANCH --head $BRANCH"
+  fi
 else
   write_epic_result "failed"
   err "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

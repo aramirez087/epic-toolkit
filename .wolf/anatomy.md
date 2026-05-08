@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T04:57:57.947Z
-> Files: 69 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T13:20:30.721Z
+> Files: 70 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -14,6 +14,7 @@
 - `bug-189-commit-msg.txt` — Declares as (~647 tok)
 - `bughunt-tests.sh` (~1187 tok)
 - `commit-msg-204-205.txt` — Declares already (~940 tok)
+- `commit-msg-238-239.txt` — Declares as (~1937 tok)
 - `commit-msg-bug-182.txt` — Declares as (~894 tok)
 - `commit-msg-bug-200-201.txt` — Declares as (~1535 tok)
 - `commit-msg-bug-207.txt` — Declares bug (~1088 tok)
@@ -64,7 +65,7 @@
 ## .claude-plugin/
 
 - `marketplace.json` (~95 tok)
-- `plugin.json` (~122 tok)
+- `plugin.json` (~162 tok)
 
 ## .opencode/
 
@@ -99,13 +100,13 @@
 - `epic-dag.py` — - supabase/migrations/*auth* (~8000 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~5269 tok)
 - `epic-ui.py` — EpicUI: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~4333 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~15682 tok)
-- `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3099 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16038 tok)
+- `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3415 tok)
 - `validate-session-deliverables.py` — /", PH_MID) (~3028 tok)
 
 ## scripts/lib/
 
-- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~2744 tok)
+- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3011 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2230 tok)
 - `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5169 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~612 tok)

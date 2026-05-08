@@ -4810,6 +4810,55 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T12:52:02Z"
+    },
+    {
+      "id": "bug-240",
+      "timestamp": "2026-05-08T13:00:00Z",
+      "error_message": "scripts/run-sessions.sh:67 usage() ran sed -n '2,43p' \"$0\" but the comment header listing CLI options grew to line 46 \u2014 three options (--wave-timeout MINS, --fresh, -h/--help) were silently truncated from `bash run-sessions.sh --help` output. Users discovered --wave-timeout / --fresh by reading the source or by trial-and-error from error messages, and the help text appeared to be missing the standard -h/--help convention.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Audit-gap symmetric to bug-205/218 (user-facing strings that hard-coded one shape while the surrounding code/headers grew). The sed line range `2,43p` was correct for the original header, but three options (--wave-timeout at line 44, --fresh at line 45, -h/--help at line 46) were appended without updating the range. The companion run-sprint.sh:64 `sed -n '2,47p'` was kept correct (line 47 IS the last comment line there), so the audit drift was specific to run-sessions.sh. Same defect class as bug-218 (commit body fired in BOTH branches while OK message branched correctly): every consumer of a hard-coded line range / case template must be re-examined when the surrounding code grows.",
+      "fix": "Change `sed -n '2,43p'` to `sed -n '2,46p'` so the help output covers the full comment header. Add a leading docblock naming the audit lineage (bug-205/218) and the failure mode (silently truncated options) so future audits don't re-introduce the drift when more options are added \u2014 the convention is now explicit: keep the sed range in sync with the last `# ` line above `set -euo pipefail`. Verified by running `sed -n '2,46p' scripts/run-sessions.sh | sed 's/^# \\{0,1\\}//' | tail -10` \u2014 the last 10 lines now include all three previously-truncated options. `bash -n scripts/run-sessions.sh` passes; no behavioural change for any code path other than --help, which now prints the additional three lines that were previously silent.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "symmetric-to-bug-205",
+        "symmetric-to-bug-218",
+        "user-facing-string",
+        "help-text",
+        "sed-range"
+      ],
+      "related_bugs": [
+        "bug-205",
+        "bug-218"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T13:00:00Z"
+    },
+    {
+      "id": "bug-241",
+      "timestamp": "2026-05-08T13:00:00Z",
+      "error_message": "scripts/run-sessions.sh:1422 success-path printed `Next step  : gh pr create --base $BASE_BRANCH --head $BRANCH` UNCONDITIONALLY \u2014 even after AUTO_PR had successfully created a new PR (line 1351-1353) or pushed to an existing PR (line 1278-1297). Users running with the default AUTO_PR=true saw `Pull request created: <url>` immediately followed by `Next step: gh pr create ...` and either (a) ran the suggested command and got `gh: a pull request for branch 'X' into 'Y' already exists` from the duplicate, or (b) doubted whether the auto-PR actually succeeded and re-ran the script with --no-pr to be safe.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Audit-gap symmetric to bug-205/218 \u2014 every user-facing string the runner emits must reflect the actual code path it took, not a single template that happens to match the most common case. The bug-205 fix corrected the BASE_BRANCH placeholder in the same line (it used to hard-code 'main') but the surrounding case-shape \u2014 that the message fires regardless of AUTO_PR success \u2014 was not in scope for that fix. Four exits land at line 1422: (1) AUTO_PR=false (--no-pr): outer `if $AUTO_PR && command -v gh` is false, no PR work happened, message is appropriate. (2) AUTO_PR=true but gh missing: elif `$AUTO_PR` warns and skips, message is appropriate. (3) AUTO_PR=true, gh found, on default branch: warn at line 1359 skips PR work, message is appropriate. (4) AUTO_PR=true, gh found, EXISTING_PR found OR PR_URL starts with http: a PR was successfully handled, message is MISLEADING \u2014 the user already has a PR they should review, and `gh pr create` would fail with a duplicate error or create a confusing second PR against the same branch. Same defect class as bug-218 (cleanup-commit body fired in BOTH branches while OK message branched correctly), bug-211/212/217 (push-site messages that hard-coded one case while the surrounding code branched on local-vs-remote state), and bug-205 (Next step naming the wrong base).",
+      "fix": "Add an `AUTO_PR_HANDLED=false` flag initialized just before the auto-PR block at line 1269. Set it true at the two PR-handled sites: after `ok \"PR already exists: $EXISTING_PR\"` (line 1279) and after `ok \"Pull request created: $PR_URL\"` (line 1353). The flag stays false in all four cases where the user genuinely needs the manual `gh pr create` advice (AUTO_PR=false, gh missing, on-default-branch skip, and `gh pr create` failure where PR_URL didn't start with http). Gate the `Next step` line at 1422 on `if ! $AUTO_PR_HANDLED; then ... fi`. The Branch-ready message above (line 1419) stays unconditional \u2014 the user always wants to know what branch is ready. Add a leading docblock at the AUTO_PR_HANDLED initialization and at the conditional naming the audit lineage (bug-205/218), the four code paths and which trigger the conditional, and the misleading-output failure mode so future audits don't re-introduce the unconditional shape. Note that EXISTING_PR-with-failed-push still sets AUTO_PR_HANDLED=true: the PR exists on remote regardless of whether the local push succeeded, and the user's correct action is to fix the push (the `|| warn` already names this) and review the existing PR \u2014 not to call `gh pr create`. `bash -n scripts/run-sessions.sh` passes; no behavioural change for the non-AUTO_PR-success paths (4 of 5 success-path exits print identical output); change is scoped to the previously-misleading flag-on path. Same minimum-scope discipline as bug-205/218 \u2014 the fix is purely additive: one variable initialization, two assignments, and one if-guard around the existing message.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "symmetric-to-bug-205",
+        "symmetric-to-bug-218",
+        "user-facing-string",
+        "auto-pr",
+        "next-step-advice"
+      ],
+      "related_bugs": [
+        "bug-205",
+        "bug-211",
+        "bug-212",
+        "bug-217",
+        "bug-218"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T13:00:00Z"
     }
   ]
 }

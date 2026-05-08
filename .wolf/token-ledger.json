@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 5728768,
-    "total_reads": 1089,
-    "total_writes": 585,
-    "total_sessions": 94,
-    "anatomy_hits": 1047,
+    "total_tokens_estimated": 5736883,
+    "total_reads": 1097,
+    "total_writes": 591,
+    "total_sessions": 97,
+    "anatomy_hits": 1055,
     "anatomy_misses": 42,
     "repeated_reads_blocked": 689,
-    "estimated_savings_vs_bare_cli": 10896266
+    "estimated_savings_vs_bare_cli": 10897866
   },
   "sessions": [
     {
@@ -11682,6 +11682,134 @@
         "writes_count": 147,
         "repeated_reads_blocked": 19,
         "anatomy_lookups": 13
+      }
+    },
+    {
+      "id": "session-2026-05-08-0635",
+      "started": "2026-05-08T12:35:44.655Z",
+      "ended": "2026-05-08T12:38:21.335Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh",
+          "tokens_estimated": 260,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 260,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-08-0635",
+      "started": "2026-05-08T12:35:44.655Z",
+      "ended": "2026-05-08T12:45:01.072Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh",
+          "tokens_estimated": 260,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.claude-plugin/plugin.json",
+          "tokens_estimated": 122,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/gitattributes-snippet",
+          "tokens_estimated": 120,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.claude-plugin/plugin.json",
+          "tokens_estimated": 6,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 502,
+        "output_tokens_estimated": 6,
+        "reads_count": 3,
+        "writes_count": 1,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 3
+      }
+    },
+    {
+      "id": "session-2026-05-08-0635",
+      "started": "2026-05-08T12:35:44.655Z",
+      "ended": "2026-05-08T12:54:34.429Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh",
+          "tokens_estimated": 260,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.claude-plugin/plugin.json",
+          "tokens_estimated": 122,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/gitattributes-snippet",
+          "tokens_estimated": 120,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh",
+          "tokens_estimated": 3415,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.claude-plugin/plugin.json",
+          "tokens_estimated": 6,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh",
+          "tokens_estimated": 616,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
+          "tokens_estimated": 573,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh",
+          "tokens_estimated": 21,
+          "action": "edit"
+        },
+        {
+          "file": "/tmp/commit-msg-238-239.txt",
+          "tokens_estimated": 2214,
+          "action": "create"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 3917,
+        "output_tokens_estimated": 3430,
+        "reads_count": 4,
+        "writes_count": 5,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 4
       }
     }
   ],
