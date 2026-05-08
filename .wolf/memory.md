@@ -1154,3 +1154,13 @@
 |------|--------|---------|---------|--------|
 | 09:41 | Edited scripts/run-sessions.sh | inline fix | ~14 |
 | 09:41 | Edited docs/epic-guide.md | 3→5 lines | ~74 |
+| 09:43 | Session end: 2 writes across 2 files (run-sessions.sh, epic-guide.md) | 25 reads | ~65942 tok |
+
+## Session: 2026-05-08 09:52
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:00 | Edited AGENTS.md | 3→7 lines | ~172 |
+| 10:00 | Edited AGENTS.md | inline fix | ~17 |
+| 10:00 | Edited CLAUDE.md | inline fix | ~17 |
+| 10:00 | Edited README.md | 9→14 lines | ~254 |

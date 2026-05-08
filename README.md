@@ -88,6 +88,11 @@ Progress display adapts to the CLI:
      with a fresh CLI process each (PLAN pass → EXECUTE pass).
    - Iteratively `--no-ff` merges successful siblings into trunk between waves.
    - Auto-commits, auto-creates a GitHub PR via `gh`, cleans up worktrees.
+3. **`/epic-toolkit:sprint`** runs N epics back-to-back on a shared trunk
+   branch and opens a single PR for the whole sprint. Each epic is a normal
+   `/epic-toolkit:epic` run; the wrapper enforces sequential execution,
+   forwards `--no-pr` to every epic except the final one, and emits a single
+   sprint-level summary.
 
 ## Layout produced by `/epic-toolkit:epic.generate`
 

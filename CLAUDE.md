@@ -37,7 +37,7 @@ Worktrees are created at `.epic-worktrees/<repo>/epic--<name>/` (trunk) and `.ep
 
 ```bash
 # Preview DAG waves without running
-python scripts/epic-dag.py --show docs/claude-sessions/<name>/
+python3 scripts/epic-dag.py --show docs/claude-sessions/<name>/
 
 # Dry-run the full orchestrator (no side effects)
 bash scripts/run-sessions.sh docs/claude-sessions/<name>/ --dry-run
