@@ -1581,7 +1581,22 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
   # any non-.wolf/ conflict aborts the rebase cleanly and the unrebased branch
   # is pushed as-is for manual conflict resolution on GitHub.
   REBASE_RESULT="skipped"
-  if $AUTO_REBASE && command -v gh &>/dev/null; then
+  # Drop the vestigial `command -v gh &>/dev/null` gate. After bug-208 replaced
+  # the `gh repo view --json defaultBranchRef` query inside this block with
+  # `$BASE_BRANCH`, every line below uses only `git fetch` and
+  # `rebase_with_wolf_resolve` — neither of which calls gh. Keeping the gh
+  # check silently disabled auto-rebase for everyone running the runner on a
+  # machine without gh installed (CI, slim Docker images, devs who use git
+  # without gh): the rebase block was skipped, REBASE_RESULT stayed "skipped",
+  # the local branch was pushed unrebased, and the PR was likely not fast-
+  # forward-mergeable — with no diagnostic naming the missing `gh` as the
+  # cause (since the user wasn't asking for a PR; they were asking for the
+  # rebase). bug-208's own commit message flagged this leftover ("kept for
+  # minimum-scope; relaxing it so auto-rebase runs without gh is a separate
+  # UX improvement"). The auto-PR block immediately below STILL keeps its
+  # `command -v gh &>/dev/null` gate because `gh pr create` does need gh —
+  # only the rebase block's gate was vestigial. (bug-210)
+  if $AUTO_REBASE; then
     # Use the runner's already-resolved $BASE_BRANCH (line 943-945: user's
     # `--base` value, or origin/HEAD's target, or "main" fallback) instead of
     # re-querying gh's repo default. The trunk worktree was branched off

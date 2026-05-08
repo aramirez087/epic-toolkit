@@ -4236,6 +4236,27 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-07T23:55:28Z"
+    },
+    {
+      "id": "bug-210",
+      "timestamp": "2026-05-08T00:14:09Z",
+      "error_message": "scripts/run-sessions.sh:1584 auto-rebase block was gated on `command -v gh &>/dev/null` even though every line inside the block uses only `git fetch` and `rebase_with_wolf_resolve` \u2014 neither of which calls gh. After bug-208 replaced the `gh repo view --json defaultBranchRef` query inside this block with `$BASE_BRANCH`, the gh check became vestigial. Users on machines without gh (CI runners, slim Docker images, devs who use git but not gh) silently got auto-rebase skipped: the if-block never fired, REBASE_RESULT stayed `skipped`, the local branch was pushed un-rebased, and the resulting PR was likely not fast-forward-mergeable. No diagnostic named missing gh as the cause because the user was asking for the rebase, not a PR (gh is legitimately needed only by the auto-PR block immediately below). bug-208's own commit message flagged this leftover: 'The `command -v gh &>/dev/null` guard at line 1584 is now technically vestigial for the rebase block (gh is no longer called there) but kept for minimum-scope; relaxing it so auto-rebase runs without gh is a separate UX improvement.' This patch is that separate improvement.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Vestigial gate left in place during bug-208's minimum-scope fix. bug-208 replaced the only gh consumer inside the auto-rebase block (the `gh repo view --json defaultBranchRef` query) with the runner's already-resolved $BASE_BRANCH, but didn't relax the surrounding `if $AUTO_REBASE && command -v gh &>/dev/null; then` gate that originally existed because the block needed gh. The auto-PR block immediately below (line 1632 post-patch) STILL has its own `command -v gh &>/dev/null` gate because `gh pr create` genuinely needs gh \u2014 only the rebase block's gate became dead.",
+      "fix": "Drop the `&& command -v gh &>/dev/null` clause from the auto-rebase guard so the block becomes `if $AUTO_REBASE; then`. Inside the block, `git fetch -q origin \"$BASE_BRANCH\"` and `rebase_with_wolf_resolve \"$REPO_ROOT\" \"origin/$BASE_BRANCH\"` work on any system with git \u2014 no gh required. Behaviour for users with gh installed is unchanged (the block still fires). Behaviour for users without gh changes from 'silently skipped, PR not fast-forward-mergeable' to 'rebase runs, PR is fast-forward-mergeable' \u2014 the documented intent of --no-rebase remaining as the user-facing opt-out, and the existing `git fetch ... 2>/dev/null` failure path still handles repos without origin configured. Verified by inspection of lines 1582-1614: only line 1584 (the gate) referenced gh; every line inside the block uses git or string ops. `bash -n` passes; `grep 'command -v gh' scripts/run-sessions.sh` post-patch shows the only remaining match is the auto-PR block's own legitimate gate.",
+      "tags": [
+        "found-by-bug-hunt",
+        "run-sessions",
+        "auto-rebase",
+        "vestigial-gate",
+        "follow-up-to-bug-208",
+        "ux"
+      ],
+      "related_bugs": [
+        "bug-208"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T00:14:09Z"
     }
   ]
 }
