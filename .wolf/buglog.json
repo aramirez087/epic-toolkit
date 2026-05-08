@@ -5879,6 +5879,32 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T20:18:20.207Z"
+    },
+    {
+      "id": "bug-289",
+      "timestamp": "2026-05-08T20:32:34.000Z",
+      "error_message": "scripts/validate-session-deliverables.py `_read_diff` does not decompose `git diff --name-status` rename rows (`R<score>\\told\\tnew`) into a (changed=new, deleted=old) pair. The OLD path of every rename is silently dropped. Real-world impact: a session whose only commit was `git mv src/foo.cs .wolf/archive-foo.cs` (legitimate refactor moving real source out of the source tree into archival metadata) is misclassified as `metadata-only` because the resulting `changed=['.wolf/archive-foo.cs']` matches `^\\.wolf/` and `deleted=[]` is empty — the implicit removal of the real-source path is invisible to `_is_metadata_only`. Validator returns rc=1 with 'committed only metadata/handoff files — no real deliverables' even though the session DID remove real source. Audit-class follow-up to bug-286/287: every diff consumer must consider both changed and deleted paths, including R-decomposition.",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "The diff-status loop set `path = parts[-1]` (correct: the new path for R/C rows) and then routed it to `changed` for everything except `D`. R rows have THREE tab-separated fields (`R<score>\\told\\tnew`) and the `old` field at `parts[1]` was never read. _is_metadata_only iterates both lists after bug-286, but `deleted` was empty for renames so the metadata-only heuristic could not see that the rename had moved real source out. Same audit class as bug-286/287 (deletions of real source count as legitimate deliverables) — except here the deletion was implicit in a rename rather than a `git rm`.",
+      "fix": "Branch on `status == 'R'` separately and append `parts[1]` (old path) to `deleted` while keeping the new path in `changed`. Copies (status `C`) leave the source in place and continue to flow only into `changed`. Verified with 5 cases: (1) wolf-internal rename → metadata_only=True (correct fail); (2) real→real rename → metadata_only=False (pass); (3) bug-286 regression deletion-only of real source → metadata_only=False (pass); (4) simple add → metadata_only=False (pass); (5) declared `produces` still matches the new path on a real rename.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "silent-failure",
+        "deliverables-validator",
+        "metadata-only-heuristic",
+        "rename-handling",
+        "git-name-status",
+        "symmetric-to-bug-286",
+        "symmetric-to-bug-287",
+        "user-facing-string"
+      ],
+      "related_bugs": [
+        "bug-286",
+        "bug-287"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T20:32:34.000Z"
     }
   ]
 }

@@ -185,6 +185,18 @@ def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
         path = parts[-1]
         if status == "D":
             deleted.append(path)
+        elif status == "R" and len(parts) >= 3:
+            # Rename: the source path is implicitly removed from the
+            # working tree. Without recording it as deleted, a session
+            # whose only commit was `git mv src/foo.cs .wolf/foo.cs`
+            # is misclassified as metadata-only — the new path matches
+            # `^\.wolf/` and the implicit removal of the real-source
+            # path is invisible to _is_metadata_only. Same audit class
+            # as bug-286/287 (deletions of real source count as
+            # legitimate deliverables). Copies (status == "C") leave
+            # the source in place, so only R is decomposed.
+            changed.append(path)
+            deleted.append(parts[1])
         else:
             changed.append(path)
     return changed, deleted

@@ -1,62 +1,85 @@
 {
-  "session_id": "session-2026-05-08-1338",
-  "started": "2026-05-08T19:38:39.499Z",
+  "session_id": "session-2026-05-08-1420",
+  "started": "2026-05-08T20:20:20.949Z",
   "files_read": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
+      "count": 1,
+      "tokens": 8353,
+      "first_read": "2026-05-08T20:20:55.483Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
+      "count": 1,
+      "tokens": 6426,
+      "first_read": "2026-05-08T20:21:41.724Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
+      "count": 1,
+      "tokens": 5874,
+      "first_read": "2026-05-08T20:22:15.461Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
+      "count": 4,
+      "tokens": 16231,
+      "first_read": "2026-05-08T20:22:50.155Z"
+    },
     "/Users/aramirez/Code/epic-toolkit/scripts/epic-external-baselines.py": {
       "count": 1,
       "tokens": 4263,
-      "first_read": "2026-05-08T19:39:09.193Z"
+      "first_read": "2026-05-08T20:22:56.047Z"
     },
-    "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py": {
-      "count": 2,
-      "tokens": 6080,
-      "first_read": "2026-05-08T19:39:12.707Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh": {
-      "count": 2,
-      "tokens": 5874,
-      "first_read": "2026-05-08T19:39:54.415Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh": {
-      "count": 3,
-      "tokens": 16231,
-      "first_read": "2026-05-08T19:40:13.147Z"
-    },
-    "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py": {
+    "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh": {
       "count": 1,
-      "tokens": 8243,
-      "first_read": "2026-05-08T19:40:35.599Z"
+      "tokens": 3415,
+      "first_read": "2026-05-08T20:23:18.168Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-progress.py": {
+      "count": 1,
+      "tokens": 5269,
+      "first_read": "2026-05-08T20:24:05.684Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh": {
+      "count": 1,
+      "tokens": 3011,
+      "first_read": "2026-05-08T20:24:44.240Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh": {
+      "count": 1,
+      "tokens": 2230,
+      "first_read": "2026-05-08T20:25:14.543Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py": {
+      "count": 1,
+      "tokens": 1809,
+      "first_read": "2026-05-08T20:25:28.064Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/epic-ui.py": {
+      "count": 2,
+      "tokens": 4333,
+      "first_read": "2026-05-08T20:27:47.651Z"
     },
     "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh": {
       "count": 1,
       "tokens": 409,
-      "first_read": "2026-05-08T19:41:14.076Z"
+      "first_read": "2026-05-08T20:29:00.310Z"
+    },
+    "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh": {
+      "count": 1,
+      "tokens": 612,
+      "first_read": "2026-05-08T20:29:32.580Z"
     }
   },
   "files_written": [
     {
       "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
       "action": "edit",
-      "tokens": 128,
-      "at": "2026-05-08T19:48:02.424Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
-      "action": "edit",
-      "tokens": 263,
-      "at": "2026-05-08T19:48:10.709Z"
-    },
-    {
-      "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
-      "action": "edit",
-      "tokens": 407,
-      "at": "2026-05-08T19:48:22.635Z"
+      "tokens": 347,
+      "at": "2026-05-08T20:31:04.236Z"
     }
   ],
   "edit_counts": {
-    "scripts/validate-session-deliverables.py": 3
+    "scripts/validate-session-deliverables.py": 1
   },
-  "anatomy_hits": 6,
+  "anatomy_hits": 13,
   "anatomy_misses": 0,
   "repeated_reads_warned": 4,
   "cerebrum_warnings": 0,
