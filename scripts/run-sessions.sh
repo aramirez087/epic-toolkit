@@ -104,19 +104,8 @@ RETRY_USER_SET=false
 MODEL_USER_SET=false
 MAX_PARALLEL_USER_SET=false
 
-# Guard value-bearing flags against a missing `$2`. Without this, running
-# the script with a value-bearing flag as the LAST argument (e.g.
-# `run-sessions.sh foo/ --start`, or `--start --end 5` where the user
-# forgot the `--start` value and `$2` lands on the next flag — only the
-# truly-last-arg case is fatal here) crashes with `$2: unbound variable`
-# under the runner-wide `set -u`, far from a meaningful diagnostic. The
-# bash error names a positional parameter index, not the flag the user
-# typed, so the user has no signal that they forgot a value. Same audit
-# class as bug-194/198 (numeric-flag UX), now extended to argv-shape: a
-# clear "missing value for --flag" message names both the cause and the
-# remediation. Apply at every value-bearing case branch BEFORE the bare
-# `$2` reference. `(( $# < 2 ))` is true when only the flag itself
-# remains — exactly the crash precondition.
+# Guard `$2` for value-bearing flags so a missing value produces a clear
+# diagnostic instead of `set -u`'s opaque `$2: unbound variable`.
 require_flag_value() {
   if (( $# < 2 )); then
     err "Missing value for $1"
@@ -164,37 +153,9 @@ for _arg_name in "START_FROM" "END_AT" "MAX_PARALLEL" "TIMEOUT" "RETRY" "WAVE_TI
     err "$_arg_name must be a non-negative integer (got '$_val')"
     exit 1
   fi
-  # Normalize to base-10 so leading-zero values produce the user's apparent
-  # decimal intent rather than being silently bash-octal-decoded by downstream
-  # arithmetic. The validation regex `^[0-9]+$` accepts `08`, `09`, `010`,
-  # `019`, etc.; bash arithmetic context (`[[ x -OP y ]]`, `(( ))`, array
-  # subscripts) then treats the value as octal:
-  #   • `--max-parallel 08` / `09` → `[[ 08 -lt 1 ]]` raises `value too great
-  #     for base` to stderr and returns false; the bug-194 / bug-108 guards
-  #     never fire, the wave loop's throttle `[[ ${#JOB_PIDS[@]} -ge $MAX_
-  #     PARALLEL ]]` ALSO raises the same error on every iteration and
-  #     returns false, so the throttle never engages and ALL sessions fan
-  #     out concurrently regardless of the cap the user asked for, with the
-  #     bash error spammed to stderr on every wave-fanout iteration.
-  #   • `--max-parallel 010` → silently re-interpreted as decimal 8; the
-  #     user gets ⅕ less parallelism than they asked for with no diagnostic.
-  #   • `--wave-timeout 08` → at line ~1119, `wave_timeout=$((_effective_wtm
-  #     * 60))` triggers `value too great for base`, the assignment fails,
-  #     `$wave_timeout` stays unbound, and the next `[[ $wave_timeout -gt 0
-  #     ]]` raises `wave_timeout: unbound variable` under `set -u` and
-  #     crashes the entire runner mid-wave.
-  #   • `--start 08` / `--end 09` → range filters silently no-op (bash
-  #     error → false → no skip); user's resume-from-N intent is silently
-  #     ignored.
-  #   • `--timeout 010` / `--retry 010` → silent decimal-8 reinterpretation.
-  # Same audit class as bug-194 (numeric flag the validator accepts but the
-  # consumer can't interpret correctly) and bug-193/196 (bash arithmetic-as-
-  # int narrowing on producer-emitted scalars) — every numeric value that
-  # later flows into bash arithmetic context must be normalized here so the
-  # consumer sees what the user wrote, not what bash's octal heuristic
-  # invents. `printf -v VAR '%d' VAL` works on bash 3.2+ and reassigns the
-  # named variable; `10#$_val` forces base-10 interpretation regardless of
-  # leading zeros (`10#08` = 8, `10#010` = 10, `10#0` = 0).
+  # Force base-10 — bash arithmetic treats leading-zero values as octal
+  # (`08`/`09` crash with `value too great for base`, `010` silently
+  # becomes decimal 8). (bug-197)
   printf -v "$_arg_name" '%d' "$((10#$_val))"
 done
 
@@ -220,17 +181,9 @@ CONFIG_FILE="$REPO_ROOT/.epic-config.json"
 if [[ -f "$CONFIG_FILE" ]]; then
   log "Loading configuration from ${CONFIG_FILE/#$HOME/~}"
 
-  # Extract config values using bash regex (Bash 3.2+ compatible)
+  # Bash 3.2+ regex-extracted JSON; only overrides when CLI didn't set
+  # the value. `10#` normalisation matches the cmdline validator above.
   if config_content="$(cat "$CONFIG_FILE" 2>/dev/null)"; then
-    # Only override defaults if CLI didn't specify the value. Use _USER_SET
-    # flags (not sentinel comparisons) for flags whose default value is also
-    # a valid explicit user choice (e.g. --timeout 0, --model sonnet).
-    # Same `10#` normalization as the cmdline validator above — JSON forbids
-    # leading zeros in numeric literals, but the bash regex `[0-9]+` accepts
-    # them, so a hand-edited config (`"timeout": 010`) would otherwise
-    # silently bash-octal-decode to decimal 8 (or crash with `08`/`09`'s
-    # `value too great for base`) at every downstream arithmetic site.
-    # (bug-197)
     if ! $TIMEOUT_USER_SET && [[ "$config_content" =~ \"timeout\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
       TIMEOUT=$((10#${BASH_REMATCH[1]}))
     fi
@@ -267,40 +220,16 @@ if [[ -f "$CONFIG_FILE" ]]; then
   fi
 fi
 
-# Reject MAX_PARALLEL=0 explicitly. The earlier numeric validation accepts 0
-# because `^[0-9]+$` includes the zero case, and the same regex in the config
-# loader above (`"maxParallel"\s*:\s*([0-9]+)`) accepts `"maxParallel": 0` too.
-# But the throttle loop in the wave fan-out is `while [[ ${#JOB_PIDS[@]} -ge
-# $MAX_PARALLEL ]]; do reap_finished_jobs; sleep 1; done` — with MAX_PARALLEL=0
-# the predicate `array_length >= 0` is ALWAYS true (every non-negative array
-# length satisfies it, including the empty-array starting state), so the loop
-# never exits, no session ever spawns, and the runner hangs forever consuming
-# the wave-timeout's idle minutes before SIGKILL ends the wait. The other
-# zero-sentinel flags (`--timeout 0`, `--retry 0`, `--wave-timeout 0`) all
-# have well-defined "disabled / auto" semantics in the runner; MAX_PARALLEL=0
-# is the only one that's pathologically broken because the code path expects
-# a positive concurrency ceiling. Validate after config load so a bad
-# `.epic-config.json "maxParallel": 0` is caught too. (bug-194)
+# MAX_PARALLEL=0 hangs the throttle loop (`array_length >= 0` is always
+# true), so reject explicitly. (bug-194)
 if [[ "$MAX_PARALLEL" -lt 1 ]]; then
   err "MAX_PARALLEL must be >= 1 (got '$MAX_PARALLEL'). 0 would hang the throttle loop indefinitely; use 1 for serial execution."
   exit 1
 fi
 
 # --- Detect CLI ---
-# Prefer --cli override, then the invoking tool's env var, then PATH fallback.
-# OPENCODE_SESSION_ID is set by OpenCode; CLAUDECODE is set by Claude Code.
-#
-# Whitelist CLI_OVERRIDE before the PATH check. epic-dag.py's load_sessions
-# already rejects non-{claude,opencode} values for the per-session `cli:`
-# frontmatter (line 503-507), but the same defence was missing on the
-# command-line / config-file path: `--cli foo` (or a `.epic-config.json`
-# `"cli": "foo"`) was taken verbatim, and as long as `foo` resolved on PATH
-# the runner accepted it. run_cli's `if [[ "$session_cli" == "claude" ]]`
-# branch (epic-session.sh:208) treats EVERY non-claude string as opencode,
-# so `foo` got invoked as `foo run --format json --dangerously-skip-permissions`
-# AND `map_model_shorthand` (line 248) silently passed through unmapped because
-# its `[[ "$cli" == "opencode" ]]` test failed. Same audit class as bug-138 —
-# epic-dag.py was the only fix site; here is the symmetric one. (bug-147)
+# Prefer --cli, then env var (OPENCODE_SESSION_ID / CLAUDECODE), then PATH.
+# Whitelist before PATH check — the runner only has claude/opencode branches. (bug-147)
 if [[ -n "$CLI_OVERRIDE" && "$CLI_OVERRIDE" != "claude" && "$CLI_OVERRIDE" != "opencode" ]]; then
   err "--cli / .epic-config.json cli must be 'claude' or 'opencode' (got '$CLI_OVERRIDE')."
   exit 1
@@ -348,22 +277,8 @@ map_model_shorthand() {
       gpt5nano) echo "opencode/gpt-5-nano" ;;
       gemini)   echo "opencode/gemini-3-flash" ;;
       glm)      echo "opencode/glm-5.1" ;;
-      # Redirect the diagnostic to stderr so it does NOT leak into the
-      # captured stdout when callers wrap this function in `$(...)` —
-      # which is every call site (run-sessions.sh:288 global,
-      # epic-session.sh:174/184 per-session). `log` writes to stdout, so
-      # the previous form `log "..."; echo "$model"` captured BOTH lines
-      # — `$session_model` ended up as the ANSI-coloured "[epic] Model
-      # 'foo' is not a known OpenCode shorthand — using as-is\n<model>",
-      # which then flowed verbatim into `model_flag=(-m "$session_model")`
-      # / `(--model "$session_model")` (epic-session.sh:208/210). claude
-      # / opencode rejected the multi-line argument with an opaque
-      # "unknown model id" error, far from the YAML / CLI cause. Fires
-      # for any non-shorthand model name on `--cli opencode` — including
-      # legitimate fully-qualified ids that happen not to match the
-      # `*/*` slash test (e.g. a user typo like `claude-sonnet-4-5`
-      # instead of `opencode/claude-sonnet-4-5`), AND for any session-
-      # level `model:` override that isn't in the case list. (bug-181)
+      # Diagnostics MUST go to stderr — every caller wraps this in $(...)
+      # and a stdout log line corrupts the captured model id. (bug-181)
       *)        log "Model '$model' is not a known OpenCode shorthand — using as-is" >&2; echo "$model" ;;
     esac
   else
@@ -371,12 +286,8 @@ map_model_shorthand() {
   fi
 }
 
-# Preserve the user-supplied (un-mapped) model so per-session cli overrides
-# can re-derive the correct CLI-specific id. Without this, a session that
-# overrides `cli: claude` on a global `--cli opencode --model sonnet` run
-# inherits the already-mapped `opencode/claude-sonnet-4` and passes it to
-# Claude, which rejects the unknown model id. map_model_shorthand is a
-# one-way transform once `model != */*` no longer holds.
+# Preserve the unmapped model so per-session cli overrides can re-derive
+# a CLI-specific id (the shorthand→full mapping is one-way).
 MODEL_RAW="$MODEL"
 MODEL="$(map_model_shorthand "$MODEL" "$CLI_CMD")"
 
@@ -445,10 +356,7 @@ EPIC_NAME_SLUG="$(basename "$SESSIONS_DIR")"
 if [[ -z "$BRANCH" ]]; then
   BRANCH="epic/${EPIC_NAME_SLUG}"
 fi
-# sed (not tr): tr maps SET1 chars to SET2 chars positionally, so
-# `tr '/' '--'` only uses the first '-' and silently produces a single-dash
-# output ('epic/foo' → 'epic-foo') — diverging from the documented
-# 'epic--<name>' worktree layout in the header. (bug-091)
+# sed not tr: tr maps positionally so `tr '/' '--'` produces a single dash. (bug-091)
 BRANCH_SANITIZED="$(echo "$BRANCH" | sed 's|/|--|g')"
 
 # --no-worktree forces sequential — can't safely parallelize in one CWD.
@@ -459,12 +367,8 @@ fi
 if $SEQUENTIAL; then
   MAX_PARALLEL=1
 fi
-# Clamp MAX_PARALLEL to at least 1. The numeric validator (lines 141-147)
-# accepts 0 because `^[0-9]+$` allows it, but the wave throttle at lines ~874
-# is `while [[ ${#JOB_PIDS[@]} -ge $MAX_PARALLEL ]]; do reap; sleep 1; done` —
-# with MAX_PARALLEL=0 even an empty JOB_PIDS satisfies `0 -ge 0`, so the loop
-# spins forever before launching any session and the runner silently hangs.
-# Same defensive-numeric class as bug-062 / bug-092. (bug-108)
+# Belt-and-braces clamp — --sequential and --no-worktree paths above can
+# also override; the wave throttle hangs forever at MAX_PARALLEL=0. (bug-108)
 if [[ "$MAX_PARALLEL" -lt 1 ]]; then
   warn "--max-parallel must be at least 1; clamping (was $MAX_PARALLEL)"
   MAX_PARALLEL=1
@@ -482,12 +386,8 @@ DAG_TMP="$(mktemp)"
 JOB_PIDS=()
 JOB_SIDS=()
 
-# EXIT handler — cleans up in-flight session subshells, UI, and temp files.
-# Uses kill_tree (epic-wave.sh) for a recursive SIGKILL walk so that --timeout
-# wrapper grandchildren (timeout → claude) don't leak as orphans when the
-# runner aborts mid-wave via set -e, SIGINT, or external kill. The earlier
-# `pkill -9 -P` only walked one level and left `claude` reparented to PID 1
-# whenever --timeout MINS was set. (bug-063, bug-065, bug-073)
+# EXIT handler — kill_tree (recursive SIGKILL) prevents --timeout wrapper
+# grandchildren from leaking as orphans. (bug-063, bug-065, bug-073)
 _on_exit() {
   local _rc=$?
   for _tp in "${JOB_PIDS[@]:-}"; do
@@ -524,118 +424,38 @@ declare -a SESSION_CLI_BY_ID     # by id
 
 WAVE_COUNT=0
 
-# META values can legitimately contain spaces (operator_path is an absolute
-# filesystem path), so they must NOT be tokenized via `set -- $line`. Strip
-# the "META <key>=" prefix and take the rest verbatim. SESSION rows continue
-# to use word-splitting because their fields are space-free by construction
-# (numeric ids, comma-separated deps, regex-derived slug, 0/1 flags).
+# META values can contain spaces (operator_path), so strip the prefix
+# verbatim instead of using `set -- $line`. SESSION rows are space-free.
 while IFS= read -r line; do
   case "$line" in
     "META operator_path="*)   OPERATOR_PATH="${line#META operator_path=}" ;;
     "META any_frontmatter="*) ANY_FRONTMATTER="${line#META any_frontmatter=}" ;;
     "META wave_count="*)
-      # Validate at parse time — the value flows verbatim into the arithmetic
-      # contexts `[[ "$WAVE_COUNT" -eq 0 ]]` (line ~534) and `for (( wn=1;
-      # wn<=WAVE_COUNT; wn++ ))` (wave loop), and bash treats a non-numeric
-      # operand as a variable-name reference. Under the runner's `set -u`, a
-      # corrupted `META wave_count=garbage` line crashes the entire runner
-      # with `garbage: unbound variable` BEFORE the existing zero-check at
-      # line 534 can fire — the user sees a cryptic bash error rather than
-      # the intended "DAG plan is empty or malformed" diagnostic. Same
-      # producer-emittable corruption modes as bug-192/193 (partial-flush
-      # from a SIGKILL'd `cp`, NFS read racing the write, schema drift,
-      # hand-edit for debugging) and same audit class: every consumer of
-      # producer-emitted data must reject inputs the producer can emit but
-      # the consumer can't interpret, AND that audit must extend to every
-      # narrowing predicate the consumer applies — bash arithmetic-as-int
-      # is a string→int narrowing on the WAVE_COUNT field too. Reject
-      # non-numeric values silently (leave WAVE_COUNT at its default 0);
-      # the existing line-534 guard then exits with the proper diagnostic.
+      # Reject non-numeric (would crash arithmetic under set -u) and
+      # leading-zero (silent octal). (bug-196, bug-197)
       _wc_raw="${line#META wave_count=}"
       if [[ "$_wc_raw" =~ ^[0-9]+$ ]]; then
-        # `10#` normalization — bug-196 patched the non-numeric crash but
-        # left the leading-zero silent-octal hole. A producer-emittable
-        # corruption (partial-flush, NFS read race, schema drift, hand-
-        # edit) lands `META wave_count=010` and the wave loop's `for ((
-        # wn=1; wn<=WAVE_COUNT; wn++ ))` arithmetic-decodes the value as
-        # octal 8, silently truncating a 10-wave plan to 8 waves with no
-        # diagnostic. Same audit class as bug-194/196/197. (bug-197)
         WAVE_COUNT=$((10#$_wc_raw))
       fi
       unset _wc_raw
       ;;
-    "META "*) : ;;  # unrecognised META key — ignore
-    "WAVE "*) : ;;  # WAVE <num> <size> — informational only
+    "META "*) : ;;
+    "WAVE "*) : ;;
     "SESSION "*)
       # SESSION <wave> <id> <file> <deps> <slug> <parallel> [<model> <cli>]
-      # Empty model/cli are emitted as the sentinel `-` by epic-dag.py so
-      # `set -- $_rest`'s whitespace-collapse can't shift cli into the
-      # model slot when model is empty. Translate the sentinel back here.
-      # (bug-076)
+      # Empty model/cli arrive as `-` so word-splitting can't shift fields. (bug-076)
       _rest="${line#SESSION }"
       set -- $_rest
       sw="${1:-}"; sid="${2:-}"; sfile="${3:-}"; sdeps="${4:-}"; sslug="${5:-}"; sparallel="${6:-}"
       smodel="${7:-}"; scli="${8:-}"
-      # Skip malformed SESSION rows whose wave/id fields aren't numeric.
-      # Symmetric bash-side defence to bug-192's Python-side guard. Both
-      # consumers (this loop and the status-init heredoc / parse_bash_plan)
-      # read the SAME plan file, so the same producer-emittable corruption
-      # modes apply: a partial-flush from a SIGKILL'd `cp` mid-write, an
-      # NFS read racing the write, schema drift from a future writer, or
-      # a hand-edit for debugging. The bash side runs FIRST (line 455-484)
-      # and uses `$sw`/`$sid` directly as numeric array subscripts at
-      # `WAVE_IDS[$sw]`, `SESSION_FILE_BASENAME[$sid]`, etc. — bash treats
-      # subscripts as arithmetic expressions, and a non-numeric subscript
-      # like `WAVE_IDS[garbage]` looks up a variable named `garbage`,
-      # which under the runner's `set -u` is unbound: bash exits the
-      # entire runner with `garbage: unbound variable` BEFORE bug-192's
-      # heredoc fix ever gets a chance to run. The user sees a cryptic
-      # bash error and the epic never starts. Same audit class as bug-192:
-      # every consumer of producer-emitted data must reject inputs the
-      # producer can emit but the consumer can't interpret, and the audit
-      # must extend to every narrowing predicate the consumer applies —
-      # here, bash array-subscript-as-arithmetic is a string→int narrowing
-      # that crashes on every shape outside the numeric subspace. Mirror
-      # bug-192's coerce-and-skip: the well-formed lines around the
-      # malformed one still register, so the runner degrades gracefully
-      # (dropping ONLY the malformed sessions) instead of failing wholesale.
-      # Also reject empty truncated rows (fewer than 6 fields after split)
-      # for parity with the heredoc's `if len(parts) < 6: continue`. (bug-193)
+      # Reject malformed rows: non-numeric subscripts crash under set -u,
+      # leading zeros silent-octal-decode, truncated rows yield empty
+      # session paths that surface as opaque prompt-extraction errors. (bugs 193, 195, 197)
       if ! [[ "$sw" =~ ^[0-9]+$ && "$sid" =~ ^[0-9]+$ ]]; then
         continue
       fi
-      # `10#` normalization — bug-193 patched the non-numeric subscript
-      # crash but left the leading-zero silent-octal hole. A producer-
-      # emittable corruption (partial-flush, NFS read race, schema drift,
-      # hand-edit) lands `SESSION 010 5 ...` (wave field with leading
-      # zero) and bash arithmetic-as-subscript decodes `WAVE_IDS[010]` as
-      # octal 8 — the session intended for wave 10 silently registers in
-      # wave 8 instead, silently corrupting the DAG with no diagnostic.
-      # Same hole on `SESSION 1 010 ...` for the sid → SESSION_*[010] sites.
-      # Same audit class as bug-194/196/197. (bug-197)
       sw=$((10#$sw))
       sid=$((10#$sid))
-      # bug-193's stated intent included this length check ("Also reject
-      # empty truncated rows ... for parity with the heredoc's `if
-      # len(parts) < 6: continue`"), but the implementation only added
-      # field-defaulting via `${N:-}` plus the numeric guard on sw/sid.
-      # The length check itself was never written, so a truncated row
-      # like `SESSION 1 5` (only 3 fields after SESSION; sw=1, sid=5
-      # both numeric, but sfile/sdeps/sslug/sparallel all empty) passed
-      # the numeric check and registered a session entry with empty file
-      # and empty slug. Downstream the wave loop fanned the session out
-      # with `fname=""`, run_one_session built `session_path="$TRUNK_
-      # SESSIONS_DIR/"` (just the directory), `extract_prompt` ran awk
-      # against a directory and returned empty, and the session failed
-      # with "ERROR: could not extract prompt from <directory>" — a
-      # symptom-level error pointing at the (perfectly valid) prompt-
-      # extraction code instead of naming the malformed plan as the
-      # cause. Same producer-emittable corruption modes as bug-192/193
-      # (partial-flush from a SIGKILL'd `cp`, NFS read racing the
-      # write, schema drift, hand-edit). Mirror the heredoc's check
-      # explicitly so the bash side rejects the same shapes the Python
-      # consumer already rejects — `set -- $_rest` exposes `$#` for the
-      # field count after splitting. (bug-195)
       if [[ $# -lt 6 ]]; then
         continue
       fi
@@ -700,9 +520,7 @@ if $SEQUENTIAL; then
         _new_wave=$((_new_wave + 1))
         _SEQ_WAVE_IDS[$_new_wave]="$_sid"
         _SEQ_SESSION_WAVE_OF[$_sid]="$_new_wave"
-        # Mirror epic-dag.py emit_bash: empty model/cli become `-` so a
-        # downstream re-parse via `set -- $line` can't shift cli into the
-        # model slot. (bug-076)
+        # Mirror epic-dag.py emit_bash sentinel for empty model/cli. (bug-076)
         _seq_model="${SESSION_MODEL_BY_ID[$_sid]:-}"
         _seq_cli="${SESSION_CLI_BY_ID[$_sid]:-}"
         [[ -z "$_seq_model" ]] && _seq_model="-"
@@ -777,87 +595,22 @@ fi
 WORKTREE_BASE="$(dirname "$ORIG_REPO_ROOT")/.epic-worktrees/$(basename "$ORIG_REPO_ROOT")"
 TRUNK_WORKTREE_DIR=""
 
-# Clean up stale session worktrees from previous runs.
-# IMPORTANT: scope by ${BRANCH_SANITIZED}-- so multi-epic repos don't
-# cross-purge each other's worktrees. WORKTREE_BASE is shared across all
-# epics in a repo, so an unscoped `*--sNN-*` glob would match (and delete)
-# sibling epics' per-session worktrees whose ids happen not to be in the
-# *current* epic's DAG — including ones holding uncommitted work.
+# Clean up stale session worktrees from prior runs. Scope by
+# ${BRANCH_SANITIZED}-- — WORKTREE_BASE is shared across epics in the
+# repo so an unscoped glob would cross-purge siblings' work.
 if [[ -d "$WORKTREE_BASE" ]]; then
   log "Scanning for stale session worktrees..."
 
-  # Get list of current session IDs from DAG
   current_session_ids=""
   while IFS= read -r line; do
-    # Skip empty/blank lines BEFORE `set -- $line`. With an empty $line, the
-    # `set --` (no args) clears positional params, and the next `case "$1"`
-    # references an unset positional under the runner-wide `set -u` —
-    # raising `$1: unbound variable` and crashing the entire runner with
-    # rc=1 before any worktree is touched.
-    #
-    # epic-dag.py emit_bash never emits blank lines under happy path, but
-    # the same producer-emittable corruption modes bug-192/193/195/196
-    # already enumerate (partial-flush from a SIGKILL'd `cp` mid-write of
-    # the plan file, NFS read racing the write, schema drift from a future
-    # writer that adds blank-line padding for readability, hand-edit for
-    # debugging) all leave a blank line in the otherwise well-formed
-    # plan file. The two PYTHON consumers of the same plan file
-    # (parse_bash_plan in epic-ui.py and the status-init heredoc in
-    # run-sessions.sh) both `line.strip()` before any startswith check, so
-    # blank lines are skipped cleanly there. The bash-side SESSION-row
-    # parser at line ~474 also handles blank lines cleanly via `case
-    # "$line" in "META "*) ... "WAVE "*) ... "SESSION "*) ...` (none of
-    # which match an empty pattern, so the whole case falls through). This
-    # cleanup loop was the only consumer that ran with `set -- $line`
-    # AHEAD of any whitespace/non-empty check — same audit class as
-    # bug-192/193/195/196 (every consumer of producer-emitted plan-file
-    # data must reject inputs the consumer can't interpret), and the only
-    # bash-side reader still vulnerable to the corruption shapes those
-    # bugs already documented. (bug-198)
+    # Reject blank/truncated/non-numeric rows BEFORE `set -- $line` so
+    # corrupted plan files don't crash the runner under set -u, and so
+    # the sid match below stays in sync with the bash-side `10#`-decoded
+    # subscripts. (bugs 198, 199, 203)
     [[ -z "$line" ]] && continue
     set -- $line
-    # Default `$3` via `${3:-}` so a truncated `SESSION` / `SESSION 1`
-    # row (only 1-2 fields after split) doesn't trip `set -u` on bare
-    # `$3` BEFORE the loop continues. bug-199 patched the same loop's
-    # blank-line crash, but the truncated-row case was missed: a
-    # producer-emittable corruption (partial-flush from a SIGKILL'd
-    # `cp` mid-write of the plan file, NFS read racing the write,
-    # schema drift from a future writer, hand-edit for debugging) can
-    # leave a SESSION line with fewer than 3 fields, and the bare `$3`
-    # access raises `$3: unbound variable` under the runner-wide
-    # `set -u`, crashing the entire runner with rc=1 BEFORE any
-    # worktree is touched. Same audit class as bug-193/195/199 — every
-    # bash-side consumer of producer-emitted plan-file data must
-    # reject inputs the consumer can't interpret. The well-formed
-    # SESSION rows in the same file still register their sid, so the
-    # cleanup loop degrades gracefully (an empty default for the
-    # truncated row is a no-op for the regex match at the stale-id
-    # comparison below) instead of failing wholesale.
     case "$1" in
       SESSION)
-        # Normalize the sid via `10#` so a producer-emittable corruption
-        # like `SESSION 1 010 ...` (leading-zero sid from a partial-flush,
-        # NFS read race, schema drift, or hand-edit — same modes the
-        # rest of the bug-192/193/195/196/197/199/200 audit chain
-        # enumerates) registers as the integer 10 here too. Without
-        # normalization, `current_session_ids` accumulates the raw
-        # ` 010` token, while the per-worktree `stale_id` below at
-        # line ~851 IS already `10#`-normalized via `$((10#$stale_id))`
-        # — the substring regex match `[[ " 010 " =~ " 10 " ]]` then
-        # silently fails (the pattern ` 10 ` requires a space before
-        # `10`, but in ` 010 ` the `10` is preceded by `0`), the cleanup
-        # loop classifies the corresponding worktree as orphaned even
-        # though it belongs to the current run's DAG, and the safety
-        # guards (is_worktree_in_use, has_unmerged) gate whether
-        # `git worktree remove --force` proceeds — risking silent
-        # destruction of a worktree the runner is about to recreate.
-        # Symmetric audit gap to bug-197's bash-side parser fix at line
-        # 616-617 (which `10#`-normalized the SAME field for the array-
-        # subscript consumer at SESSION_FILE_BASENAME[$sid] but not
-        # for this cleanup-loop consumer). Numeric guard mirrors the
-        # bug-193 SESSION-row regex check so a non-numeric corruption
-        # falls through cleanly instead of letting `$((10#abc))` raise
-        # under `set -e`. (bug-203)
         if [[ "${3:-}" =~ ^[0-9]+$ ]]; then
           current_session_ids="$current_session_ids $((10#${3}))"
         fi
@@ -881,13 +634,8 @@ if [[ -d "$WORKTREE_BASE" ]]; then
       # handled (with their own safety guards) by the per-wave cleanup loop.
       [[ " $current_session_ids " =~ " $stale_id " ]] && continue
 
-      # Apply the same safety guards the per-wave cleanup uses (lines ~850-868).
-      # Without these, removing a session from the epic and re-running silently
-      # destroys uncommitted/unmerged work in that session's worktree, and a
-      # sibling concurrent runner can have its in-flight worktree ripped out
-      # from under it. The per-wave path exits 1 on guard failure (user
-      # explicitly opted into the run); the startup-stale path warns + skips
-      # so a leftover orphan never blocks subsequent epics. (bug-096)
+      # Same safety guards as per-wave cleanup; warn+skip (instead of
+      # exit) so a leftover orphan never blocks subsequent epics. (bug-096)
       if is_worktree_in_use "$stale_wt"; then
         warn "  ⚠ stale worktree for session $stale_id is in use by another process — skipping: $stale_basename"
         warn "    Stop the other runner or remove manually if truly orphaned."
@@ -895,11 +643,7 @@ if [[ -d "$WORKTREE_BASE" ]]; then
         continue
       fi
 
-      # Reconstruct the per-session branch name from the worktree dirname.
-      # The worktree was created as ${BRANCH_SANITIZED}--s${padded}-${slug};
-      # the matching branch was ${BRANCH}--s${padded}-${slug}. Replacing the
-      # sanitized prefix with the real branch name inverts the BRANCH_SANITIZED
-      # transformation without having to re-derive padding/slug separately.
+      # Invert the BRANCH_SANITIZED transform to recover the branch name.
       stale_branch=""
       if [[ "$stale_basename" == "${BRANCH_SANITIZED}"* ]]; then
         stale_branch="${BRANCH}${stale_basename#${BRANCH_SANITIZED}}"
@@ -912,9 +656,7 @@ if [[ -d "$WORKTREE_BASE" ]]; then
       fi
       if $stale_has_unmerged; then
         warn "  ⚠ stale worktree for session $stale_id has unmerged commits on '$stale_branch' — skipping: $stale_basename"
-        # Use ORIG_REPO_ROOT (set at startup) rather than TRUNK_WORKTREE_DIR;
-        # the trunk worktree isn't created until later in the script, so it
-        # is empty here on the very first run of an epic.
+        # ORIG_REPO_ROOT — TRUNK_WORKTREE_DIR isn't created yet on first run.
         warn "    Inspect with: git -C $ORIG_REPO_ROOT log $BRANCH..$stale_branch --oneline"
         warn "    Then delete manually if no longer needed."
         skipped_count=$((skipped_count + 1))
@@ -931,15 +673,9 @@ if [[ -d "$WORKTREE_BASE" ]]; then
   [[ $skipped_count -gt 0 ]] && warn "Skipped $skipped_count stale worktree(s) for safety — see warnings above"
 fi
 
-# BASE_BRANCH default-resolution must run in BOTH worktree and --no-worktree
-# modes. session_completed_on_branch (epic-git.sh) scopes its rev range to
-# `${BASE_BRANCH}..${branch}` only when BASE_BRANCH is non-empty; otherwise it
-# falls back to a bare `git log HEAD` walk that includes main's history, so a
-# prior epic's `feat: Session N — ...` commit on main makes EVERY session
-# false-positive as "already committed" on a fresh resume. Previously this
-# default was nested inside `if $USE_WORKTREE`, leaving --no-worktree mode
-# without an effective base ref and re-introducing the bug-080 scoping
-# regression for the non-worktree code path. (bug-113)
+# Resolve BASE_BRANCH in BOTH worktree modes — session_completed_on_branch
+# falls back to a bare `git log HEAD` walk when empty, re-introducing
+# bug-080 false-positives. (bug-113)
 if [[ -z "$BASE_BRANCH" ]]; then
   BASE_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || true
   [[ -z "$BASE_BRANCH" ]] && BASE_BRANCH="main"
@@ -963,11 +699,9 @@ if $USE_WORKTREE; then
   cd "$TRUNK_WORKTREE_DIR"
   REPO_ROOT="$TRUNK_WORKTREE_DIR"
 
-  # Mirror sessions dir into trunk if absent (uncommitted-source case).
+  # If the prefix strip was a no-op, the paths didn't share a prefix —
+  # almost always a macOS case-insensitive filesystem mismatch.
   TRUNK_SESSIONS_REL="$ORIG_SESSIONS_REL"
-  # Guard: if the strip was a no-op, the paths didn't share a prefix — almost
-  # always a case mismatch on a case-insensitive filesystem (macOS). Fail fast
-  # with a clear message rather than building a malformed //abs/path/inside/dir.
   if [[ "$TRUNK_SESSIONS_REL" == "$ORIG_SESSIONS_DIR" ]]; then
     err "Sessions dir is not under repo root after path canonicalization.
   repo root    : $ORIG_REPO_ROOT
@@ -978,24 +712,14 @@ or ensure the sessions dir path uses the same case as the repo root."
     exit 1
   fi
   TRUNK_SESSIONS_DIR="$TRUNK_WORKTREE_DIR/$TRUNK_SESSIONS_REL"
-  # Always sync session files from the source — overwrite stale copies that
-  # may exist from a prior run with different filenames (e.g. after regenerating
-  # session prompts). Remove old session-*.md files that no longer exist in the
-  # source so awk's prompt-extraction never picks up a stale session file.
   mkdir -p "$TRUNK_SESSIONS_DIR"
   log "Syncing session files into trunk worktree..."
-  # Remove session files present in trunk but absent from source
   for f in "$TRUNK_SESSIONS_DIR"/session-*.md; do
     [[ -e "$f" ]] || continue
     [[ -e "$ORIG_SESSIONS_DIR/$(basename "$f")" ]] || rm -f "$f"
   done
-  # `-p` preserves source mtime so the plan-cache freshness check in
-  # run_one_session (`[[ "$plan_file" -nt "$session_path" ]]`) only invalidates
-  # when the user actually edits the session prompt. Without -p, every run
-  # resets the destination's mtime to "now", so any cached plan from a prior
-  # run looks older than the freshly-copied prompt and the plan phase
-  # re-executes on every resume — exactly the scenario the cache exists for.
-  # (bug-075)
+  # -p preserves mtime so the plan-cache freshness check
+  # (`[[ "$plan_file" -nt "$session_path" ]]`) doesn't invalidate every run. (bug-075)
   cp -p "$ORIG_SESSIONS_DIR"/session-*.md "$TRUNK_SESSIONS_DIR/" 2>/dev/null || true
 
   # Bootstrap commit so per-session worktrees inherit the session files.
@@ -1061,15 +785,9 @@ LIVE_UI=false
 # Copy the dag plan to a stable path (DAG_TMP is deleted on EXIT)
 cp "$DAG_TMP" "$DAG_PLAN_FILE"
 
-# Initialize shared status JSON (all sessions start as "pending").
-# Skip malformed SESSION lines (truncation from a partial-flush, non-numeric
-# wave/id from schema drift or a hand-edit) instead of crashing the heredoc
-# with an unhandled IndexError/ValueError. The shell side does not check
-# this Python's exit code, so a single bad line previously left the status
-# file uninitialized — every session displayed as 'pending' forever in the
-# UI even after completion, defeating the live progress feature for the
-# whole run with no diagnostic. Symmetric to the parse_bash_plan fix in
-# epic-ui.py; same audit class as bug-185/186/188/189.
+# Initialize shared status JSON. Skip malformed SESSION lines instead of
+# crashing — the shell side doesn't check rc, so a bad line would leave
+# every session 'pending' forever in the UI. (bugs 185/186/188/189)
 "$PYTHON_CMD" - "$STATUS_FILE" "$EPIC_NAME_SLUG" "$DAG_PLAN_FILE" <<'PYEOF_INIT'
 import sys, json, time
 sf, epic, pf = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -1082,34 +800,12 @@ with open(pf, encoding='utf-8', errors='replace') as f:
         if len(parts) < 6: continue
         try:
             wn = int(parts[1])
-            int(parts[2])  # validate sid is numeric for parity with the UI consumer
+            int(parts[2])
         except ValueError:
             continue
-        # Normalize sid via int → str round-trip to strip leading zeros.
-        # Bug-197 patched the bash-side parser at line 569-651 to `10#`-
-        # normalize sw/sid (so a producer-emittable corruption like
-        # `SESSION 1 010 ...` registers in WAVE_IDS[1] / SESSION_*[10]
-        # instead of WAVE_IDS[1] / SESSION_*[8]) and the .epic-config.json
-        # / META wave_count / cmdline numeric flags. This heredoc init
-        # was the symmetric audit gap: parts[2] is read verbatim as the
-        # status-file key, so a `010` corruption lands `sessions["010"]`
-        # while every subsequent mark_session call writes `sessions["10"]`
-        # (mark_session uses `str(session_id)` where session_id is the
-        # already-`10#`-normalized bash int). The status file ends up
-        # with both keys — `"010"` (pending forever, orphaned by every
-        # consumer that round-trips the sid through `int`) and `"10"`
-        # (the live entry). The dashboard's parse_bash_plan keys via
-        # `int(parts[2])` and looks up via `str(int(parts[2]))="10"`, so
-        # it never sees the orphan; the pollution survives across the
-        # entire run, the cleanup at the success path's tearstdown
-        # removes only `${STATUS_FILE}` itself but the orphan key already
-        # corrupted any external watcher reading the file mid-run. Same
-        # producer-corruption modes as bug-192/193/195/196/197/199/200
-        # (partial-flush from a SIGKILL'd `cp` mid-write, NFS read race,
-        # schema drift from a future writer, hand-edit for debugging).
-        # The `int(parts[2])` validation above already guarantees the
-        # value is parseable as a base-10 integer; the round-trip here
-        # is purely a string-canonicalisation step. (bug-202)
+        # Round-trip strips leading zeros so the sid key matches mark_session's
+        # already-normalised int — otherwise sessions["010"] and sessions["10"]
+        # diverge and the UI shows the wrong one as pending forever. (bug-202)
         sid, slug = str(int(parts[2])), parts[5]
         sessions[sid] = {
             'status': 'pending', 'slug': slug, 'wave': wn,
@@ -1208,19 +904,16 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 
     slug="${SESSION_SLUG_BY_ID[$sid]}"
     friendly="${slug//-/ }"
-    # Use "--" not "/" as the trunk→session separator so per-session branch
-    # names don't try to nest under the trunk's ref path. Git rejects creating
-    # `epic/shipment-io/s01-charter` while `epic/shipment-io` already exists
-    # as a leaf branch (ref-directory conflict).
+    # `--` not `/` so per-session names don't nest under the trunk ref
+    # (git rejects `foo/bar` when `foo` already exists as a leaf branch).
     sess_branch="${BRANCH}--s$(printf '%02d' "$sid")-${slug}"
     sess_wt_dir_name="${BRANCH_SANITIZED}--s$(printf '%02d' "$sid")-${slug}"
     SESSION_BRANCH_BY_ID[$sid]="$sess_branch"
 
     if $USE_WORKTREE; then
       sess_wt="$WORKTREE_BASE/$sess_wt_dir_name"
-      # Wipe stale worktree from a prior failed run, but only if safe:
-      # 1. No process has a CWD inside it (concurrent runner)
-      # 2. No unmerged commits beyond the trunk branch (uncaptured work)
+      # Wipe stale worktree from a prior failed run, but only if no
+      # process has CWD inside and no unmerged commits exist.
       if [[ -d "$sess_wt" ]]; then
         if is_worktree_in_use "$sess_wt"; then
           err "  ✗ worktree for session $sid is in use by another process: $sess_wt"
@@ -1270,11 +963,8 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     JOB_SIDS+=("$sid")
   done
 
-  # Wait for all jobs in this wave with timeout protection.
-  # Compute effective wave ceiling per-wave so --timeout is never silently
-  # overridden by a hardcoded global. When --wave-timeout was not explicitly
-  # set, auto-derive: ceil(wave_size / MAX_PARALLEL) serial batches × per-session
-  # timeout + 10 min buffer, with a 240-min floor. (bug-083)
+  # Auto-derive wave timeout: ceil(wave_size / MAX_PARALLEL) batches ×
+  # per-session timeout + 10m, floor 240m. (bug-083)
   wave_start=$(date +%s)
   _wave_size="${#IN_RANGE[@]}"
   if $WAVE_TIMEOUT_USER_SET; then
@@ -1298,25 +988,15 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
   heartbeat_iters=0
   while [[ ${#JOB_PIDS[@]} -gt 0 ]]; do
     wave_elapsed=$(($(date +%s) - wave_start))
-    # Treat wave_timeout=0 as DISABLED (consistent with --timeout 0 = disabled
-    # per session). Without this gate, an explicit `--wave-timeout 0` (or a
-    # `.epic-config.json` `"waveTimeout": 0`) sets WAVE_TIMEOUT_USER_SET=true,
-    # bypasses auto-derive, lands wave_timeout=0, and the comparison
-    # `$wave_elapsed -gt 0` fires after the first 2-second sleep — killing
-    # every in-flight session before it can do any real work and reporting
-    # the epic as failed. (bug-153)
+    # wave_timeout=0 means disabled (matches --timeout 0). (bug-153)
     if [[ $wave_timeout -gt 0 && $wave_elapsed -gt $wave_timeout ]]; then
       err "Wave timeout after $((wave_elapsed / 60)) minutes; killing hung jobs"
-      # Kill, reap, and mark each in-flight session as failed. Without this
-      # the merge phase finds status='running' (neither 'done' nor 'failed'),
-      # falls through silently, EPIC_FAILED stays false, and the epic is
-      # falsely reported as successful at end-of-run.
+      # Mark each killed session 'failed' explicitly — otherwise the
+      # merge phase sees 'running', falls through, and the epic falsely
+      # reports success.
       for _ti in "${!JOB_PIDS[@]}"; do
         _tpid="${JOB_PIDS[$_ti]}"
         _tsid="${JOB_SIDS[$_ti]}"
-        # Recursive process-tree kill — covers --timeout wrapper grandchildren
-        # (subshell → `timeout` → `claude`) that pkill -P alone would leave
-        # orphaned at PID 1. See kill_tree in epic-wave.sh. (bug-073)
         kill_tree "$_tpid"
         wait "$_tpid" 2>/dev/null || true
         _telapsed=$(( $(date +%s) - ${SESSION_START_TS[$_tsid]:-0} ))
@@ -1337,9 +1017,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
     if [[ ${#JOB_PIDS[@]} -gt 0 ]]; then
       sleep 2
       heartbeat_iters=$((heartbeat_iters + 1))
-      # Heartbeat every ~60s (30 × 2s) so the runner doesn't look dead when
-      # a long session is in flight. Suppressed under LIVE_UI; the dashboard
-      # already shows per-session progress there.
+      # Heartbeat every ~60s so the runner doesn't look dead.
       if ! $LIVE_UI && (( heartbeat_iters % 30 == 0 )); then
         running_list=""
         for psid in "${JOB_SIDS[@]}"; do
@@ -1383,11 +1061,8 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
             auto_resolve_wolf_conflicts "$TRUNK_WORKTREE_DIR" "theirs" || _resolve_rc=$?
             if [[ $_resolve_rc -eq 0 ]]; then
               warn "  ⚠ auto-resolving .wolf/ conflicts for session $(printf '%02d' "$sid") (metadata files only)"
-              # Wrap the auto-resolve commit in an `if` so a hook failure,
-              # GPG signing failure, or index lock contention does not abort
-              # the runner mid-wave under `set -e` — that path skipped
-              # write_epic_result and left external watchers polling for a
-              # result file that was never written. (bug-077)
+              # `if` wrap — a hook/signing/lock failure here would otherwise
+              # abort under set -e and skip write_epic_result. (bug-077)
               if git -C "$TRUNK_WORKTREE_DIR" commit -q \
                   -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved]
 
@@ -1405,12 +1080,8 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
                 break
               fi
             elif [[ $_resolve_rc -eq 2 ]]; then
-              # No conflict markers found, but git merge still returned
-              # non-zero. Most likely cause: index.lock held by another
-              # process, or a dirty/staged state that prevented the merge
-              # from starting. A merge-in-progress state does not exist,
-              # so `merge --abort` must NOT be called here (it would fail
-              # on a non-existent merge and produce a confusing extra error).
+              # No markers but merge failed — likely index.lock or dirty
+              # tree. Don't call `merge --abort` (no merge in progress).
               err "  ⇢ MERGE FAILED for session $(printf '%02d' "$sid") — no conflict markers found"
               err "      Likely cause: git index.lock contention or dirty working tree"
               err "      Trunk worktree: $TRUNK_WORKTREE_DIR"
@@ -1498,14 +1169,9 @@ if ! $EPIC_FAILED; then
   fi
   ok "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # --- Verify the epic *actually* succeeded across every session ---
-  # `! $EPIC_FAILED` only confirms no session FAILED in this run — it stays
-  # false when sessions are skipped via --start/--end (partial run) or when
-  # the user resumed a prior run. Cleanup deletes the session prompt files
-  # and roadmap handoffs, so doing it on a partial epic destroys scaffolding
-  # the user still needs. Delegate per-session detection to the helper so
-  # AI subject variation (em-dash vs hyphen) and Git Bash on Windows locale
-  # quirks don't false-negative an actually-complete epic.
+  # Verify EVERY session committed — !EPIC_FAILED stays false on partial
+  # runs (--start/--end, resume), so cleanup would otherwise delete
+  # scaffolding the user still needs.
   ALL_SESSIONS_DONE=true
   INCOMPLETE_SESSIONS=()
   for sid in "${!SESSION_SLUG_BY_ID[@]}"; do
@@ -1524,14 +1190,10 @@ if ! $EPIC_FAILED; then
     warn "Re-run to finish the remaining sessions; cleanup runs only when every session has its merge or 'feat: Session N' commit."
     AUTO_PR=false
   else
-    # --- Cleanup: orchestrator artifacts + session scaffolding ---
-    # Remove everything that isn't actual product code from the epic branch so
-    # the final PR diff is clean: dotfile artefacts, session prompt files, and
-    # the per-epic roadmap/handoff directory. Use --keep-session-docs to skip.
+    # Strip scaffolding from the epic branch so the PR diff is clean.
     log "Cleaning up session scaffolding..."
     cd "$REPO_ROOT"
 
-    # 1. Dotfile artefacts (.session-*-plan.md, .epic-*.json, etc.)
     CLEANED=0
     for f in "$TRUNK_SESSIONS_DIR"/.session-* \
               "${STATUS_FILE:-}" "${DAG_PLAN_FILE:-}" \
@@ -1540,19 +1202,15 @@ if ! $EPIC_FAILED; then
     done
     [[ $CLEANED -gt 0 ]] && git add -A 2>/dev/null || true
 
-    # 2. Session prompt files and handoffs (scaffolding, not product code)
     _EPIC_SLUG="$(basename "$TRUNK_SESSIONS_REL")"
     _ROADMAP_REL="docs/roadmap/$_EPIC_SLUG"
     if ! $KEEP_SESSION_DOCS; then
-      # Remove docs/claude-sessions/<epic-name>/ — git rm for tracked files,
-      # then rm -rf to catch untracked stragglers (logs the AI wrote outside
-      # the bootstrap commit, files added but never committed, etc.) before
-      # the worktree teardown might silently leak them.
+      # Dual-removal: git rm for tracked files, then rm -rf for untracked
+      # stragglers the AI wrote outside the bootstrap commit.
       if git ls-files --error-unmatch "$TRUNK_SESSIONS_REL" &>/dev/null 2>&1; then
         git rm -r -q "$TRUNK_SESSIONS_REL" 2>/dev/null || true
       fi
       rm -rf "$REPO_ROOT/$TRUNK_SESSIONS_REL" 2>/dev/null || true
-      # Same dual-removal for docs/roadmap/<epic-name>/.
       if git ls-files --error-unmatch "$_ROADMAP_REL" &>/dev/null 2>&1; then
         git rm -r -q "$_ROADMAP_REL" 2>/dev/null || true
       fi
@@ -1560,27 +1218,8 @@ if ! $EPIC_FAILED; then
     fi
 
     if ! git diff --cached --quiet 2>/dev/null; then
-      # Commit body must reflect what was ACTUALLY cleaned. With
-      # --keep-session-docs the dual-removal block at lines 1546-1560 is
-      # skipped, so the staged deletions at this point are ONLY the dotfile
-      # artefacts swept at line 1539 (.session-*-plan.md, .epic-*.json,
-      # STATUS_FILE, DAG_PLAN_FILE, .lock, .tmp). The previous body claimed
-      # "Removes docs/claude-sessions/${_EPIC_SLUG}/ and any per-epic roadmap
-      # handoffs" verbatim in BOTH branches — the OK message at line 1570
-      # already differentiated the two cases ("session docs preserved via
-      # --keep-session-docs" vs "PR diff contains only product code") but
-      # the commit body was the unaudited site that still claimed the
-      # session-doc removal regardless of the flag. The misleading body
-      # surfaces in the PR diff (a "chore: remove epic session scaffolding"
-      # commit whose tree shows the docs/claude-sessions/* tree intact) and
-      # in `git log` history forever; reviewers reading the commit message
-      # get a wrong picture of what shipped, and a future operator
-      # bisecting for "when did session scaffolding last get removed" lands
-      # on a commit that didn't actually remove it. Same audit class as
-      # bug-205 (success-path "Next step" advice naming the wrong base
-      # branch) — every user-facing string the runner emits must reflect
-      # the actual code path it took, not a single template that happens
-      # to match the most common case.
+      # Branch the commit body so it matches what was actually staged —
+      # with --keep-session-docs only the dotfile artefacts get removed. (bug-218)
       if $KEEP_SESSION_DOCS; then
         git commit -q -m "chore: remove epic orchestrator artefacts
 
@@ -1603,42 +1242,13 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
     fi
   fi
 
-  # --- Pre-PR rebase: replay epic onto latest origin/<default> with .wolf/ auto-resolve ---
-  # This makes the GitHub PR fast-forward-mergeable even if main has advanced
-  # while the epic ran. Conflicts in .wolf/ paths are auto-resolved (theirs);
-  # any non-.wolf/ conflict aborts the rebase cleanly and the unrebased branch
-  # is pushed as-is for manual conflict resolution on GitHub.
+  # Pre-PR rebase onto origin/<base> with .wolf/ auto-resolve so the PR
+  # is fast-forward-mergeable. Non-.wolf/ conflicts abort cleanly.
   REBASE_RESULT="skipped"
-  # Drop the vestigial `command -v gh &>/dev/null` gate. After bug-208 replaced
-  # the `gh repo view --json defaultBranchRef` query inside this block with
-  # `$BASE_BRANCH`, every line below uses only `git fetch` and
-  # `rebase_with_wolf_resolve` — neither of which calls gh. Keeping the gh
-  # check silently disabled auto-rebase for everyone running the runner on a
-  # machine without gh installed (CI, slim Docker images, devs who use git
-  # without gh): the rebase block was skipped, REBASE_RESULT stayed "skipped",
-  # the local branch was pushed unrebased, and the PR was likely not fast-
-  # forward-mergeable — with no diagnostic naming the missing `gh` as the
-  # cause (since the user wasn't asking for a PR; they were asking for the
-  # rebase). bug-208's own commit message flagged this leftover ("kept for
-  # minimum-scope; relaxing it so auto-rebase runs without gh is a separate
-  # UX improvement"). The auto-PR block immediately below STILL keeps its
-  # `command -v gh &>/dev/null` gate because `gh pr create` does need gh —
-  # only the rebase block's gate was vestigial. (bug-210)
   if $AUTO_REBASE; then
-    # Use the runner's already-resolved $BASE_BRANCH (line 943-945: user's
-    # `--base` value, or origin/HEAD's target, or "main" fallback) instead of
-    # re-querying gh's repo default. The trunk worktree was branched off
-    # `$BASE_BRANCH` at line 959; the auto-rebase MUST target the same branch
-    # or it replays the epic's commits onto a different base, introducing
-    # commits-not-in-base churn (when gh-default ⊃ BASE_BRANCH) or producing
-    # conflicts (when BASE_BRANCH and gh-default have diverged). For users
-    # who pass `--base develop` on a repo whose gh-default is main, the
-    # pre-fix code rebased a develop-based epic onto `origin/main` —
-    # silently wrong target with no diagnostic. Mirrors the bug-205 fix at
-    # line 1760, which corrected the human-readable advice string to use
-    # `$BASE_BRANCH` but stopped short of the actual implementation. Same
-    # audit class as bug-122/204/207 (every consumer of "the base branch
-    # the user wanted" must use BASE_BRANCH, not gh's repo default).
+    # $BASE_BRANCH (not gh's repo default) — the trunk worktree was
+    # branched off $BASE_BRANCH; rebasing onto a different ref would
+    # replay onto the wrong base. (bug-208, bug-210)
     REBASE_DEFAULT="$BASE_BRANCH"
     log "Fetching origin/${REBASE_DEFAULT} for pre-PR rebase..."
     if git -C "$REPO_ROOT" fetch -q origin "$REBASE_DEFAULT" 2>/dev/null; then
@@ -1659,69 +1269,21 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
   # --- Auto-PR ---
   if $AUTO_PR && command -v gh &>/dev/null; then
     CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
-    # Use $BASE_BRANCH (the runner's resolved PR target — see line 943-945)
-    # instead of re-querying gh's repo default. The on-default-branch guard
-    # exists to skip PR creation when CURRENT_BRANCH IS the merge target
-    # (degenerate self-merge); after the fix the comparison is against the
-    # actual target, not gh's repo-wide default. Same audit gap as the
-    # auto-rebase site immediately above and the diff-stats / gh pr create
-    # sites below.
     DEFAULT_BRANCH="$BASE_BRANCH"
     if [[ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]]; then
-      # Filter to OPEN PRs only. `gh pr view <branch>` falls back to the most
-      # recently-created CLOSED/MERGED PR when no open PR exists on the branch
-      # (verified empirically: `gh pr view <branch> --json state` returns
-      # `{"state":"MERGED"}` for a previously-merged branch with no open PR).
-      # The previous form took that URL verbatim, the runner reported
-      # "PR already exists: <url>" pointing at the stale merged PR, force-
-      # pushed (or push-fallbacked, post-bug-211) to the branch — which on a
-      # MERGED PR does NOT reopen it; the new commits land on the remote
-      # branch but no PR ever wraps them — and skipped `gh pr create` at
-      # line 1759 because the existing-PR branch had already been taken.
-      # User copy-pasted the printed URL expecting the new work and found
-      # the old merged PR still showing the prior epic. Same audit pattern
-      # as cleanup_merged_epic_branches at epic-git.sh:253, which already
-      # uses `gh pr list --head <br> --state all` and case-matches the state
-      # explicitly — that helper differentiates OPEN/DRAFT (keep) from
-      # MERGED/CLOSED (prune); the auto-PR check at this site needs the
-      # same OPEN-only filter so a stale merged PR does not pre-empt the
-      # new-PR path. Use `gh pr list --head ... --state open` instead;
-      # `.[0].url` returns empty when no open PR exists, falling cleanly
-      # through to the `else` branch where `gh pr create` opens a fresh PR.
-      # (bug-214)
-      EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --state open --json url -q '.[0].url' 2>/dev/null || true)"
+      # --state open: avoid `gh pr view` falling back to a CLOSED/MERGED
+      # PR. --base $BASE_BRANCH: don't grab an OPEN PR that targets a
+      # different base. (bug-215, bug-217)
+      EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --base "$BASE_BRANCH" --state open --json url -q '.[0].url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
         ok "PR already exists: $EXISTING_PR"
-        # Push so the existing PR reflects the latest commits. Four cases:
-        #   1. `@{u}` is not configured — the local branch was created fresh
-        #      from BASE_BRANCH (line 956 path: `git worktree add -b ...`)
-        #      while a PR already exists on the remote. `push -u` sets
-        #      upstream and pushes; if the remote diverges, push fails
-        #      non-FF and `|| warn` surfaces the cause. Without this arm
-        #      the next two arms BOTH fail silently when @{u} is missing:
-        #      `push --force-with-lease` errors with "no upstream branch",
-        #      and `git log '@{u}..HEAD'` returns empty (the 2>/dev/null
-        #      swallows the unresolvable-ref error), the elif test is
-        #      False, no push happens, and the PR stays stale with no
-        #      diagnostic naming the cause.
-        #   2. REBASE_RESULT="ok" — history was rewritten onto a fresh
-        #      origin/<base>; force-with-lease updates the diverged remote.
-        #   3. REBASE_RESULT in {skipped,fetch-failed,conflict} but the
-        #      local branch has commits ahead of `@{u}` — a plain push
-        #      fast-forwards the remote and the PR shows the new commits.
-        #   4. Nothing ahead of `@{u}` — no-op.
-        # Symmetric audit gap to bug-211/212: bug-211 added the case-3
-        # arm but assumed `@{u}` was always configured (the comment
-        # said "Three cases" not naming case 1); the no-upstream case
-        # fell through silently. The new-PR block immediately below
-        # already has the no-`@{u}` arm at line 1712 because brand-new
-        # branches obviously need upstream tracking — but the same
-        # condition also fires in the existing-PR scenario when the
-        # local branch was just created and the remote PR predates it.
-        # Same audit class as bug-204..212: every push site that expects
-        # to update an existing remote ref must reflect the actual
-        # local-vs-remote state, including the "no upstream tracking
-        # configured" case the bug-211 fix didn't reach.
+        # Four push cases, ordered by precondition:
+        #   1. no @{u} — set upstream first (push --force-with-lease and
+        #      `git log @{u}..HEAD` both fail silently otherwise).
+        #   2. REBASE_RESULT=ok — rewritten history; force-with-lease.
+        #   3. commits ahead of @{u} — fast-forward push.
+        #   4. nothing ahead — no-op.
+        # (bug-211, bug-217)
         if ! git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' &>/dev/null; then
           log "Setting upstream for existing PR branch and pushing..."
           git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH" 2>&1 | tail -5 \
@@ -1735,20 +1297,8 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
         fi
       else
         log "Creating pull request..."
-        # If we rebased, the local branch has diverged from any remote tracking ref;
-        # use force-with-lease to update. For a brand-new branch, plain push -u.
-        # Every push site MUST end in `|| warn ...` so a transient push failure
-        # (network blip, hook rejection, large-file rejection, lacking push
-        # permission, etc.) does not crash the runner under `set -euo pipefail`
-        # — the symmetric existing-PR block above (bug-211) already wraps each
-        # push in `2>&1 | tail -5 || warn`, but the new-PR push arms here were
-        # left bare. A bare-push failure aborts the runner BEFORE `gh pr create`
-        # (which has `|| true` to swallow gh's own non-zero exits at line 1743)
-        # AND BEFORE the post-PR cleanup at lines 1758-1819 (trunk worktree
-        # removal, per-session worktree leak detection, cleanup_merged_epic_
-        # branches), leaking the trunk worktree and surfacing a low-level
-        # `git push` stderr instead of a runner-level diagnostic naming what
-        # actually failed. (bug-212)
+        # Every push arm ends in `|| warn` so a transient failure doesn't
+        # abort the runner under set -e and skip the post-PR cleanup. (bug-212)
         if ! git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' &>/dev/null; then
           git -C "$REPO_ROOT" push -u origin "$CURRENT_BRANCH" 2>&1 | tail -5 \
             || warn "Initial push failed; PR creation will likely fail"
@@ -1772,19 +1322,9 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
           SESSION_LIST="
 (No sessions were merged in this run)"
         fi
-        # Prefer `origin/<default>` over the local `<default>` ref for the PR
-        # diff stats. `git fetch --prune` (cleanup_merged_epic_branches at the
-        # tail of the run) updates the remote-tracking ref but does NOT
-        # fast-forward the local one, AND the auto-rebase at line 1589 just
-        # rebased HEAD onto `origin/$REBASE_DEFAULT` — so any time the user's
-        # local `<default>` lags behind origin (very common in worktree
-        # workflows), `<local>...HEAD` walks the merge-base back to the
-        # local tip and the shortstat absorbs every commit that landed on
-        # origin between the two — inflating the PR body's "Stats" section
-        # with churn that isn't part of this epic. Same audit pattern as
-        # cleanup_merged_epic_branches in epic-git.sh:255-258 where the
-        # local-vs-origin lag was already documented; this is the symmetric
-        # site that was missed.
+        # Prefer origin/<default> — local ref lags after fetch --prune
+        # and auto-rebase already lands on origin's tip, so a stale local
+        # ref inflates the PR's stats with unrelated churn. (bug-204)
         DEFAULT_REF="$DEFAULT_BRANCH"
         if git -C "$REPO_ROOT" rev-parse --verify --quiet "origin/$DEFAULT_BRANCH" >/dev/null 2>&1; then
           DEFAULT_REF="origin/$DEFAULT_BRANCH"
@@ -1806,17 +1346,8 @@ ${DIFF_STATS}
 
 🤖 Generated with DAG epic runner"
 
-        # Pass `--base "$BASE_BRANCH"` explicitly. `gh pr create` without
-        # --base defaults to the repo's gh-default branch, which is NOT the
-        # same as the runner's $BASE_BRANCH whenever the user passed `--base
-        # develop` (or any non-default base). Pre-fix, an epic branched off
-        # develop opened a PR against main, the diff stats above were
-        # computed against the wrong base, and the "Next step" advice
-        # string at line 1760 (bug-205) was the only place that named the
-        # right target — every actual implementation site silently used
-        # gh's default. The flag accepts a bare branch name (gh resolves it
-        # against origin) and matches what the bug-205 advice already tells
-        # the user to type when running gh manually.
+        # Explicit --base — without it, gh defaults to its repo-default,
+        # not the runner's $BASE_BRANCH. (bug-208)
         PR_URL="$(gh pr create --base "$BASE_BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2>&1)" || true
         if [[ "$PR_URL" == http* ]]; then
           ok "Pull request created: $PR_URL"
@@ -1837,12 +1368,9 @@ ${DIFF_STATS}
     if $KEEP_WORKTREE; then
       log "Keeping trunk worktree: $TRUNK_WORKTREE_DIR"
     else
-      # Try git's worktree remove first, then plain rm -rf. On Windows,
-      # `git worktree remove --force` regularly fails when antivirus, an
-      # IDE, or another shell holds a handle inside the worktree — and
-      # silently swallowing that error left users with a half-cleaned
-      # scaffolding dir. Surface the failure so they know to retry rather
-      # than wonder why session files persisted on a "successful" run.
+      # `git worktree remove` then rm -rf fallback. On Windows, file
+      # locks (AV, IDE, other shells) regularly block the remove —
+      # surface the failure instead of swallowing it.
       _wt_err="$(mktemp 2>/dev/null || echo "/tmp/wt-rm.$$")"
       if git worktree remove "$TRUNK_WORKTREE_DIR" --force 2>"$_wt_err"; then
         :
@@ -1856,14 +1384,11 @@ ${DIFF_STATS}
       fi
       rm -f "$_wt_err"
       unset _wt_err
-      # Sweep any empty leftover scaffolding under the worktree base
-      # (handles both this run's parent dir and stale dirs from old runs).
+      # Sweep empty scaffolding dirs (this run's parent and stale leftovers).
       _wt_base="$(dirname "$TRUNK_WORKTREE_DIR")"
       if [[ -d "$_wt_base" ]]; then
-        # Remove empty dirs depth-first (-empty + -delete is safe — won't touch non-empty)
         find "$_wt_base" -mindepth 1 -depth -type d -empty -delete 2>/dev/null || true
       fi
-      # Climb upward removing empty parents (e.g. the per-repo or top-level base)
       _wt_parent="$_wt_base"
       while [[ -d "$_wt_parent" ]] && rmdir "$_wt_parent" 2>/dev/null; do
         _wt_parent="$(dirname "$_wt_parent")"
@@ -1873,9 +1398,8 @@ ${DIFF_STATS}
   fi
   git worktree prune 2>/dev/null || true
 
-  # Surface any per-session worktree leaks (silently swallowed during the
-  # wave loop's per-session removal). On Windows these can pile up across
-  # runs because file locks block `git worktree remove` and we don't notice.
+  # Surface per-session worktree leaks (silently swallowed earlier). On
+  # Windows file locks block `git worktree remove` and these pile up.
   if $USE_WORKTREE && ! $KEEP_SESSION_WORKTREES \
      && [[ -n "${WORKTREE_BASE:-}" && -d "$WORKTREE_BASE" ]]; then
     _leaked=0
@@ -1889,22 +1413,12 @@ ${DIFF_STATS}
     unset _leaked _d
   fi
 
-  # --- Post-merge stale-branch cleanup ---
-  # Sweep merged epic branches whose PRs are closed/merged. This catches
-  # both this epic (if user merged the PR before script exit) and any
-  # leftover branches from previous runs.
   cleanup_merged_epic_branches "$ORIG_REPO_ROOT"
 
   ok ""
   ok "Branch ready: $BRANCH"
-  # Use the resolved BASE_BRANCH (line 943-945 detects origin/HEAD or falls
-  # back to "main") rather than hardcoding `main`. On a repo whose default
-  # branch is `master` / `develop` / `trunk`, the previous form silently
-  # printed an unrunnable `gh pr create --base main` — the user copy-pasted
-  # it and got "branch main does not exist on remote", with no signal that
-  # the script's own advice was wrong. BASE_BRANCH is always resolved by
-  # the time we reach this success-path tail (the resolution block at line
-  # 943 runs unconditionally before any worktree setup).
+  # $BASE_BRANCH not "main" — repos using master/develop/trunk would
+  # otherwise get an unrunnable command. (bug-205)
   ok "Next step  : gh pr create --base $BASE_BRANCH --head $BRANCH"
 else
   write_epic_result "failed"
@@ -1913,25 +1427,7 @@ else
   err "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   if [[ -n "$FIRST_FAILED_ID" ]]; then
     err "First failure: session $(printf '%02d' "$FIRST_FAILED_ID")"
-    # Include --base $BASE_BRANCH so a resumed run targets the same base the
-    # original used. Without it, the resume invocation falls back to
-    # `origin/HEAD` or "main" at line 943-945, and on a repo whose default
-    # is `main` while the original epic targeted `develop`/`master`/`trunk`
-    # via `--base`, every base-consuming site silently switches: the auto-
-    # rebase at line 1599 replays onto the wrong target (bug-208's exact
-    # failure), the auto-PR at line 1704 opens against the wrong base,
-    # session_completed_on_branch (epic-git.sh:290 / bug-207) scopes its
-    # rev range against the wrong base — false-positiving sessions whose
-    # subjects appear in the lagging local-vs-origin gap of the new fallback
-    # — and the diff-stats at line 1676 compute against the wrong target.
-    # Symmetric audit gap to bug-205 (which fixed the success-path "Next
-    # step" advice at line 1792 to use `$BASE_BRANCH`) and bug-208 (which
-    # fixed every implementation site); the failure-path resume advice was
-    # the unaudited user-facing string still naming a derived default.
-    # BASE_BRANCH is unconditionally resolved at line 943-945 by the time
-    # we reach this failure-path tail, so the value always names a sensible
-    # remediation — either the user's explicit `--base`, the repo's
-    # origin/HEAD target, or the literal "main" fallback.
+    # Include --base so resume targets the same base the original used. (bug-209)
     err "Resume with: $(basename "$0") $ORIG_SESSIONS_DIR --start $FIRST_FAILED_ID --branch $BRANCH --base $BASE_BRANCH"
   fi
   if $USE_WORKTREE; then

@@ -2,24 +2,11 @@
 # epic-session.sh — Session execution functions for the epic runner.
 # Sourced by run-sessions.sh; all functions share its global scope.
 
-# --- Extract prompt from markdown code fence ---
-# Capture between the first ```md fence and its matching closer. Inner
-# language-tagged code blocks (```bash, ```python, ```diff, …) inside the
-# prompt are tracked via a depth counter so their closing ``` does NOT
-# silently terminate the outer capture — that previously truncated prompts
-# at the first inner code fence with no error. Bare-``` inner blocks are
-# still ambiguous in CommonMark; the template tells users to indent code
-# examples instead.
+# Extract prompt between ```md fences. A depth counter tracks inner
+# language-tagged code blocks so their closer doesn't silently truncate
+# the capture. CRLF is normalised before any anchored compare. (bug-024)
 extract_prompt() {
   local file="$1" content
-  # `sub(/\r$/, "")` normalises CRLF line endings before any anchored
-  # comparison. Without it, awk sees `$0 == "```md\r"` and the literal
-  # match against "```md" fails on Windows/Git-Bash checkouts where
-  # core.autocrlf=true converts session files to CRLF — both this
-  # primary path and the fallback below silently returned empty,
-  # which made run-sessions.sh exit with "Could not extract operator
-  # prompt" before any session ran. Mirrors the bug-024 fix in
-  # epic-dag.py for the Python parser.
   content="$(awk '
     BEGIN { capture=0; depth=0 }
     {
@@ -38,21 +25,9 @@ extract_prompt() {
     }
   ' "$file")"
   if [[ -z "$content" ]]; then
-    # Strip frontmatter and the title line, return the rest.
-    # `awaiting_title` is true ONLY between the frontmatter close and the
-    # first non-blank body line. The title (`^# …`) is stripped only in
-    # that window; any later `# Heading` inside the body is left intact.
-    # The previous version used a single fm_done flag and stripped the
-    # FIRST `# ` heading anywhere after the frontmatter — so a file with
-    # no leading title silently lost its first body section header.
-    #
-    # Initialise awaiting_title=1 so the title-strip window also opens
-    # for files that have NO frontmatter at all. Otherwise the function
-    # docs claim to "strip frontmatter and the title line" but the
-    # frontmatter-less branch never enters awaiting_title and leaks the
-    # leading `# Title` into the model's prompt. Files with a leading
-    # `---` still flip in_fm=1 first, so the awaiting_title window is
-    # correctly re-armed only AFTER the closing `---`. (bug-155)
+    # Fallback: strip frontmatter + title line. awaiting_title only
+    # spans frontmatter-close → first non-blank body line, so later
+    # `# Heading`s aren't stripped. (bug-034, bug-155)
     content="$(awk '
       BEGIN { in_fm=0; awaiting_title=1 }
       { sub(/\r$/, "") }
@@ -69,21 +44,12 @@ extract_prompt() {
   echo "$content"
 }
 
-# Check if a worktree directory is in use by another process.
-# Uses multiple detection methods in order of preference:
-#   1. /proc-based check (Linux/Unix)
-#   2. lsof command (BSD/macOS fallback)
-#   3. fuser command (alternative to lsof)
-# Args: $1 = worktree directory path
-# Returns: 0 if in use, 1 if not in use
+# Returns 0 if any process has CWD inside $1. /proc → lsof → fuser.
 is_worktree_in_use() {
   local wt_dir="$1"
   [[ -d "$wt_dir" ]] || return 1
 
-  # Method 1: Check /proc (Linux/Unix) for any process with CWD in this directory.
-  # Match exact dir OR a path strictly under it ("$wt_dir"/*) — never a bare
-  # prefix glob like "$wt_dir"*, which would match unrelated siblings such as
-  # `…--s01-foo-extra` and falsely block cleanup of `…--s01-foo`.
+  # Anchor the separator — bare prefix glob would match `…-foo-extra`. (bug-022)
   if [[ -d /proc ]]; then
     for proc_dir in /proc/*/cwd; do
       [[ -L "$proc_dir" ]] || continue
@@ -95,14 +61,12 @@ is_worktree_in_use() {
     done
   fi
 
-  # Method 2: Try lsof (macOS/BSD fallback)
   if command -v lsof >/dev/null 2>&1; then
     if lsof +D "$wt_dir" 2>/dev/null | grep -q .; then
       return 0
     fi
   fi
 
-  # Method 3: fuser command (alternative to lsof)
   if command -v fuser >/dev/null 2>&1; then
     if fuser "$wt_dir" >/dev/null 2>&1; then
       return 0
@@ -112,13 +76,9 @@ is_worktree_in_use() {
   return 1
 }
 
-# Look up a session id's handoff file under docs/roadmap/<epic>/.
-# Intra-epic only: the DAG dependency model takes session ids within the
-# current epic, so a cross-epic fallback would only fire when an in-epic
-# parent produced no handoff — and would silently inject an unrelated
-# epic's artifact, framed by build_handoff_section as "the only memory of
-# prior work". Returns empty stdout when not found; build_handoff_section
-# already suppresses the section header in that case. (bug-159)
+# Look up a parent session's handoff. Intra-epic only — a cross-epic
+# fallback would inject an unrelated epic's artifact as "memory of
+# prior work". (bug-159)
 find_handoff_for() {
   local pid="$1" padded cand
   padded="$(printf "%02d" "$pid")"
@@ -126,13 +86,8 @@ find_handoff_for() {
   [[ -f "$cand" ]] && echo "$cand"
 }
 
-# Build the multi-parent handoff section for a session.
-# Emits the "## Previous Session Handoffs" header ONLY when at least one
-# parent has a handoff file on disk. Without this guard, sessions whose
-# parents declined to write a handoff (or whose handoff lives at a path
-# find_handoff_for doesn't probe) saw an orphan header followed by the
-# intro paragraph and no entries — a misleading prompt fragment that
-# hinted at "memory of prior work" the model could not actually access.
+# Build the parent-handoff section. Emits header only when at least one
+# parent has a handoff on disk — orphan headers mislead the model.
 build_handoff_section() {
   local deps_csv="$1"
   local entries="" pid path
@@ -175,11 +130,8 @@ run_cli() {
   fi
   if [[ "$sid" -gt 0 && -n "${SESSION_CLI_BY_ID[$sid]:-}" ]]; then
     session_cli="${SESSION_CLI_BY_ID[$sid]}"
-    # Re-map model if CLI changed (e.g. session overrides cli from opencode to claude
-    # or vice versa — model shorthand depends on which CLI is in use).
-    # Fall back to MODEL_RAW (the user-supplied form before the global map) so
-    # we don't feed the opencode-style id `opencode/claude-sonnet-4` to claude
-    # when the global cli was opencode but this session forces cli: claude.
+    # Re-map from MODEL_RAW so a session overriding cli doesn't inherit
+    # the already-mapped id from the wrong CLI.
     local raw_model_for_remap="${SESSION_MODEL_BY_ID[$sid]:-${MODEL_RAW:-$MODEL}}"
     session_model="$(map_model_shorthand "$raw_model_for_remap" "$session_cli")"
   fi
@@ -214,7 +166,6 @@ run_cli() {
   if [[ -f "$PROGRESS_SCRIPT" ]]; then
     local stderr_tmp="${log_file%.log}-stderr.tmp"
     if [[ "$session_cli" == "claude" ]]; then
-      # Claude Code with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
         ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u CLAUDECODE claude -p \
           "${model_flag[@]}" \
@@ -240,7 +191,6 @@ run_cli() {
       cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
       rm -f "$stderr_tmp"
     else
-      # OpenCode with timeout wrapper
       if [[ "$quiet" == "false" ]]; then
         ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u OPENCODE_SESSION_ID opencode run "${model_flag[@]}" \
           --format json \
@@ -261,7 +211,6 @@ run_cli() {
       rm -f "$stderr_tmp"
     fi
   else
-    # No progress script available
     if [[ "$session_cli" == "claude" ]]; then
       ${timeout_cmd[@]+"${timeout_cmd[@]}"} env -u CLAUDECODE claude -p \
         "${model_flag[@]}" \
@@ -315,27 +264,8 @@ else:
     sys.exit(0)
 try:
     with open(sf, encoding='utf-8') as f: data = json.load(f)
-    # Defend against producer-emitted shapes the consumer can't interpret.
-    # dict.get's default fires only for ABSENT keys, not null values, so
-    # `data['sessions'][sid]` lands None whenever a hand-edit, schema drift,
-    # or out-of-band writer sets the entry to null. The previous
-    # `data['sessions'].setdefault(sid, {})` chain failed three ways:
-    #   • data not a dict (file is `null`/list/str): `data['sessions']`
-    #     raises TypeError on subscript.
-    #   • data['sessions'] is None or non-dict: `.setdefault(...)` raises
-    #     AttributeError.
-    #   • data['sessions'][sid] is null: `setdefault(sid, {})` returns
-    #     None (default fires only for absent keys), then `entry['status']
-    #     = st` raises TypeError ("'NoneType' does not support item
-    #     assignment").
-    # The mark_session heredoc has no try/except around the body, so any
-    # of these propagate out, the Python exits non-zero, and the shell
-    # side doesn't check the exit code — the status update is silently
-    # dropped, the corrupted file is left intact, and every subsequent
-    # mark_session call fails the same way until manual repair. Same
-    # audit class as bug-167/175/178/183/184. Coerce non-dict shapes to
-    # an empty dict at every level so the writer rebuilds the missing
-    # structure rather than crashing on it. (bug-186)
+    # Coerce non-dict shapes at every level — dict.get default only
+    # fires on absent keys, not null values. (bug-186)
     if not isinstance(data, dict):
         data = {}
     sessions_obj = data.get('sessions')
@@ -378,17 +308,9 @@ run_one_session() {
   local sid="$1" wt_dir="$2" friendly="$3" handoff_text="$4" quiet="$5"
   local fname="${SESSION_FILE_BASENAME[$sid]}"
   local session_path="$TRUNK_SESSIONS_DIR/$fname"
-  # Use zero-padded sid for all artifact names so the writer and the
-  # reader (write_epic_result / classify_error) agree on the filename.
   local padded_sid; padded_sid="$(printf '%02d' "$sid")"
-  # Plan markdown is written by Claude inside the session worktree, then
-  # mirrored to the trunk. `claude -p` treats its cwd ($wt_dir) as the
-  # project root and refuses (or silently rewrites) writes to absolute
-  # paths in a sibling worktree even with --dangerously-skip-permissions,
-  # so handing it $TRUNK_SESSIONS_DIR left the trunk file missing and the
-  # runner aborted the plan phase as failed (bug-110). The mirror keeps
-  # the canonical archive in the trunk so resume can find it after the
-  # session worktree is torn down.
+  # Plan written inside session worktree, then mirrored to trunk.
+  # claude -p won't write to absolute paths in a sibling worktree. (bug-110)
   local plan_basename=".session-${padded_sid}-plan.md"
   local plan_file="$TRUNK_SESSIONS_DIR/$plan_basename"
   local plan_file_session="$wt_dir/$plan_basename"
@@ -404,18 +326,8 @@ run_one_session() {
   local prev_cwd; prev_cwd="$(pwd)"
   cd "$wt_dir"
 
-  # ── Resume support ──────────────────────────────────────────────────
-  # Two levels of caching, both controlled by --fresh:
-  #
-  # 1. Skip the entire session if a successful commit already exists on
-  #    the current branch. Detection delegates to session_completed_on_branch
-  #    so it tolerates AI subject-line variation (em-dash vs hyphen vs
-  #    colon) and Git Bash on Windows where regex multibyte handling is
-  #    unreliable. Partial-commits use `feat(partial):` and are NOT
-  #    matched, so they correctly trigger a re-run.
-  # 2. Reuse a cached plan file if it exists, is non-empty, and is
-  #    newer than the session prompt. The mtime check ensures that
-  #    edits to the session prompt invalidate the cached plan.
+  # Resume: skip session if already committed; reuse plan if newer
+  # than prompt. Both gated by --fresh.
   local plan_cached=false
   if ! $FRESH; then
     if session_completed_on_branch "$sid" HEAD "$wt_dir"; then
@@ -433,10 +345,7 @@ run_one_session() {
   local attempt=1
   local max_attempts=$((RETRY + 1))
 
-  # Capture worktree HEAD before the session runs so we can detect a
-  # no-op completion below: a model that returns rc=0 without creating
-  # any files, modifying anything, or committing — the session did
-  # nothing and must not be reported as success.
+  # Baseline for the no-op detector below.
   local baseline_head
   baseline_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
 
@@ -444,11 +353,7 @@ run_one_session() {
     rc=0
     if [[ $attempt -gt 1 ]]; then
       echo "Retry attempt $attempt of $max_attempts" >> "$exec_log"
-      # Re-check plan cache at the start of every retry. If the plan phase
-      # succeeded on a prior attempt (plan_file was written) but execution
-      # failed, reuse the existing plan rather than re-running the plan
-      # phase and wasting tokens — or worse, having the plan phase itself
-      # fail when a valid plan already exists. (bug-088)
+      # Recheck plan cache — if plan succeeded but exec failed, reuse it. (bug-088)
       if ! $plan_cached && ! $SKIP_PLAN && [[ -s "$plan_file" && "$plan_file" -nt "$session_path" ]]; then
         plan_cached=true
         log "  ↻ session ${padded_sid}: reusing plan from prior attempt on retry"
@@ -480,7 +385,6 @@ SINGLE_EOF
       run_claude "$prompt_file" "$exec_log" "S${sid}-EXEC" "$quiet" "$sid" || rc=$?
       rm -f "$prompt_file"
     else
-      # PLAN pass — skipped entirely if a fresh cached plan exists.
       if $plan_cached; then
         local plan_size; plan_size="$(wc -c < "$plan_file" | tr -d ' ')"
         log "  ↻ session ${padded_sid}: reusing cached plan (${plan_size} bytes, mtime newer than prompt)"
@@ -515,10 +419,8 @@ PLAN_EOF
             echo "ERROR: plan phase finished but plan file was not created or is empty: $plan_file_session" >> "$exec_log"
             rc=1
           else
-            # Mirror the freshly-written plan to the trunk archive so
-            # resume can find it after the session worktree is removed,
-            # then drop the session-local copy so the exec phase's
-            # `git add -A` doesn't capture it as a deliverable.
+            # Mirror to trunk so resume finds it after worktree teardown;
+            # drop the session-local copy so exec's `git add -A` skips it.
             mkdir -p "$(dirname "$plan_file")"
             cp -p "$plan_file_session" "$plan_file"
             rm -f "$plan_file_session"
@@ -527,8 +429,6 @@ PLAN_EOF
         rm -f "$prompt_file"
       fi
 
-      # EXECUTE pass — runs whenever we have a usable plan, whether
-      # it was just generated or pulled from cache.
       if [[ $rc -eq 0 ]]; then
         local plan_contents; plan_contents="$(cat "$plan_file")"
         local exec_prompt; exec_prompt="$(cat <<EXEC_EOF
@@ -572,25 +472,20 @@ EXEC_EOF
     sleep 5
   done
 
-  # Auto-commit fallback inside the session worktree with timeout.
-  # Runs regardless of rc — if Claude created files but didn't commit
-  # (timeout, error, or model just forgot the final step), we capture
-  # the work rather than lose it. The merge step later validates via
-  # build/test gates.
+  # Auto-commit fallback — runs regardless of rc so files survive even
+  # when Claude exited without committing. Merge step still validates.
   if $AUTO_COMMIT; then
     if ! git diff --quiet HEAD 2>/dev/null \
        || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
       git add -A
-      # Distinguish auto-recovered work from successful sessions
       local commit_subject="feat: Session ${sid} — ${friendly}"
       local commit_note="Automated execution of $fname."
       if [[ $rc -ne 0 ]]; then
         commit_subject="feat(partial): Session ${sid} — ${friendly}"
         commit_note="Auto-recovered after session exited rc=$rc. Files were created but session did not commit them. Verify before merging."
       fi
-      # Use timeout/gtimeout when available to prevent git commit hanging on index.lock.
-      # Stock macOS has neither; in that case, run git commit directly so the
-      # fallback still captures work instead of failing with command-not-found.
+      # timeout if available — bare commit can hang on index.lock.
+      # Stock macOS has neither timeout nor gtimeout; fall through. (bug-038)
       local commit_timeout_cmd=()
       if command -v timeout >/dev/null 2>&1; then
         commit_timeout_cmd=(timeout 60)
@@ -611,13 +506,8 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
     fi
   fi
 
-  # No-op session guard. If the underlying CLI returned success but the
-  # session produced nothing — no new commits beyond baseline, no diff,
-  # no untracked files — we must NOT report success. Most commonly seen
-  # when the model aborts early (oversized prompt, transient API issue)
-  # but the wrapper still exits 0. Reporting success here corrupts the
-  # epic: dependent sessions read missing artifacts and either stub out
-  # or compound the failure.
+  # No-op guard: rc=0 + zero output = treat as failure. Otherwise
+  # dependent sessions read missing artifacts.
   if [[ $rc -eq 0 && -n "$baseline_head" ]]; then
     local current_head
     current_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
@@ -630,14 +520,8 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
     fi
   fi
 
-  # Deliverables validation. Stronger sibling of the no-op guard above: that
-  # guard only fires when HEAD is unchanged AND the tree is clean, so a
-  # session that committed ONLY its handoff doc + .wolf/* metadata sailed
-  # through. Now we ask the validator whether the session's diff actually
-  # contains real deliverables — either the paths the session declared via
-  # `produces:` frontmatter, or, when nothing was declared, anything
-  # outside .wolf/* and docs/roadmap/*-handoff.md. Authors can opt out per
-  # session with `skip_deliverables_check: true`.
+  # Deliverables validator: catches sessions that committed only handoff
+  # docs + .wolf/* metadata. Opt out with `skip_deliverables_check: true`.
   if [[ $rc -eq 0 && -n "$baseline_head" ]]; then
     local current_head_v
     current_head_v="$(git rev-parse HEAD 2>/dev/null || echo "")"

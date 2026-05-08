@@ -43,9 +43,7 @@ def update_status_file(path: str, session_id: int, update: dict) -> None:
             acquired = True
             break
         except (FileExistsError, OSError):
-            # Recover a lock file left behind by a SIGKILL'd progress process
-            # (SIGKILL bypasses finally, so the lock is never released).
-            # Mirror the same stale-lock logic in mark_session (bug-061 / bug-064).
+            # Recover lock left by SIGKILL (which bypasses finally). (bug-061, bug-064)
             try:
                 if time.time() - os.path.getmtime(lock) > STALE_LOCK_SECS:
                     os.unlink(lock)
@@ -58,23 +56,8 @@ def update_status_file(path: str, session_id: int, update: dict) -> None:
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
         key = str(session_id)
-        # Symmetric guard to mark_session in epic-session.sh. dict.get
-        # AND dict.setdefault both return the EXISTING value when the
-        # key is present — `setdefault('sessions', {})` returns None
-        # whenever data['sessions'] is null (the default fires only for
-        # ABSENT keys, not null values), and the next `.setdefault(...)`
-        # on None raises AttributeError. Same chain at the inner
-        # session entry: a `{"sessions": {"1": null}}` shape lets
-        # `setdefault(key, {})` return None and the next `.update(...)`
-        # raises AttributeError too.
-        # The outer `except Exception: pass` here silently swallows the
-        # crash (best-effort discipline), but the broken state persists
-        # in the file and every subsequent update call fails the same
-        # way — the user loses live progress for the rest of the run
-        # with no diagnostic. Same audit class as bug-167/175/178/183/
-        # 184. Coerce non-dict shapes to {} at every level so the writer
-        # rebuilds the missing structure rather than crashing on it.
-        # (bug-186)
+        # Coerce non-dict shapes — setdefault returns None for null values,
+        # not the default; the broken file would persist otherwise. (bug-186)
         if not isinstance(data, dict):
             data = {}
         sessions_obj = data.get('sessions')
@@ -104,13 +87,8 @@ REFRESH = 0.2  # seconds between spinner frames
 
 def parse_target(tool_name, buf):
     """Extract a human-readable target from accumulated input_json_delta (Claude)."""
-    # `(?:[^"\\]|\\.)*` matches any sequence of non-quote/non-backslash chars OR
-    # an escape pair (backslash + any char). The previous `[^"]*` stopped at the
-    # FIRST '"' byte, including escaped `\"` inside the value — so a Bash command
-    # like `echo "hello world"` (streamed as `"command": "echo \"hello world\""`)
-    # captured only `echo \\` and the UI showed a truncated, garbled target. This
-    # form respects JSON escapes; the json.loads round-trip below converts them
-    # back to the user-visible characters. (bug-116)
+    # `(?:[^"\\]|\\.)*` skips escaped `\"` inside the JSON value so the
+    # capture doesn't truncate at the first inner quote. (bug-116)
     patterns = {
         "Read": r'"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"',
         "Edit": r'"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"',
@@ -236,10 +214,7 @@ def main():
     except (OSError, ValueError):
         term_width = 80
 
-    # Cross-platform non-blocking stdin: a reader thread pumps chunks into a
-    # Queue; the main loop polls with a timeout so the spinner animates even
-    # while no events arrive. Replaces select.select(), which only works on
-    # POSIX sockets/pipes — it errors on Windows pipes.
+    # Reader-thread + queue replaces select.select(), which can't read Windows pipes.
     stdin_buffer = sys.stdin.buffer
     chunk_q: queue.Queue = queue.Queue()
 
@@ -257,17 +232,8 @@ def main():
     threading.Thread(target=_reader, daemon=True).start()
     line_buf = ""
     eof = False
-    # Streaming UTF-8 decoder. Buffers partial multi-byte sequences across
-    # chunk boundaries — `read1(65536)` returns whatever the underlying pipe
-    # has available, so a 2/3/4-byte UTF-8 codepoint can land with its first
-    # byte(s) at the tail of one chunk and its remainder at the head of the
-    # next. The previous `chunk.decode("utf-8", errors="replace")` per chunk
-    # treated each fragment as its own complete string, replacing every split
-    # codepoint with `�` on both sides — so any em-dash, smart quote, or
-    # non-ASCII filename Claude streamed near a 64KB boundary landed garbled
-    # in the log file and in the live UI's `target` field. An incremental
-    # decoder defers final="False" calls until enough bytes have arrived to
-    # complete the codepoint, so cross-boundary sequences round-trip cleanly.
+    # Incremental UTF-8 decoder buffers multi-byte codepoints split
+    # across read1() chunk boundaries. (bug-162)
     decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
     try:
@@ -280,15 +246,8 @@ def main():
             if chunk is not None:
                 if not chunk:
                     eof = True
-                    # Flush any trailing bytes the decoder is still buffering
-                    # (partial multi-byte sequence at producer-EOF) so we
-                    # don't silently drop a final character.
+                    # Flush partial multi-byte and trailing partial line.
                     line_buf += decoder.decode(b"", final=True)
-                    # Force-flush any trailing partial line (no final newline)
-                    # so the parse loop drains it before the outer break test
-                    # fires. Without this, a producer that crashes / is killed
-                    # mid-line leaves line_buf non-empty forever and the loop
-                    # spins at REFRESH Hz on stderr indefinitely.
                     if line_buf and not line_buf.endswith("\n"):
                         line_buf += "\n"
                 else:
@@ -304,51 +263,21 @@ def main():
                     except json.JSONDecodeError:
                         continue
 
-                    # `evt = json.loads(line)` succeeds for any valid JSON value,
-                    # not just objects — `null` → None, `"str"` → str, `[…]` →
-                    # list, `123` → int. The downstream `evt.get("type", "")`
-                    # crashes with AttributeError on every non-dict, propagating
-                    # out of the reader and breaking the producer pipe with
-                    # SIGPIPE — claude/opencode then exits 141 and classify_error
-                    # reports `cli_crash` instead of the real producer-protocol
-                    # cause. Same audit class as bug-167 (`evt.get("error", {})`
-                    # accepted None for `"error": null`); the fix there guarded
-                    # one call site, but the symmetric guard at the OUTER event
-                    # boundary was never added — every nested fetch below
-                    # (content_block, delta, part) was implicitly assuming the
-                    # outer parse already produced a dict. (bug-175)
+                    # json.loads accepts non-dict shapes (null/str/list/int);
+                    # downstream .get(...) would crash and SIGPIPE the CLI. (bug-175)
                     if not isinstance(evt, dict):
                         continue
                     evt_type = evt.get("type", "")
 
-                    # ── Claude stream-json events ──
                     if evt_type == "content_block_start":
-                        # `evt.get("content_block", {})` returns the literal None
-                        # when the producer emits `"content_block": null` (the
-                        # default ONLY fires for absent keys, not null values)
-                        # — same audit class as bug-167. Without the guard, the
-                        # next `cb.get(...)` raises AttributeError, breaks the
-                        # pipe, and the session is misclassified as cli_crash.
-                        # Mirror the bug-167 isinstance(dict) guard. (bug-175)
+                        # isinstance guard — null content_block / non-str
+                        # name would SIGPIPE the CLI. (bug-175, bug-180)
                         cb = evt.get("content_block")
                         if not isinstance(cb, dict):
                             continue
                         if cb.get("type") == "tool_use":
                             step += 1
                             tool_calls += 1
-                            # `cb.get("name", "?")` returns whatever the producer
-                            # sent for `name`. If non-str (None, int, list, dict)
-                            # the value flows into `parse_target(current_tool, …)`
-                            # → `patterns.get(current_tool)` — which raises
-                            # `TypeError: unhashable type` for list/dict,
-                            # breaking the main loop and triggering the SIGPIPE
-                            # → cli_crash chain. Bug-175/176 added isinstance
-                            # guards at the OUTER dict-shaped values (evt,
-                            # content_block, delta, part); this is the symmetric
-                            # guard for the INNER scalar fields. Coerce at the
-                            # boundary so downstream code stays str-safe and
-                            # non-str shapes degrade to the existing `?`
-                            # sentinel. Same audit class. (bug-180)
                             raw_name = cb.get("name", "?")
                             current_tool = raw_name if isinstance(raw_name, str) else "?"
                             current_target = ""
@@ -368,32 +297,13 @@ def main():
                                 current_target = ""
 
                     elif evt_type == "content_block_delta":
-                        # Same null-safe guard as content_block_start above —
-                        # `evt.get("delta", {})` returns None for `"delta": null`
-                        # and the next `.get(...)` raises AttributeError,
-                        # breaking the producer pipe with SIGPIPE. (bug-175)
                         delta = evt.get("delta")
                         if not isinstance(delta, dict):
                             continue
                         delta_type = delta.get("type", "")
 
                         if delta_type == "input_json_delta":
-                            # `partial_json` is supposed to be a string fragment
-                            # of the tool's input JSON. dict.get's default fires
-                            # only for ABSENT keys, not null values:
-                            # `"partial_json": null` lands None and `input_buf
-                            # += None` raises TypeError (str-concat with
-                            # NoneType), propagates out of the main loop,
-                            # breaks the producer pipe with SIGPIPE, the AI CLI
-                            # exits 141 and classify_error reports `cli_crash`
-                            # instead of the real producer-protocol cause.
-                            # Truthy non-str shapes (`"partial_json": 5`,
-                            # `["x"]`) crash the same way. Bug-175/176 added
-                            # isinstance(dict) guards at the OUTER dict-shaped
-                            # values (evt, content_block, delta, part); this is
-                            # the symmetric guard for the INNER scalar field
-                            # the earlier audit missed. Same audit class.
-                            # (bug-178)
+                            # str-typed scalar guard — null/non-str crashes concat. (bug-178)
                             pj = delta.get("partial_json", "")
                             if isinstance(pj, str):
                                 input_buf += pj
@@ -410,15 +320,7 @@ def main():
                                         last_status_ts = now
 
                         elif delta_type == "text_delta":
-                            # Same str-safe guard as the partial_json site
-                            # above. dict.get's default fires only for ABSENT
-                            # keys: `"text": null` lands None and
-                            # `log_file.write(None)` raises TypeError
-                            # ("write() argument must be str, not NoneType"),
-                            # propagates out, SIGPIPE, cli_crash. Truthy
-                            # non-str shapes (`"text": 5`, `["x"]`) raise the
-                            # same TypeError on log_file.write. Same audit
-                            # class as bug-175/176/178. (bug-179)
+                            # str-typed scalar guard. (bug-179)
                             text = delta.get("text", "")
                             if isinstance(text, str):
                                 log_file.write(text)
@@ -442,21 +344,11 @@ def main():
                         current_target = ""
 
                     elif evt_type == "tool_use":
-                        # Same null-safe guard — `"part": null` collapses to
-                        # None and the next `.get(...)` crashes the reader,
-                        # breaking the OpenCode pipe with SIGPIPE. (bug-175)
                         part = evt.get("part")
                         if not isinstance(part, dict):
                             continue
-                        # Same str-coerce guard as the Claude
-                        # content_block_start site above.
-                        # `OPENCODE_TOOL_ALIASES.get(raw_tool, raw_tool)` and
-                        # `field_map.get(tool_name, "")` inside
-                        # parse_opencode_target both raise TypeError when
-                        # raw_tool is unhashable (list/dict from a malformed
-                        # producer event). Coerce non-str to the `?` sentinel
-                        # at the boundary so downstream code stays str-safe.
-                        # (bug-180)
+                        # Coerce non-str — list/dict crash dict.get with
+                        # `unhashable type`. (bug-180)
                         raw_tool = part.get("tool", "?")
                         if not isinstance(raw_tool, str):
                             raw_tool = "?"
@@ -475,18 +367,10 @@ def main():
                             last_status_ts = now
 
                     elif evt_type == "text":
-                        # Same null-safe guard for the OpenCode text event.
-                        # (bug-175)
                         part = evt.get("part")
                         if not isinstance(part, dict):
                             continue
-                        # `if text:` (the previous guard) catches None and
-                        # "" but NOT truthy non-str shapes — `"text": 5`,
-                        # `["x"]`, `{"a":1}` all pass through and crash
-                        # log_file.write with TypeError, breaking the
-                        # OpenCode pipe with SIGPIPE. Reject non-str
-                        # alongside the truthy check. Same audit class
-                        # as bug-179 in the Claude branch. (bug-179)
+                        # isinstance + truthy — non-str shapes crash log write. (bug-179)
                         text = part.get("text", "")
                         if isinstance(text, str) and text:
                             log_file.write(text)
@@ -500,20 +384,9 @@ def main():
                             current_target = ""
 
                     elif evt_type == "error":
-                        # `evt.get("error", {})` returns the literal None when the
-                        # producer emits `"error": null` (the default only fires
-                        # for ABSENT keys). The previous `str(err_data)` fallback
-                        # then stringified None to "None", a non-empty string
-                        # that passed the `if err_msg:` gate — corrupting the log
-                        # with `[ERROR] None` and propagating "None" as the
-                        # error_detail in the result file. Same audit class as
-                        # bug-148: every .get(key, default) site that consumes
-                        # a typed value must reject inputs the producer can emit
-                        # but the consumer can't interpret.
-                        # Multi-line messages also need normalisation: classify_error
-                        # uses `grep -oE '^\[ERROR\] .+' | head -1` which truncates
-                        # at the first \n, dropping the rest of the message from
-                        # error_detail (it survives in the log only).
+                        # Reject null/non-{dict,str} — str(None)="None" would
+                        # leak as error_detail. Multi-line normalised because
+                        # classify_error grep'd only the first line. (bug-167)
                         err_data = evt.get("error")
                         err_msg = ""
                         if isinstance(err_data, dict):

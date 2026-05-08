@@ -895,3 +895,170 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+
+## Session: 2026-05-08 21:57
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:06 | Edited scripts/run-sessions.sh | expanded (+28 lines) | ~654 |
+| 22:09 | Created ../../../../tmp/commit-msg-bug-218.txt | — | ~1018 |
+| 22:09 | Session end: 2 writes across 2 files (run-sessions.sh, commit-msg-bug-218.txt) | 11 reads | ~77437 tok |
+
+## Session: 2026-05-08 22:09
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:21 | Edited scripts/lib/epic-git.sh | modified Fx() | ~749 |
+
+## Session: 2026-05-08 22:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 22:21 | Edited scripts/run-sessions.sh | expanded (+21 lines) | ~826 |
+| 22:24 | Edited scripts/lib/epic-git.sh | modified _realpath() | ~42 |
+| 22:24 | Edited scripts/lib/epic-git.sh | modified provision_wolf_merge() | ~536 |
+| 22:25 | Edited scripts/lib/epic-git.sh | modified auto_resolve_wolf_conflicts() | ~138 |
+| 22:25 | Edited scripts/lib/epic-git.sh | 3→2 lines | ~17 |
+| 22:25 | Edited scripts/lib/epic-git.sh | modified rebase_with_wolf_resolve() | ~507 |
+| 22:26 | Edited scripts/lib/epic-git.sh | modified cleanup_merged_epic_branches() | ~726 |
+| 22:27 | Edited scripts/lib/epic-git.sh | modified feat() | ~452 |
+| 22:27 | Edited scripts/run-sessions.sh | removed 14 lines | ~43 |
+| 22:28 | Edited scripts/run-sessions.sh | removed 32 lines | ~59 |
+| 22:28 | Edited scripts/run-sessions.sh | reduced (-8 lines) | ~84 |
+| 22:28 | Edited scripts/run-sessions.sh | removed 15 lines | ~40 |
+| 22:28 | Edited scripts/run-sessions.sh | reduced (-12 lines) | ~76 |
+| 22:29 | Edited scripts/run-sessions.sh | reduced (-14 lines) | ~116 |
+| 22:29 | Edited scripts/run-sessions.sh | 7→3 lines | ~41 |
+| 22:29 | Edited scripts/run-sessions.sh | 5→2 lines | ~38 |
+| 22:29 | Edited scripts/run-sessions.sh | 7→3 lines | ~50 |
+| 22:29 | Edited scripts/run-sessions.sh | modified _on_exit() | ~42 |
+| 22:30 | Edited scripts/run-sessions.sh | reduced (-80 lines) | ~396 |
+| 22:31 | Edited scripts/run-sessions.sh | 7→5 lines | ~74 |
+| 22:31 | Edited scripts/run-sessions.sh | removed 87 lines | ~221 |
+| 22:32 | Edited scripts/run-sessions.sh | 8→3 lines | ~51 |
+| 22:32 | Edited scripts/run-sessions.sh | 6→2 lines | ~26 |
+| 22:32 | Edited scripts/run-sessions.sh | 6→4 lines | ~88 |
+| 22:32 | Edited scripts/run-sessions.sh | reduced (-6 lines) | ~58 |
+| 22:32 | Edited scripts/run-sessions.sh | 9→7 lines | ~81 |
+| 22:32 | Edited scripts/run-sessions.sh | reduced (-10 lines) | ~142 |
+| 22:33 | Edited scripts/run-sessions.sh | reduced (-6 lines) | ~79 |
+| 22:33 | Edited scripts/run-sessions.sh | removed 31 lines | ~108 |
+| 22:33 | Edited scripts/run-sessions.sh | 7→9 lines | ~119 |
+| 22:33 | Edited scripts/run-sessions.sh | 8→5 lines | ~64 |
+| 22:33 | Edited scripts/run-sessions.sh | 7→5 lines | ~73 |
+| 22:33 | Edited scripts/run-sessions.sh | 6→3 lines | ~40 |
+| 22:34 | Edited scripts/run-sessions.sh | DISABLED() → disabled() | ~152 |
+| 22:34 | Edited scripts/run-sessions.sh | 7→5 lines | ~60 |
+| 22:34 | Edited scripts/run-sessions.sh | 8→5 lines | ~99 |
+| 22:34 | Edited scripts/run-sessions.sh | 8→4 lines | ~79 |
+| 22:34 | Edited scripts/run-sessions.sh | 9→4 lines | ~55 |
+| 22:34 | Edited scripts/run-sessions.sh | 6→3 lines | ~33 |
+| 22:35 | Edited scripts/run-sessions.sh | removed 2 lines | ~4 |
+| 22:35 | Edited scripts/run-sessions.sh | reduced (-23 lines) | ~267 |
+| 22:35 | Edited scripts/run-sessions.sh | removed 37 lines | ~110 |
+| 22:36 | Edited scripts/run-sessions.sh | removed 88 lines | ~300 |
+| 22:37 | Edited scripts/run-sessions.sh | reduced (-12 lines) | ~82 |
+| 22:37 | Edited scripts/run-sessions.sh | reduced (-10 lines) | ~68 |
+| 22:37 | Edited scripts/run-sessions.sh | reduced (-9 lines) | ~62 |
+| 22:37 | Edited scripts/run-sessions.sh | 10→7 lines | ~92 |
+| 22:37 | Edited scripts/run-sessions.sh | 11→8 lines | ~89 |
+| 22:37 | Edited scripts/run-sessions.sh | 4→3 lines | ~51 |
+| 22:38 | Edited scripts/run-sessions.sh | reduced (-10 lines) | ~74 |
+| 22:38 | Edited scripts/run-sessions.sh | removed 22 lines | ~83 |
+| 22:38 | Edited scripts/lib/epic-session.sh | modified extract_prompt() | ~74 |
+| 22:39 | Edited scripts/lib/epic-session.sh | reduced (-12 lines) | ~65 |
+| 22:39 | Edited scripts/lib/epic-session.sh | modified is_worktree_in_use() | ~67 |
+| 22:39 | Edited scripts/lib/epic-session.sh | 9→7 lines | ~46 |
+| 22:39 | Edited scripts/lib/epic-session.sh | modified find_handoff_for() | ~49 |
+| 22:39 | Edited scripts/lib/epic-session.sh | modified build_handoff_section() | ~44 |
+| 22:39 | Edited scripts/lib/epic-session.sh | 10→7 lines | ~107 |
+| 22:39 | Edited scripts/lib/epic-session.sh | 3→2 lines | ~23 |
+| 22:40 | Edited scripts/lib/epic-session.sh | 3→2 lines | ~14 |
+| 22:40 | Edited scripts/lib/epic-session.sh | 3→2 lines | ~14 |
+| 22:40 | Edited scripts/lib/epic-session.sh | removed 24 lines | ~60 |
+| 22:40 | Edited scripts/lib/epic-session.sh | modified run_one_session() | ~119 |
+| 22:40 | Edited scripts/lib/epic-session.sh | removed 13 lines | ~36 |
+| 22:40 | Edited scripts/lib/epic-session.sh | 5→2 lines | ~18 |
+| 22:40 | Edited scripts/lib/epic-session.sh | 8→4 lines | ~78 |
+| 22:41 | Edited scripts/lib/epic-session.sh | 3→2 lines | ~10 |
+| 22:41 | Edited scripts/lib/epic-session.sh | 9→7 lines | ~107 |
+| 22:41 | Edited scripts/lib/epic-session.sh | removed 3 lines | ~8 |
+| 22:41 | Edited scripts/lib/epic-session.sh | modified feat() | ~227 |
+| 22:41 | Edited scripts/lib/epic-session.sh | 8→3 lines | ~44 |
+| 22:41 | Edited scripts/lib/epic-session.sh | reduced (-6 lines) | ~53 |
+| 22:42 | Edited scripts/lib/epic-result.sh | removed 8 lines | ~26 |
+| 22:42 | Edited scripts/lib/epic-result.sh | removed 29 lines | ~78 |
+| 22:42 | Edited scripts/lib/epic-result.sh | 9→5 lines | ~73 |
+| 22:42 | Edited scripts/lib/epic-result.sh | 2→1 lines | ~30 |
+| 22:42 | Edited scripts/lib/epic-result.sh | modified write_epic_result() | ~87 |
+| 22:42 | Edited scripts/lib/epic-result.sh | 6→3 lines | ~32 |
+| 22:42 | Edited scripts/lib/epic-result.sh | 2→1 lines | ~5 |
+| 22:43 | Edited scripts/lib/epic-result.sh | 2→1 lines | ~18 |
+| 22:43 | Edited scripts/lib/epic-result.sh | 15→10 lines | ~93 |
+| 22:43 | Edited scripts/lib/epic-result.sh | removed 7 lines | ~11 |
+| 22:43 | Edited scripts/lib/epic-wave.sh | modified kill_tree() | ~40 |
+| 22:43 | Edited scripts/lib/epic-wave.sh | modified add_merged_session() | ~24 |
+| 22:43 | Edited scripts/lib/epic-wave.sh | modified reap_finished_jobs() | ~68 |
+| 22:44 | Edited scripts/epic-dag.py | modified parse_frontmatter() | ~65 |
+| 22:44 | Edited scripts/epic-dag.py | modified _strip_inline_comment() | ~735 |
+| 22:45 | Edited scripts/epic-dag.py | removed 26 lines | ~57 |
+| 22:45 | Edited scripts/epic-dag.py | removed 25 lines | ~41 |
+| 22:45 | Edited scripts/epic-dag.py | modified splitlines() | ~121 |
+| 22:45 | Edited scripts/epic-dag.py | modified in() | ~144 |
+| 22:46 | Edited scripts/epic-dag.py | modified load_sessions() | ~96 |
+| 22:46 | Edited scripts/epic-dag.py | modified match() | ~92 |
+| 22:46 | Edited scripts/epic-dag.py | 10→5 lines | ~59 |
+| 22:46 | Edited scripts/epic-dag.py | modified isinstance() | ~80 |
+| 22:47 | Edited scripts/epic-dag.py | modified isinstance() | ~92 |
+| 22:47 | Edited scripts/epic-dag.py | removed 18 lines | ~52 |
+| 22:47 | Edited scripts/epic-dag.py | modified isinstance() | ~164 |
+| 22:47 | Edited scripts/epic-dag.py | removed 32 lines | ~61 |
+| 22:48 | Edited scripts/epic-dag.py | modified in() | ~75 |
+| 22:48 | Edited scripts/epic-dag.py | reduced (-7 lines) | ~50 |
+| 22:48 | Edited scripts/epic-dag.py | reduced (-7 lines) | ~63 |
+| 22:48 | Edited scripts/epic-dag.py | modified _stem() | ~115 |
+| 22:49 | Edited scripts/epic-dag.py | modified emit_bash() | ~78 |
+| 22:49 | Edited scripts/epic-dag.py | modified main() | ~32 |
+| 22:49 | Edited scripts/epic-progress.py | mark_session() → SIGKILL() | ~42 |
+| 22:49 | Edited scripts/epic-progress.py | removed 19 lines | ~64 |
+| 22:49 | Edited scripts/epic-progress.py | modified parse_target() | ~79 |
+| 22:50 | Edited scripts/epic-progress.py | 5→2 lines | ~35 |
+| 22:50 | Edited scripts/epic-progress.py | reduced (-9 lines) | ~63 |
+| 22:50 | Edited scripts/epic-progress.py | modified endswith() | ~76 |
+| 22:50 | Edited scripts/epic-progress.py | removed 14 lines | ~61 |
+| 22:50 | Edited scripts/epic-progress.py | modified isinstance() | ~156 |
+| 22:51 | Edited scripts/epic-progress.py | modified isinstance() | ~137 |
+| 22:51 | Edited scripts/epic-progress.py | modified isinstance() | ~93 |
+| 22:51 | Edited scripts/epic-progress.py | reduced (-11 lines) | ~95 |
+| 22:51 | Edited scripts/epic-progress.py | reduced (-8 lines) | ~51 |
+| 22:51 | Edited scripts/epic-progress.py | modified isinstance() | ~107 |
+| 22:52 | Edited scripts/epic-ui.py | removed 22 lines | ~56 |
+| 22:52 | Edited scripts/epic-ui.py | removed 18 lines | ~34 |
+| 22:52 | Edited scripts/epic-ui.py | removed 22 lines | ~60 |
+| 22:52 | Edited scripts/epic-ui.py | removed 15 lines | ~33 |
+| 22:53 | Edited scripts/epic-ui.py | modified _get() | ~58 |
+| 22:53 | Edited scripts/epic-ui.py | modified items() | ~55 |
+| 22:53 | Edited scripts/validate-session-deliverables.py | modified _matches_declared() | ~168 |
+| 22:53 | Edited scripts/validate-session-deliverables.py | committed() → moved() | ~57 |
+| 22:54 | Edited scripts/validate-session-deliverables.py | modified _read_diff() | ~90 |
+| 22:54 | Edited scripts/validate-session-deliverables.py | removed 32 lines | ~56 |
+| 22:54 | Edited scripts/validate-session-deliverables.py | removed 20 lines | ~50 |
+| 22:54 | Edited scripts/wolf-merge/merge-wolf-json.py | modified load() | ~35 |
+| 22:55 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bug_signature() | ~54 |
+| 22:55 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bug_id() | ~44 |
+| 22:55 | Edited scripts/wolf-merge/merge-wolf-json.py | removed 20 lines | ~43 |
+| 22:55 | Edited scripts/wolf-merge/merge-wolf-json.py | removed 21 lines | ~52 |
+| 22:56 | Edited scripts/wolf-merge/merge-wolf-json.py | removed 42 lines | ~72 |
+| 22:56 | Edited scripts/wolf-merge/merge-wolf-json.py | removed 19 lines | ~62 |
+| 22:56 | Edited scripts/wolf-merge/merge-wolf-json.py | 7→4 lines | ~62 |
+| 22:56 | Edited scripts/wolf-merge/merge-wolf-json.py | modified _bug_signature() | ~72 |
+| 22:56 | Edited scripts/wolf-merge/merge-wolf-json.py | modified merge_buglog() | ~70 |
+| 22:57 | Edited scripts/run-sprint.sh | modified require_flag_value() | ~41 |
+| 22:57 | Edited scripts/run-sprint.sh | 4→3 lines | ~62 |
+| 22:57 | Edited scripts/wolf-merge/resolve-wolf.sh | removed 13 lines | ~40 |
+| 22:57 | Edited scripts/wolf-merge/resolve-wolf.sh | removed 14 lines | ~50 |
+| 22:57 | Edited scripts/wolf-merge/resolve-wolf.sh | reduced (-7 lines) | ~55 |
+| 22:57 | Edited scripts/wolf-merge/resolve-wolf.sh | 2→1 lines | ~7 |
+| 22:57 | Edited scripts/wolf-merge/resolve-wolf.sh | 2→1 lines | ~11 |
+| 22:57 | Edited scripts/wolf-merge/install-merge-driver.sh | 6→2 lines | ~25 |
+| 22:58 | Session end: 147 writes across 13 files (run-sessions.sh, epic-git.sh, epic-session.sh, epic-result.sh, epic-wave.sh) | 13 reads | ~80904 tok |

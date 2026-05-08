@@ -50,11 +50,7 @@ SESSION_RE = re.compile(r"^session-(\d+)-(.+)\.md$")
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Minimal YAML-frontmatter parser. Stdlib only."""
-    # Normalise line endings before any anchored search. CRLF-encoded files
-    # (Windows checkouts, or anything committed without core.autocrlf) used
-    # to silently fail the `\n---\n` look-ups and return {} — every session
-    # then collapsed to the implicit linear-chain fallback, killing the
-    # user's parallel DAG with no error.
+    # Normalise CRLF — anchored `\n---\n` lookups silently fail otherwise. (bug-024)
     if "\r" in text:
         text = text.replace("\r\n", "\n").replace("\r", "\n")
     if not text.startswith("---\n"):
@@ -71,42 +67,26 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     body = text[body_start:]
 
     def _strip_inline_comment(line: str) -> str:
-        """Remove YAML inline comments ( # ...) while preserving # inside quoted values.
+        """Strip ` # ...` comments while preserving `#` inside quoted values.
 
-        A quote character only opens a string when it sits at the FIRST non-space
-        position of a value (right after `:` or `- `). Mid-token quotes — most
-        commonly an apostrophe in an unquoted scalar like `title: It's a test` —
-        are treated as ordinary characters, so a trailing `# comment` is still
-        stripped instead of being preserved as part of the value. (bug-117)
+        Quotes only open at value-start (after `:` / `- `); mid-token quotes
+        (`title: It's a test`) are scalar chars. Tracks flow_depth for
+        `[...]` / `{...}` entries. (bugs 117, 123, 124, 126, 134, 135, 136)
         """
         stripped = line.lstrip()
         leading_ws = len(line) - len(stripped)
 
         value_start = -1
-        # Accept both `- ` (dash-space) AND `-\t` (dash-tab) as block-list-item
-        # value starts. The block-list parser at the bottom of parse_frontmatter
-        # has accepted `-\t` since bug-127, but the comment-stripper still only
-        # matched ASCII-space, so a `\t-\t"x # y"` row fell through to scalar
-        # mode, in_quote never opened on the following `"`, and the
-        # `#`-stripper truncated the value at the first `#`. Symmetric to
-        # bug-126 in the block-list-item branch. (bug-135)
         if len(stripped) >= 2 and stripped[0] == "-" and stripped[1] in (" ", "\t"):
             value_start = leading_ws + 2
         elif ":" in stripped:
             value_start = line.find(":") + 1
 
-        # Skip BOTH spaces and tabs between the `:`/`- ` separator and the
-        # opening quote of a value. ASCII-space-only previously left
-        # `key:\t"hello # world"` parsed as `hello` — the tab kept value_start
-        # pointing one byte before the `"`, in_quote never opened, and the
-        # `#`-stripper (which DOES accept tab as a separator since bug-124)
-        # then truncated the value at the first `#` inside the string.
-        # Symmetric to bug-124. (bug-126)
         while 0 <= value_start < len(line) and line[value_start] in (" ", "\t"):
             value_start += 1
 
         in_quote: str | None = None
-        flow_depth = 0  # nested `[`/`{` levels; quotes inside open mid-line
+        flow_depth = 0
         scan_start = max(value_start, 1)
         if 0 <= value_start < len(line):
             c0 = line[value_start]
@@ -114,17 +94,6 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 in_quote = c0
                 scan_start = value_start + 1
             elif c0 in ("[", "{"):
-                # Flow-list / flow-map context. Quotes inside `[...]` open
-                # mid-line, not at value_start, so the value-start quote test
-                # above never fires for flow contents. Without explicit flow
-                # tracking, every `"` inside the brackets was walked past as a
-                # scalar character and the first ` #` inside any quoted entry
-                # truncated the line — corrupting the value before the
-                # (quote-aware since bug-132) `_split_flow_list` ever saw it.
-                # `tags: ["a # b", c]` parsed as the string `["a` instead of
-                # the 2-element list, and load_sessions then surfaced the
-                # misleading error 'touches must be a list of globs' against
-                # syntactically valid YAML. (bug-134)
                 flow_depth = 1
                 scan_start = value_start + 1
 
@@ -134,26 +103,14 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             if in_quote is not None:
                 if ch == in_quote:
                     if in_quote == "'":
-                        # YAML 1.2 §7.3.2: backslash is LITERAL inside single-
-                        # quoted strings; the only escape is `''` (two
-                        # apostrophes) for a literal apostrophe. Reusing the
-                        # bug-123 backslash-parity rule for single quotes
-                        # silently kept any value that legitimately ended in
-                        # `\` (Windows-ish paths, regex literals) open and
-                        # leaked the trailing `# comment` into the value.
-                        # Detect `''` and skip both characters; otherwise
-                        # close unconditionally. (bug-136)
+                        # YAML 1.2 §7.3.2: `\` is literal in single-quoted
+                        # strings; only `''` is an escape. (bug-136)
                         if i + 1 < len(line) and line[i + 1] == "'":
                             i += 2
                             continue
                         in_quote = None
                     else:
-                        # Double-quoted: backslash escapes apply. Count the
-                        # run of consecutive `\` immediately before i. Even
-                        # count (incl. zero) means the quote is the actual
-                        # terminator; odd count means the quote is escaped.
-                        # Preserves the bug-123 fix for `\\"` endings. Same
-                        # class as bug-117 in the apostrophe branch. (bug-123)
+                        # Double-quoted: even backslash count = real terminator. (bug-123)
                         bs = 0
                         j = i - 1
                         while j >= 0 and line[j] == "\\":
@@ -173,45 +130,13 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 i += 1
                 continue
             if ch == "#" and line[i - 1] in (" ", "\t"):
-                # YAML 1.2 §6.6 requires whitespace before `#`. The previous
-                # check only matched ASCII space, so a tab-separated comment
-                # (`key: value\t# note`) silently leaked the comment text into
-                # the value — same defect class as bug-117/bug-123 in the
-                # apostrophe and double-quote branches. Tab is the only other
-                # in-line whitespace YAML allows; keep the set explicit so a
-                # newline (impossible here, splitlines() already split on it)
-                # or stray Unicode whitespace can't be misinterpreted as a
-                # separator. (bug-124)
                 return line[:i].rstrip()
             i += 1
         return line
 
     def _unquote_scalar(raw: str) -> str:
-        """Decode a YAML 1.2 quoted scalar to its plain string form.
-
-        bug-123 / bug-136 made `_strip_inline_comment` correctly LOCATE the
-        closing quote of a YAML scalar (handling `\\"` parity in double-quoted
-        strings and `''` escapes in single-quoted strings). But the value
-        extraction at every consumer site was still `v.strip("'\\"")` — a
-        blind two-sided trim of any `'` or `"` chars from the boundary. That
-        broke two ways:
-          1. YAML escapes were never decoded — `"He said \\"hi\\""` returned
-             the raw bytes instead of `He said "hi"`, and `'It''s'` returned
-             `It''s` instead of `It's`.
-          2. Worse, when a value ended with `\\"` (escaped inner quote) right
-             before the closing `"`, the right-hand strip pulled BOTH `"`
-             characters off, exposing the `\\` and dropping the user's
-             intended `"`. So `"He said \\"hi\\""` collapsed to `He said \\"hi\\`
-             — strictly losing data the bug-123 fix had just been written
-             to preserve.
-        This helper is the single decode point: double-quoted (§5.7) handles
-        `\\\\`, `\\"`, `\\n`, `\\t`, `\\r`, `\\0`, `\\a`, `\\b`, `\\v`, `\\f`,
-        `\\e`, `\\/`, with `\\<unknown>` falling through to the literal char so
-        a forwards-compatible escape doesn't crash. Single-quoted (§7.3.2)
-        only honours `''` → `'`. Anything that isn't a recognisable quoted
-        scalar (unquoted, mismatched outer quotes, len < 2) falls back to the
-        historical `strip("'\\"")` so plain bareword values still work. (bug-145)
-        """
+        """Decode a YAML 1.2 quoted scalar — escapes for double-quoted,
+        `''` for single-quoted, fall back to strip("'\"") for unquoted. (bug-145)"""
         if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
             esc = {
                 '\\': '\\', '"': '"', '/': '/',
@@ -245,30 +170,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         return raw.strip("'\"")
 
     def _split_flow_list(s: str) -> list[str]:
-        """Split a `[...]` flow-list body on `,`, respecting quoted spans.
-
-        A blind `s.split(",")` (the previous implementation) splits inside a
-        legitimate quoted item — `["a, b", c]` produced `['a', 'b', 'c']`
-        instead of `['a, b', 'c']`. For a session's `touches:` / `produces:`
-        list this corrupts any path or glob containing a literal comma, and
-        the validator (validate-session-deliverables.py) then false-flags the
-        session because the entries it's matching against were silently
-        rebuilt under different keys. Same defect class as the quote-aware
-        audits already applied to `_strip_inline_comment` (bug-117 apostrophe,
-        bug-123 escaped backslash, bug-124 tab-before-`#`, bug-126
-        tab-after-`:`); this is the remaining unaudited site. (bug-132)
-
-        Track flow_depth so nested `[...]` / `{...}` items aren't split mid-
-        bracket. `_strip_inline_comment` grew flow_depth tracking via bug-134,
-        but `_split_flow_list` was the symmetric site that still walked at
-        depth-blind state — `[[a, b], c]`'s inner body `[a, b], c` produced
-        `['[a', 'b]', 'c']` instead of `['[a, b]', 'c']`, silently corrupting
-        any nested-flow entry in `touches:` / `produces:` / `depends_on:`.
-        Open-bracket bumps depth, close-bracket decrements; comma is a real
-        item separator only when in_q is None AND flow_depth == 0. Same audit
-        class as bug-117/123/124/126/132 — every parser site that consumes a
-        token boundary must respect quotes AND flow nesting. (bug-149)
-        """
+        """Split `[...]` body on `,`, respecting quotes and nested flow. (bug-132, bug-149)"""
         items: list[str] = []
         buf = ""
         in_q: str | None = None
@@ -281,14 +183,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 buf += ch
                 if ch == in_q:
                     if in_q == "'":
-                        # YAML 1.2 single-quoted: backslash is literal; the
-                        # only escape is `''`. Mirror the bug-136 fix in
-                        # `_strip_inline_comment` so a single-quoted entry
-                        # ending in `\` (e.g. a Windows-ish path) closes
-                        # correctly here too. Without this the bug-132
-                        # backslash-parity check kept the entry "open",
-                        # absorbed the comma into the buffer, and merged
-                        # what should have been two list items into one.
+                        # `''` is the only single-quote escape per YAML 1.2 §7.3.2. (bug-136)
                         if i + 1 < n and s[i + 1] == "'":
                             buf += "'"
                             i += 2
@@ -333,15 +228,8 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         raw = _strip_inline_comment(raw)
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
-        # Recognise a block-list item at any indent (any mix of spaces and
-        # tabs), and accept either `- value`, `-\tvalue`, or a bare `-` row.
-        # The previous prefix whitelist `("  - ", "- ", "    - ")` only
-        # covered 0/2/4-space indents, so a perfectly normal 3-space or
-        # tab-indented `produces:` list silently dropped every item, leaving
-        # `result['produces'] = []`. Downstream that took
-        # validate-session-deliverables.py through the metadata-only fallback
-        # and rubber-stamped sessions whose `produces:` declaration was being
-        # ignored. (bug-127)
+        # Accept block-list items at any indent (spaces or tabs) — a fixed
+        # whitelist would silently drop 3-space or tab-indented entries. (bug-127)
         lstripped = raw.lstrip(" \t")
         if lstripped == "-" or lstripped.startswith(("- ", "-\t")):
             item = _unquote_scalar(lstripped[1:].strip())
@@ -361,20 +249,12 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             inner = v[1:-1].strip()
             result[k] = _split_flow_list(inner) if inner else []
         elif v.lower() in ("true", "false", "yes", "no", "on", "off", "y", "n"):
-            # YAML 1.1 boolean spellings (yes/no/on/off + y/n shorthand)
-            # join true/false in the parser whitelist. Without this, a
-            # frontmatter line like `parallel_safe: no` falls through to
-            # the string branch and load_sessions's `bool(...)` coerces
-            # the non-empty string to True — silently inverting the user's
-            # explicit "do not run me in parallel" intent. (bug-097)
+            # YAML 1.1 booleans — without this whitelist, `parallel_safe: no`
+            # falls through to bool("no") = True. (bug-097)
             result[k] = v.lower() in ("true", "yes", "on", "y")
         elif (v.startswith("-") and v[1:].isdigit()) or v.isdigit():
-            # Accept at most one leading sign. The previous test
-            # `v.lstrip('-').isdigit()` strips ALL leading dashes, so values
-            # like `--3` or `---5` pass the predicate and then crash int() with
-            # an unhandled ValueError, which propagates out through main() and
-            # surfaces in run-sessions.sh as a bare 'DAG validation failed'
-            # with the actual cause hidden in stderr. (bug-114)
+            # At most one leading sign — `lstrip('-').isdigit()` accepts
+            # `--3` and crashes int(). (bug-114)
             result[k] = int(v)
         else:
             result[k] = _unquote_scalar(v)
@@ -384,21 +264,8 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
     sessions: list[dict[str, Any]] = []
     operator: str | None = None
-    # Track every session id we've already accepted so two files claiming the
-    # same NN are rejected before they can ever reach build_dag/compute_waves.
-    # Without this, sorted(...) by id leaves both files in `sessions`, the
-    # implicit-dep chain at the bottom of this function makes the second one
-    # `depends_on=[N]` (i.e. on itself, since the prior list element shares
-    # the same id) and build_dag prints the misleading error
-    # "session NN cannot depend on itself" — pointing the user at a YAML
-    # frontmatter problem when the actual issue is duplicate filenames.
-    # With explicit `depends_on: []` the misleading error never fires and
-    # the bug is worse: emit_bash writes two SESSION rows with the same id,
-    # the runner's META parser overwrites SESSION_FILE_BASENAME[N] /
-    # SESSION_SLUG_BY_ID[N] with whichever line came last (silently dropping
-    # the first file), AND appends both ids to WAVE_IDS[N], so the wave
-    # loop in run-sessions.sh attempts to create the same per-session
-    # worktree twice — racing against the in-flight first session. (bug-133)
+    # Reject duplicate session ids — emit_bash would otherwise write two
+    # SESSION rows that race the per-session worktree creation. (bug-133)
     seen_ids: dict[int, str] = {}
     for entry in sorted(os.listdir(sessions_dir)):
         m = SESSION_RE.match(entry)
@@ -407,15 +274,8 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         path = os.path.join(sessions_dir, entry)
         sid = int(m.group(1))
         slug = m.group(2)
-        # Whitelist [A-Za-z0-9._-] for slugs. Rejects:
-        #   space — breaks `set -- $_rest` field splitting in run-sessions.sh (bug-062)
-        #   pipe  — breaks `|`-delimited result rows in epic-result.sh (bug-082)
-        #   tab   — breaks IFS word-splitting of SESSION lines in run-sessions.sh
-        #   glob meta (* ? [ ]) — silently expands during `set -- $_rest` if the
-        #     cwd contains matching files, corrupting later columns (bug-092)
-        #   shell meta ($ ` ; & < > etc) — defensive; never used in real slugs
-        # The same whitelist also keeps sess_branch and sess_wt_dir_name
-        # construction in run-sessions.sh:837-838 safe by construction.
+        # [A-Za-z0-9._-] only — rejects shell meta, IFS chars, glob chars
+        # that would corrupt SESSION-row word-splitting downstream. (bugs 062, 082, 092)
         if not re.match(r"^[A-Za-z0-9._-]+$", slug):
             safe_suggestion = re.sub(r"[^A-Za-z0-9._-]", "-", slug)
             raise SystemExit(
@@ -432,26 +292,14 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         if sid == 0:
             operator = path
             continue
-        # `utf-8-sig` strips an optional leading UTF-8 BOM (﻿) on read.
-        # Files saved by Windows editors (Notepad, some VS Code configs) with
-        # "UTF-8 with BOM" prepend \xef\xbb\xbf; `encoding="utf-8"` leaves it
-        # in `text`, causing `text.startswith("---\n")` to fail and returning {}
-        # — the session silently loses depends_on/parallel_safe and the whole DAG
-        # collapses to the implicit linear chain with no error. (bug-081)
+        # utf-8-sig strips Windows-editor BOM that breaks `---\n` lookup. (bug-081)
         with open(path, encoding="utf-8-sig") as f:
             text = f.read()
         fm, _ = parse_frontmatter(text)
         fm_session = fm.get("session")
         if fm_session is not None:
-            # Mirror the bug-142 guard for title/model/cli. parse_frontmatter's
-            # YAML 1.1 boolean whitelist coerces `session: y` / `session: no`
-            # / `session: on` to True / False, and `int(True) == 1` so the
-            # try/except below would NOT fire — control would fall through to
-            # the id-vs-filename check at line ~376 which then raises the
-            # misleading error "declares session=True but filename says 02",
-            # pointing the user at a session/filename mismatch when the real
-            # cause is a YAML 1.1 boolean trap. Same audit class as bug-142.
-            # (bug-146)
+            # Reject bool first — int(True)==1 would slip past the try/except
+            # and surface a misleading session/filename mismatch error. (bug-146)
             if isinstance(fm_session, bool):
                 raise SystemExit(
                     f"ERROR: {entry} session: must be a numeric session id, "
@@ -477,22 +325,8 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
         if implicit:
             deps: list[int] = []
         else:
-            # Reject non-list shapes BEFORE the iteration. Same audit class as
-            # bug-097/142/146/164: every fm.get site that consumes a typed
-            # value must reject inputs the parser can produce but the consumer
-            # can't interpret. Two silent-wrong shapes the previous
-            # `[int(d) for d in deps_raw]` accepted:
-            #   1. Quoted string: `depends_on: "12"` parses to the string
-            #      "12" (bug-145's _unquote_scalar strips the quotes), and
-            #      the list-comprehension iterates it CHAR-BY-CHAR — yielding
-            #      `[1, 2]` (deps on sessions 1 AND 2) instead of either an
-            #      error or the intended `[12]`. Silently wrong DAG topology.
-            #   2. YAML 1.1 boolean: `depends_on: yes`/`no`/`on`/etc. coerces
-            #      to True/False (bug-097), the list-comp's `for d in True`
-            #      raises TypeError, the existing except prints "got True" —
-            #      correct error but doesn't name the YAML 1.1 trap, leaving
-            #      the user to guess. Mirror bug-142/146's bool-name-first
-            #      pattern so the cause is surfaced before the type-error.
+            # Reject non-list shapes — quoted-string `"12"` would iterate
+            # char-by-char into deps=[1,2]. (bug-165)
             if isinstance(deps_raw, bool):
                 raise SystemExit(
                     f"ERROR: {entry} depends_on must be a list of session "
@@ -516,23 +350,8 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                     f"ERROR: {entry} depends_on must be a list of session numbers; "
                     f"got {deps_raw!r}"
                 ) from exc
-        # `fm.get("touches", []) or []` silently coerced any falsy non-list to
-        # an empty list — `touches: false`/`no`/`off` parsed to False, `0`
-        # parsed to int 0, an empty quoted scalar `touches: ""` parsed to "" —
-        # all three were rewritten to `[]` by `or []` and then passed the
-        # isinstance(list) check. The session looked like it had no touches
-        # declared, so the wave-overlap warning (find_overlaps) never fired
-        # against neighbours that genuinely shared the disk region the user
-        # tried to claim. Truthy non-list shapes (True from `touches: yes`,
-        # bare int `touches: 12`, unquoted scalar `touches: foo`) DID fire
-        # the existing isinstance error, but the message ("must be a list
-        # of globs") didn't name the YAML 1.1 boolean trap that maps yes/no/
-        # on/off → bool, so users mistyping a list as a scalar got a
-        # symptom-level error far from the cause. Same audit class as
-        # bug-097/142/146/164/165: every fm.get site that consumes a typed
-        # value must reject inputs the parser can produce but the consumer
-        # can't interpret. Match the bug-164/165 pattern — name the bool
-        # case first (most common cause), then the generic shape error.
+        # Name bool case first — `touches: yes` would otherwise surface as
+        # the symptom-level "must be a list" error. (bug-170)
         touches_raw = fm.get("touches", [])
         if isinstance(touches_raw, bool):
             raise SystemExit(
@@ -551,12 +370,8 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"(`touches: \"src/foo\"`) is not a list."
             )
         touches = touches_raw
-        # Defence-in-depth alongside the bug-097 fix in parse_frontmatter:
-        # any string that survived the boolean-recognition whitelist (typo,
-        # capitalised brand-name like `parallel_safe: Maybe`, accidental
-        # quoting, etc.) would otherwise be silently coerced via bool()
-        # into True. Refuse those explicitly so the user sees a clear error
-        # at validation time instead of mysterious parallel-wave behavior.
+        # Reject string (typo'd boolean) and list/dict/None (empty value
+        # with mistakenly indented children). bool([]) silently inverts. (bug-164)
         ps_raw = fm.get("parallel_safe", True)
         if isinstance(ps_raw, str):
             raise SystemExit(
@@ -564,17 +379,6 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"(true/false/yes/no/on/off), got string {ps_raw!r}. "
                 f"Quote the value if you intend it as a literal string."
             )
-        # Reject list / dict / None too. parse_frontmatter assigns `[]` to any
-        # key whose value column is empty (`parallel_safe:` with no value, or
-        # followed by indented block-list items that the user typed by
-        # mistake). The previous guard only caught strings, so the empty-
-        # value case fell through to `bool(ps_raw)` below — `bool([]) is False`
-        # silently inverted the documented default (True), turning a typo into
-        # a serial-wave run with no error. The block-list-items case was
-        # worse: `bool([item]) is True`, masking the typo as success while
-        # the items were thrown away. Same audit class as bug-097/142 —
-        # every fm.get site that consumes a typed value must reject inputs
-        # the parser can produce but the consumer can't interpret. (bug-164)
         if not isinstance(ps_raw, (bool, int)):
             raise SystemExit(
                 f"ERROR: {entry} parallel_safe must be a boolean "
@@ -583,46 +387,9 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"(empty `parallel_safe:`) or has accidental indented children. "
                 f"Either remove the key (defaults to true) or set it to true/false."
             )
-        # Symmetric guard for string-typed fields. parse_frontmatter's YAML 1.1
-        # boolean whitelist (true/false/yes/no/on/off/y/n, added by bug-097 for
-        # parallel_safe) coerces ANY key with one of those values to a Python
-        # bool. Without this guard, `model: yes` becomes True, emit_bash writes
-        # the literal token `True` into the SESSION row, and run_cli passes
-        # `--model True` to claude — which rejects the unknown model id with
-        # an opaque error far from the typo. Run before the cli/model shape
-        # checks below so the YAML 1.1 cause is named first instead of the
-        # downstream "must be 'claude' or 'opencode'" surrogate. (bug-142)
-        #
-        # Reject every other non-string shape too. parse_frontmatter emits
-        # `[]` for any key whose value column is empty (`model:` / `cli:`
-        # with no value, or with indented sub-items the user typo'd
-        # underneath), and `int(...)` for any bare-numeric scalar (`model: 5`).
-        # Both shapes used to slip past the bool-only guard and corrupt the
-        # downstream cli/model checks:
-        #   • `cli: 0` (int) — `cli_raw = 0 or "" = ""` silently coerced to
-        #     auto-detect; the user's explicit (mis-typed) value vanished
-        #     with no error.
-        #   • `cli:` empty + `- claude` (list) — `cli_raw = ['claude']`,
-        #     the value-set check at line ~605 fired with "got ['claude']"
-        #     but never named the list-vs-scalar cause; same for `cli:`
-        #     empty alone (`[]`), which collapsed to "" via `or ""` and
-        #     silently auto-detected.
-        #   • `model:` empty + `- sonnet` (list) — `model_raw = ['sonnet']`,
-        #     `str([...])` survived the regex pre-check but failed it on
-        #     the `[`/`]`/quote characters, surfacing "contains characters
-        #     that break the SESSION row's space-delimited format" — a
-        #     symptom-level error pointing at the SERIALISER when the
-        #     real cause was the user wrote a list, not a scalar.
-        #   • `model: 5` (int) — `str(5) = "5"` passed the regex, the int
-        #     was stored verbatim, emit_bash wrote `5` into the SESSION
-        #     row, and claude rejected the unknown model id far from the
-        #     YAML cause.
-        # Same audit class as bug-097/142/146/164/165/170/171: every fm.get
-        # site that consumes a typed value must reject inputs the parser
-        # can produce but the consumer can't interpret. Mirror the bug-164
-        # / bug-170 pattern — name the bool case first (most common YAML
-        # 1.1 trap), then the generic shape error with both common-cause
-        # remediations (empty key with sub-items, or numeric scalar).
+        # Reject non-string shapes for str-typed keys. YAML 1.1 booleans
+        # (`model: yes` → True), empty values ([]), and bare ints all
+        # corrupt the SESSION row downstream. (bugs 142, 172, 173)
         for _str_key in ("title", "model", "cli"):
             _str_val = fm.get(_str_key)
             if _str_val is None:
@@ -649,15 +416,8 @@ def load_sessions(sessions_dir: str) -> tuple[list[dict[str, Any]], str | None]:
                 f"ERROR: {entry} cli must be 'claude' or 'opencode' (or omit for auto-detect), "
                 f"got {cli_raw!r}"
             )
-        # emit_bash writes a space-delimited SESSION row that run-sessions.sh
-        # parses via `set -- $_rest`, so any whitespace or shell-glob meta in
-        # model shifts every later field one slot left. parse_frontmatter
-        # strips surrounding quotes, so a quoted `model: "Custom Sonnet"` still
-        # arrives here as the bare string `Custom Sonnet`; the bug-076 `-`
-        # sentinel only protects empty fields, not split-able ones. cli is
-        # already pinned to {claude,opencode} above; only model needs the
-        # shape guard. Same defect class as bug-062 (slug spaces) and bug-092
-        # (slug glob meta). (bug-143)
+        # SESSION row is space-delimited — whitespace or shell meta in
+        # model would shift every later field. (bug-143)
         model_raw = fm.get("model", "") or ""
         if model_raw and not re.match(r"^[A-Za-z0-9._/+:-]+$", str(model_raw)):
             raise SystemExit(
@@ -783,28 +543,12 @@ def globs_overlap(a_globs: list[str], b_globs: list[str]) -> bool:
     """
 
     def _stem(g: str) -> str:
-        # `rstrip("/*")` strips ANY trailing `/` or `*` together; the previous
-        # two-pass `rstrip("/").rstrip("*")` left a trailing `/` for single-
-        # star patterns like `src/foo/*` (rstrip("/") was a no-op since the
-        # path ended in `*`, then rstrip("*") stripped the star and exposed
-        # the underlying `/` — final stem `src/foo/`). The trailing slash
-        # then defeated `_is_under`'s `parent + "/"` join: a child `src/foo/
-        # bar` does NOT start with `src/foo//`, so the containment test
-        # returned False whenever fnmatch couldn't catch the overlap by
-        # itself. fnmatch saves most cases (single `*` matches across `/`),
-        # but pure-literal vs single-star pairs fall through to _stem and
-        # the trailing-slash drift quietly under-detects overlap. Combining
-        # both classes into one `rstrip("/*")` strips the star and the slash
-        # in one pass and produces the same result the two-pass form already
-        # produced for `src/foo/`, `src/foo`, and `src/foo/**` — only the
-        # single-star case changes (now `src/foo` with no trailing slash).
+        # rstrip("/*") strips slash + star together; two-pass left
+        # `src/foo/*` as `src/foo/` and broke `_is_under`.
         return g.split("**")[0].rstrip("/*")
 
     def _is_under(child: str, parent: str) -> bool:
-        # Anchor on the path separator so sibling directories that share a
-        # name prefix (e.g. `src/foo` vs `src/foo-extra`) are not falsely
-        # flagged as overlapping. Same class as the bug-022/bug-033 literal-
-        # prefix glob bugs in run-sessions.sh.
+        # Anchor the separator — `src/foo` vs `src/foo-extra`. (bug-022, bug-033)
         return child == parent or child.startswith(parent + "/")
 
     for ag in a_globs:
@@ -843,18 +587,10 @@ def render_ascii(waves: list[list[dict[str, Any]]]) -> str:
 
 
 def emit_bash(plan: dict[str, Any]) -> None:
-    """
-    Emit bash-parseable plan. SESSION lines have been extended with model/cli columns
-    for backward compatibility: older parsers can ignore the extra trailing columns.
+    """Emit bash-parseable plan.
     Format: SESSION <wave> <id> <file> <deps> <slug> <parallel> <model> <cli>
-
-    Empty optional fields (model, cli) are rendered as the sentinel `-`. The
-    bash side splits the SESSION row via unquoted `set -- $_rest`, which
-    collapses consecutive whitespace; an empty middle field would otherwise
-    shift every later field one slot left. With model="" and cli="claude"
-    the row would parse as smodel="claude" / scli="" — silently losing the
-    per-session CLI override and treating "claude" as a model id. Same family
-    as the deps field, which already uses `-` for "no parents". (bug-076)
+    Empty model/cli render as `-` so word-splitting on `set -- $_rest`
+    doesn't shift fields. (bug-076)
     """
     print(f"META operator_path={plan['operator_path']}")
     print(f"META operator_file={os.path.basename(plan['operator_path'])}")
@@ -873,9 +609,7 @@ def emit_bash(plan: dict[str, Any]) -> None:
 
 
 def main() -> None:
-    # On Windows, Python's text-mode stdout translates "\n" to "\r\n", which
-    # breaks downstream bash parsing. Force LF newlines and UTF-8 so the
-    # shell wrapper sees clean output regardless of platform.
+    # Force LF stdout — Windows text-mode would emit CRLF and break bash parsing.
     try:
         sys.stdout.reconfigure(newline="\n", encoding="utf-8")
     except (AttributeError, ValueError):

@@ -2,15 +2,8 @@
 # epic-git.sh — Git/repo utility functions for the epic runner.
 # Sourced by run-sessions.sh; all functions share its global scope.
 
-# Portable realpath that works on macOS (no GNU coreutils by default) and
-# Git Bash on Windows (where paths can be mixed-style).
-#
-# `git rev-parse --show-toplevel` on Git Bash returns Windows-style paths
-# (`C:/foo/bar`) while `pwd` and SESSIONS_DIR use MSYS-style (`/c/foo/bar`).
-# Mixing these silently breaks the `${SESSIONS_DIR#$REPO_ROOT/}` prefix strip
-# downstream. On macOS case-insensitive APFS/HFS+, `pwd` preserves typed case
-# so REPO_ROOT and SESSIONS_DIR can differ only in case, causing a malformed
-# nested-absolute `//…` path. This normalises via grealpath → realpath → python.
+# Portable realpath: macOS lacks GNU coreutils; Git Bash on Windows mixes
+# Windows- and MSYS-style paths which break downstream prefix strips.
 _realpath() {
   if command -v realpath >/dev/null 2>&1; then
     realpath "$1" 2>/dev/null || echo "$1"
@@ -27,34 +20,21 @@ _realpath() {
   fi
 }
 
-# Auto-provision .wolf/ merge auto-resolution for a consuming repo.
-#
-# If the repo has a .wolf/ directory (uses OpenWolf), this function:
-#   1. Syncs bundled scripts from the toolkit into .wolf/scripts/ and scripts/
-#   2. Idempotently appends merge directives to .gitattributes
-#   3. Registers the wolf-json merge driver in local git config
-#
-# All operations are idempotent and silent on no-change. Logs only when
-# new files are written or .gitattributes is updated. Drift is corrected
-# automatically on every epic run (toolkit is the source of truth).
-#
-# Args:
-#   $1 = repo root
+# Sync .wolf/ merge auto-resolution into a consuming repo. Idempotent;
+# the toolkit is source of truth, so drift is corrected every epic run.
 provision_wolf_merge() {
   local repo_root="$1"
   local wolf_dir="$repo_root/.wolf"
-  [[ -d "$wolf_dir" ]] || return 0  # not an OpenWolf repo, no-op
+  [[ -d "$wolf_dir" ]] || return 0
 
   local toolkit_assets="$CLAUDE_PLUGIN_ROOT/scripts/wolf-merge"
-  [[ -d "$toolkit_assets" ]] || return 0  # toolkit not bundled correctly, skip
+  [[ -d "$toolkit_assets" ]] || return 0
 
   local provisioned=0
   mkdir -p "$wolf_dir/scripts" "$repo_root/scripts"
 
-  # Sync each bundled asset; only log when contents actually change.
-  # chmod +x runs unconditionally — it is idempotent and ensures the +x bit
-  # is always present even when file content was already up-to-date
-  # (e.g. after archive extraction that strips exec bits).
+  # chmod runs unconditionally — archive extraction can strip the +x bit
+  # even when content matches.
   _wolf_sync_file() {
     local src="$1" dst="$2"
     if [[ ! -f "$dst" ]] || ! cmp -s "$src" "$dst"; then
@@ -68,8 +48,6 @@ provision_wolf_merge() {
   _wolf_sync_file "$toolkit_assets/install-merge-driver.sh" "$wolf_dir/scripts/install-merge-driver.sh" || true
   _wolf_sync_file "$toolkit_assets/resolve-wolf.sh" "$repo_root/scripts/resolve-wolf.sh" || true
 
-  # Idempotently merge .gitattributes. Skip if any wolf-json driver
-  # directive is already present (managed-block marker OR manual entry).
   local gitattrs="$repo_root/.gitattributes"
   local snippet="$toolkit_assets/gitattributes-snippet"
   if [[ -f "$snippet" ]]; then
@@ -85,10 +63,8 @@ provision_wolf_merge() {
     fi
   fi
 
-  # Register the wolf-json driver in local git config (idempotent, fast).
-  # Guard on -f (file exists), not -x (executable): bash does not require +x
-  # to read a script, and _wolf_sync_file's chmod +x may not have run yet on
-  # this call (e.g. content unchanged but git config drifted).
+  # -f not -x: bash can read scripts without the exec bit and chmod may
+  # not have run if content was unchanged but git config drifted.
   if [[ -f "$wolf_dir/scripts/install-merge-driver.sh" ]]; then
     bash "$wolf_dir/scripts/install-merge-driver.sh" 2>/dev/null || true
   fi
@@ -99,40 +75,17 @@ provision_wolf_merge() {
   unset -f _wolf_sync_file
 }
 
-# Auto-resolve OpenWolf metadata conflicts in the current working dir.
-# .wolf/ files are append-mostly logs (anatomy.md, memory.md, buglog.json)
-# and per-session state (token-ledger.json, hooks/_session.json) — safe to
-# resolve to whichever side the caller prefers.
-#
-# Args:
-#   $1 = working directory (git checkout root)
-#   $2 = preferred side: "ours" or "theirs"
-# Returns:
-#   0 — all conflicts were .wolf/-only and have been resolved+staged
-#   1 — non-.wolf/ conflicts exist (caller must handle)
-#   2 — no conflicts at all
+# Auto-resolve .wolf/ conflicts in $1 to side $2 (ours|theirs).
+# Returns: 0 = wolf-only resolved+staged, 1 = non-wolf conflicts present, 2 = no conflicts.
 auto_resolve_wolf_conflicts() {
   local workdir="$1" side="$2"
   local conflicted non_wolf
-  # `core.quotePath=false`: git's default quotes any path with bytes >= 0x80
-  # (and whitespace/control chars) as `".wolf/foo\xxxx"`. The downstream
-  # `^\.wolf/` filter then misclassifies the quoted line as a non-wolf
-  # conflict (the line starts with `"`, not `.`), the function returns 1,
-  # and the caller bails as if a real code conflict existed — silently
-  # disabling the .wolf/-only auto-resolve for any session whose conflicted
-  # .wolf/ file has a non-ASCII char in its name (em-dash, accented letter,
-  # CJK, smart quote). Same audit class as bug-104/107 in
-  # validate-session-deliverables.py's `_read_diff`; that fix added
-  # `-c core.quotePath=false` to the same `git diff` call shape but stopped
-  # at the validator and missed the symmetric merge-driver path. Forcing
-  # raw bytes here lets the regex compare two consistently-encoded strings,
-  # and the subsequent `git checkout`/`git add` accept the unquoted UTF-8
-  # path as pathspec.
+  # core.quotePath=false: default quoting wraps non-ASCII paths as `"…"`,
+  # which fails the `^\.wolf/` filter and silently misclassifies them. (bug-213)
   conflicted="$(git -C "$workdir" -c core.quotePath=false diff --name-only --diff-filter=U 2>/dev/null || true)"
   [[ -z "$conflicted" ]] && return 2
   non_wolf="$(printf '%s\n' "$conflicted" | grep -Ev '^\.wolf/' | grep -v '^$' || true)"
   [[ -n "$non_wolf" ]] && return 1
-  # All conflicts are .wolf/-only. Resolve each.
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     git -C "$workdir" checkout "--$side" -- "$f" 2>/dev/null || true
@@ -141,44 +94,25 @@ auto_resolve_wolf_conflicts() {
   return 0
 }
 
-# Rebase the current branch onto a target ref, auto-resolving any
-# conflicts that fall entirely within .wolf/ paths. Aborts cleanly if
-# real code conflicts arise.
-#
-# During `git rebase`:
-#   "ours"   = the rebase base (target ref, e.g. origin/main)
-#   "theirs" = the commit being replayed (the epic's commit)
-# We want the epic's wolf state to win, so we use "theirs" for .wolf/.
-#
-# Args:
-#   $1 = working directory
-#   $2 = target ref (e.g. origin/main)
-# Returns:
-#   0 — rebase succeeded (no-op, fast-forward, or with .wolf/ auto-resolve)
-#   1 — rebase aborted due to non-.wolf/ conflicts (workdir restored)
-#   2 — fetch/setup failure (no rebase attempted)
+# Rebase $1 onto $2, auto-resolving conflicts confined to .wolf/ paths.
+# During rebase, "theirs" = the replayed epic commit, which is what we want
+# .wolf/ state to follow. Returns 0 ok, 1 real conflict / fast-fail, 2 unused.
 rebase_with_wolf_resolve() {
   local workdir="$1" target="$2"
-  # Already a descendant of target? No-op.
   if git -C "$workdir" merge-base --is-ancestor "$target" HEAD 2>/dev/null; then
     return 0
   fi
-  # Try clean rebase first
   if git -C "$workdir" -c core.editor=true rebase -q "$target" 2>/dev/null; then
     return 0
   fi
-  # Rebase failed. Distinguish "paused on conflict" (rebase-merge/rebase-apply
-  # exists) from "fast-fail without state" (dirty tree, invalid upstream, etc.
-  # — git refuses before starting). The previous code fell through the conflict
-  # while-loop in the no-state case and returned 0, causing the caller to
-  # force-push un-rebased history while reporting "Rebased onto …". (bug-074)
+  # Distinguish "paused on conflict" from "fast-fail without state" — the
+  # previous bare-fallthrough returned 0 and force-pushed un-rebased history. (bug-074)
   local _rmerge _rapply
   _rmerge="$(git -C "$workdir" rev-parse --git-path rebase-merge 2>/dev/null)"
   _rapply="$(git -C "$workdir" rev-parse --git-path rebase-apply 2>/dev/null)"
   if [[ ! -d "$_rmerge" && ! -d "$_rapply" ]]; then
     return 1
   fi
-  # Rebase paused on conflict. Iterate, resolving .wolf/ conflicts.
   local max_iters=50 i=0
   while [[ -d "$_rmerge" || -d "$_rapply" ]]; do
     i=$((i + 1))
@@ -188,21 +122,19 @@ rebase_with_wolf_resolve() {
     fi
     auto_resolve_wolf_conflicts "$workdir" "theirs"
     case $? in
-      0) # All-wolf resolved; continue rebase
+      0)
         if ! git -C "$workdir" -c core.editor=true rebase --continue 2>/dev/null; then
-          # Continue may have triggered a new conflict — loop will catch it
-          # If there's no new conflict and continue still failed, abort.
           if ! git -C "$workdir" diff --name-only --diff-filter=U 2>/dev/null | grep -q .; then
             git -C "$workdir" rebase --abort 2>/dev/null || true
             return 1
           fi
         fi
         ;;
-      1) # Non-wolf conflicts present; bail
+      1)
         git -C "$workdir" rebase --abort 2>/dev/null || true
         return 1
         ;;
-      2) # No conflicts but rebase still in progress — empty commit?
+      2)
         if ! git -C "$workdir" -c core.editor=true rebase --skip 2>/dev/null \
             && ! git -C "$workdir" -c core.editor=true rebase --continue 2>/dev/null; then
           git -C "$workdir" rebase --abort 2>/dev/null || true
@@ -214,43 +146,34 @@ rebase_with_wolf_resolve() {
   return 0
 }
 
-# Sweep stale `epic/*` branches whose PRs have been merged or closed.
-# After a PR is merged on GitHub, the local epic branch lingers forever
-# unless explicitly cleaned. This runs on every successful epic completion
-# (including this very epic, in case the user merged the PR mid-run).
-#
-# Args:
-#   $1 = repo root
+# Sweep stale epic/* branches whose PRs are merged/closed.
 cleanup_merged_epic_branches() {
   local repo_root="$1"
   command -v gh &>/dev/null || return 0
-  # Fetch with prune so origin/epic/* refs disappear when the remote branch is gone.
   git -C "$repo_root" fetch --prune --quiet origin 2>/dev/null || true
   local default_branch
-  # `gh repo view` does NOT accept -R/--repo (that flag is per-subcommand and
-  # repo-view takes the repo only as a positional). The previous form
-  # `gh -R "$url" repo view ...` failed with `unknown shorthand flag: 'R' in -R`
-  # for every URL form, the `2>/dev/null || echo main` swallowed it, and
-  # default_branch was silently always "main" — so repos whose default is
-  # master/develop/trunk never had their merged epic/* branches reaped via the
-  # no-PR fallback below. Run gh from the repo root via a subshell cd so
-  # auto-detection picks the right repo (matches the two callers in
-  # run-sessions.sh:1261 and :1281). The sibling `pr_state` call below uses
-  # `gh pr list -R …` correctly because pr-list does support -R with URLs.
-  # (bug-122)
+  # `gh repo view` doesn't accept -R; cd into the repo so auto-detect
+  # picks the right one. Without this, default_branch silently fell back
+  # to "main" for master/develop/trunk repos. (bug-122)
   default_branch="$( (cd "$repo_root" && gh repo view --json defaultBranchRef -q '.defaultBranchRef.name') 2>/dev/null || echo main)"
-  local removed=0 br pr_state
+  local removed=0 br pr_state origin_url has_open
+  origin_url="$(git -C "$repo_root" remote get-url origin 2>/dev/null)"
   while IFS= read -r br; do
     [[ -z "$br" ]] && continue
-    # Skip if branch is currently checked out somewhere.
-    # Use -Fx (whole-line match): plain -F does substring matching, so
-    # `epic/foo` would falsely match `branch refs/heads/epic/foo-bar` and
-    # the legitimately-stale `epic/foo` would never be cleaned up.
+    # -Fx (whole-line) — plain -F substring-matches and `epic/foo` would
+    # falsely match `epic/foo-bar`.
     if git -C "$repo_root" worktree list --porcelain 2>/dev/null | grep -qFx "branch refs/heads/$br"; then
       continue
     fi
-    # Query PR state (MERGED or CLOSED is safe to delete; OPEN/DRAFT we keep)
-    pr_state="$(gh -R "$(git -C "$repo_root" remote get-url origin 2>/dev/null)" pr list --head "$br" --state all --json state -q '.[0].state' 2>/dev/null || true)"
+    # Check for ANY open PR before falling through to .[0].state, which
+    # picks the most-recent PR by createdAt — a closed duplicate could
+    # otherwise hide an older still-open PR on a different base. jq's
+    # `length` yields "0" for the empty case; the regex below rejects it.
+    has_open="$(gh -R "$origin_url" pr list --head "$br" --state open --json id -q 'length' 2>/dev/null || echo 0)"
+    if [[ "$has_open" =~ ^[1-9][0-9]*$ ]]; then
+      continue
+    fi
+    pr_state="$(gh -R "$origin_url" pr list --head "$br" --state all --json state -q '.[0].state' 2>/dev/null || true)"
     case "$pr_state" in
       MERGED|CLOSED)
         if git -C "$repo_root" branch -D "$br" &>/dev/null; then
@@ -259,13 +182,9 @@ cleanup_merged_epic_branches() {
         fi
         ;;
       "")
-        # No PR exists. Only delete if the branch is fully merged into default.
-        # Compare against `origin/<default_branch>` rather than the local ref:
-        # `git fetch --prune origin` (line ~194) updates the remote-tracking
-        # branch but does NOT fast-forward the local one. A user whose local
-        # `main` lags behind `origin/main` (very common in worktree workflows)
-        # would otherwise see this guard return false for branches already
-        # merged on origin, leaving stale `epic/*` branches uncleaned.
+        # Compare against origin/<default> — `fetch --prune` doesn't
+        # fast-forward the local ref, so a lagging local `main` would
+        # falsely report not-merged.
         local default_ref="$default_branch"
         if git -C "$repo_root" rev-parse --verify --quiet "origin/$default_branch" >/dev/null 2>&1; then
           default_ref="origin/$default_branch"
@@ -283,24 +202,11 @@ cleanup_merged_epic_branches() {
   return 0
 }
 
-# Returns 0 if session $1 has evidence of completion on branch $2 within
-# repo $3. Combines three signals so prior-run history and AI subject
-# variation don't leave stale scaffolding behind:
-#
-#   1. SESSION_STATUS[$1] == "done" — this run completed it (covers fresh
-#      runs and resume early-returns).
-#   2. Wave merge commit "Merge session NN (slug) into BRANCH" — script-
-#      generated, deterministic; present on every prior run that used
-#      worktree mode (the default). Survives across runs.
-#   3. AI feat commit "feat: Session N <sep>..." with sep matched as any
-#      non-alphanumeric byte. The character class avoids hard-coding
-#      multibyte separators (em-dash, en-dash) which behave differently
-#      across grep locales — Git Bash on Windows often runs grep in the C
-#      locale where a literal em-dash inside a regex character class is
-#      compared byte-by-byte and produces inconsistent matches. Excludes
-#      "feat(partial):" subjects since the auto-commit fallback uses that
-#      prefix when work was recovered but the session didn't actually
-#      finish.
+# Returns 0 if session $1 is already committed on branch $2 in repo $3.
+# Three signals: in-memory status, script-generated wave merge commit,
+# or an AI `feat: Session N` commit (sep is any non-alnum byte to avoid
+# locale issues with em-/en-dash in C-locale grep on Git Bash).
+# Excludes `feat(partial):` since that prefix means recovered-but-unfinished.
 session_completed_on_branch() {
   local sid="$1" branch="$2" repo="$3"
   if [[ "${SESSION_STATUS[$sid]:-}" == "done" ]]; then
@@ -309,46 +215,14 @@ session_completed_on_branch() {
   local padded subjects rev_range
   padded="$(printf '%02d' "$sid")"
 
-  # Scope the subject scan to commits made on the epic branch itself.
-  # Without this, an unscoped `git log $branch` walks back through the
-  # entire base branch (main) history. A single commit anywhere on main
-  # whose subject happens to begin with "feat: Session 1" — for example,
-  # from a previously-merged epic of the same family, or any unrelated
-  # commit using a session-style convention — falsely matches and causes
-  # the runner to silently skip every session's Claude execution as
-  # "already committed on this branch". The fresh per-session worktree
-  # (created at run-sessions.sh:860 from $BRANCH, which was just branched
-  # off $BASE_BRANCH) inherits all of main's history, so the bug fires
-  # on the very first run with no resume artifacts. Limiting to
-  # ${BASE_BRANCH}..${branch} keeps only commits unique to this epic.
+  # Scope to ${BASE_BRANCH}..${branch}. An unscoped log walks back into
+  # main's history and any prior epic's `feat: Session N` subject would
+  # falsely match, silently skipping every session this run. (bug-080)
   rev_range="$branch"
   if [[ -n "${BASE_BRANCH:-}" ]]; then
-    # Prefer `origin/$BASE_BRANCH` over the local `$BASE_BRANCH` ref. The
-    # auto-rebase at run-sessions.sh:1589 lands HEAD on top of
-    # `origin/$REBASE_DEFAULT`, and `git fetch --prune` (via
-    # cleanup_merged_epic_branches at the run's tail and any user-driven
-    # fetch beforehand) updates the remote-tracking ref but does NOT
-    # fast-forward the local one — so on a resume run after a prior auto-
-    # rebase, the trunk worktree's HEAD ancestry passes through origin's
-    # tip-at-rebase-time, NOT through local `$BASE_BRANCH`. Walking
-    # `local-base..HEAD` then walks back to the lagging local tip and the
-    # rev-range absorbs every commit that landed on origin between the
-    # two refs — re-introducing the exact bug-080 false-positive class
-    # the rev-range scope was supposed to prevent: a previously-merged
-    # epic's `feat: Session N ...` subjects on origin/main get walked
-    # into the scan, the helper returns 0 for sessions that never ran on
-    # this branch, and the runner's end-of-epic check at
-    # run-sessions.sh:1512 silently classifies the run as ALL_SESSIONS_DONE
-    # — triggering the cleanup path (lines 1518-1576) that deletes session
-    # prompt files and roadmap handoffs the user still needs for the next
-    # resume attempt. Same audit gap as bug-122 (cleanup_merged_epic_
-    # branches at epic-git.sh:255-258, where `origin/$default_branch` is
-    # already preferred via the same `rev-parse --verify --quiet` probe)
-    # and bug-204 (the auto-PR shortstat at run-sessions.sh:1651-1654);
-    # session_completed_on_branch was the third local-vs-origin call site
-    # the bug-122/204 audit missed. The same fall-through to the local
-    # ref preserves the worktree-only-checkout case (no local ref
-    # configured) that the original guard was added for.
+    # Prefer origin/<base> over the local ref — auto-rebase lands HEAD
+    # on origin's tip and `fetch --prune` doesn't fast-forward the local
+    # branch, so a lagging local `main` would re-introduce bug-080.
     local base_ref=""
     if git -C "$repo" rev-parse --verify --quiet "origin/$BASE_BRANCH" >/dev/null 2>&1; then
       base_ref="origin/$BASE_BRANCH"

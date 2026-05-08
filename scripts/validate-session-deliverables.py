@@ -64,41 +64,15 @@ def _load_dag_module():
 
 
 def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
-    # Try literal equality first so paths containing literal `[` survive — e.g.
-    # Next.js / Remix / Nuxt dynamic-route segments (`app/[id]/page.tsx`),
-    # scaffolded `[generated]` directories, NSwag/OpenAPI output dirs. Without
-    # the literal probe, a bare `[` in the declared path puts us in fnmatch
-    # mode and `[generated]` is interpreted as a character class — the file
-    # ends up flagged as a missing deliverable even though it is plainly in
-    # the diff, failing the session with rc=97. (bug-118)
+    # Literal equality first — bare `[` survives Next.js/Remix dynamic
+    # segments instead of being interpreted as a fnmatch character class. (bug-118)
     literal = [p for p in changed_paths if p == declared]
     if literal:
         return literal
     if not any(c in declared for c in "*?["):
         return []
-    # Glob path. fnmatch.fnmatchcase still mangles `[id]`-style segments when
-    # the declared path mixes a literal bracket with a glob meta — e.g.
-    # `app/[id]/*.tsx` matches `app/i/page.tsx` but not the actual on-disk
-    # `app/[id]/page.tsx`, because fnmatch reads `[id]` as a character class.
-    # bug-118's literal probe doesn't help here: the path isn't exact, so the
-    # session still fails with rc=97 even though the file is plainly in the
-    # diff. Build our own regex that treats `[`/`]` as literal characters and
-    # only `*`/`?` as wildcards. Trade-off: real fnmatch character classes
-    # (`[abc]`, `[a-z]`, `[!x]`) are no longer respected — but in practice
-    # `produces:` never uses them, while Next.js/Remix dynamic-route segments
-    # are common. (bug-141)
-    #
-    # Globstar (`**`) means "zero or more path segments" per gitignore /
-    # npm-glob / extended-glob convention. The naive char-by-char rule
-    # `* → .*` translates `**` into `.*.*`, which still requires at least the
-    # trailing literal `/` to be present in the path — so `app/**/page.tsx`
-    # silently rejects `app/page.tsx` (the zero-segment case the user is
-    # explicitly opting in to with `**`). Pre-rewrite the four globstar
-    # contexts before the char loop so the zero-segment case actually
-    # matches: `/**/` → `(?:/.*)?/`, `**/` at start → `(?:.*/)?`, `/**` at
-    # end → `(?:/.*)?`, bare `**` → `.*`. Single `*` keeps its existing
-    # cross-segment-permissive `.*` translation (changing that would be a
-    # behavior change beyond this bug). (bug-161)
+    # Custom glob: treat `[`/`]` as literal (so `app/[id]/page.tsx` works),
+    # only `*` and `?` are wildcards. `**` is zero-or-more path segments. (bugs 141, 161)
     PH_MID = "\x00GS_MID\x00"
     PH_PREFIX = "\x00GS_PRE\x00"
     PH_SUFFIX = "\x00GS_SUF\x00"
@@ -138,11 +112,8 @@ def _matches_declared(declared: str, changed_paths: list[str]) -> list[str]:
 
 
 def _is_metadata_only(changed_paths: list[str]) -> bool:
-    # Empty diff means the session committed (HEAD changed) but added no files
-    # outside metadata — typically an empty commit or a commit whose only
-    # content was rename-equivalent. The no-op guard in run_one_session passes
-    # because HEAD moved; without treating empty as metadata-only here, the
-    # session would silently sail through deliverables validation too.
+    # Empty diff also counts as metadata-only — HEAD moved (no-op guard
+    # passed) but no real files changed.
     for p in changed_paths:
         if not any(rx.match(p) for rx in HEURISTIC_METADATA_PATTERNS):
             return False
@@ -151,19 +122,8 @@ def _is_metadata_only(changed_paths: list[str]) -> bool:
 
 def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
     """Return (changed_or_added, deleted) paths between base_ref and HEAD."""
-    # core.quotePath=false: git's default quotes any path with bytes >= 0x80
-    # (and whitespace/control chars) as `"src/T\303\253st.cs"`. The exact-match
-    # compare against the unquoted `produces:` entry then silently fails, so
-    # any session that produces a file containing a non-ASCII char (em-dash,
-    # accented letter, CJK) or a literal space gets flagged as "declared
-    # deliverable missing" even when the file is plainly in the diff. Force
-    # raw bytes so the comparison reflects real path identity. (bug-104)
-    #
-    # encoding="utf-8": text=True alone decodes git's stdout via
-    # locale.getpreferredencoding() — cp1252 on Windows / ASCII under LC_ALL=C —
-    # which mangles the very non-ASCII paths bug-104 went out of its way to
-    # preserve. Pin UTF-8 so _matches_declared compares two consistently-decoded
-    # strings on every locale. (bug-107)
+    # core.quotePath=false + encoding="utf-8" — default quoting + locale
+    # decoding both mangle non-ASCII paths. (bugs 104, 107)
     proc = subprocess.run(
         [
             "git",
@@ -226,37 +186,8 @@ def main() -> int:
 
     fm, _ = dag.parse_frontmatter(text)
 
-    # `fm.get("skip_deliverables_check") is True` silently ignored every shape
-    # parse_frontmatter can emit that ISN'T strictly bool True. The user typed
-    # an opt-out, the parser produced something the consumer couldn't interpret,
-    # the consumer fell through and ran validation — which then most likely
-    # FAILED the session (kickoff/docs-only sessions don't have `produces:`
-    # declared, so they hit the metadata-only heuristic). The user saw a
-    # confusing "deliverables missing" / "metadata-only" error AFTER they
-    # explicitly opted out, with no diagnostic naming the YAML cause. Concrete
-    # silent-ignore shapes:
-    #   • `skip_deliverables_check: 1` — int 1 (parse_frontmatter's numeric
-    #     branch); `1 is True` is False → silent run.
-    #   • `skip_deliverables_check: "true"` (quoted) — _unquote_scalar strips
-    #     the quotes BUT only AFTER the YAML 1.1 boolean check (which keys
-    #     on the unstripped raw v.lower() ∈ {"true","yes",...}); the quoted
-    #     `"true"` is not in that whitelist (it includes the quotes), falls
-    #     through to the string branch, lands as the string "true", and
-    #     `"true" is True` is False → silent run. Same for `"yes"`/`"on"`.
-    #   • `skip_deliverables_check:` empty + indented `- true` block items —
-    #     parse_frontmatter assigns `[]` for the empty value column and then
-    #     appends block-list items, yielding `["true"]`; `["true"] is True`
-    #     is False → silent run, with the user's items thrown away.
-    #   • `skip_deliverables_check:` empty alone — `[]`; `[] is True` is False
-    #     → silent run.
-    # Same audit class as bug-097/142/146/164/165/167/170/171/172/173: every
-    # .get(key, default)-style consumer that interprets a typed value must
-    # reject inputs the parser can produce but the consumer can't interpret,
-    # AND the diagnostic must name the parser cause so the user fixes the
-    # YAML, not the symptom. Mirror the bug-170/171 pattern — name bool
-    # spelling first (the YAML 1.1 trap is rare here since `false` is a
-    # legitimate value, but bool-typed shapes that AREN'T True still need
-    # to fall through cleanly), then reject every other non-bool shape.
+    # Reject non-bool shapes — `is True` would silently ignore quoted-string
+    # / int / list opt-outs that the user expected to work. (bug-175)
     skip_raw = fm.get("skip_deliverables_check")
     if skip_raw is not None and not isinstance(skip_raw, bool):
         print(
@@ -279,25 +210,8 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    # `fm.get("produces", []) or []` silently coerced any falsy non-list to
-    # an empty list, falling through to the metadata-only heuristic at the
-    # bottom of main(). Three concrete shapes the parser emits the consumer
-    # couldn't interpret:
-    #   1. `produces: false` / `no` / `off` — YAML 1.1 boolean → False;
-    #      `False or []` → `[]` → metadata-only fallback runs instead of
-    #      declared-deliverables validation, defeating the whole point of
-    #      `produces:`. The session sails through if it touched any non-
-    #      metadata path.
-    #   2. `produces: 0` — int 0; same `0 or []` → `[]` collapse.
-    #   3. `produces: ""` — empty quoted scalar; same `"" or []` collapse.
-    # Truthy non-list shapes (True from `produces: yes`, int N, "foo") DID
-    # hit the isinstance error, but the message didn't name the YAML 1.1
-    # boolean trap, so users mistyping a list as a scalar got a symptom-
-    # level error. Same audit class as bug-097/142/146/164/165 in epic-dag.py
-    # — every fm.get site that consumes a typed value must reject inputs the
-    # parser can produce but the consumer can't interpret. Mirror the
-    # epic-dag.py pattern: name bool first, then generic shape, then accept
-    # the list.
+    # Reject non-list shapes — `produces: false` / `0` / `""` would
+    # silently fall through to the metadata-only heuristic. (bug-171)
     produces = fm.get("produces", [])
     if isinstance(produces, bool):
         print(

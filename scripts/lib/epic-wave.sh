@@ -7,14 +7,8 @@ format_elapsed() {
   printf "%dm%02ds" $((s / 60)) $((s % 60))
 }
 
-# Recursively SIGKILL a process and all its descendants. `pkill -P` only
-# matches DIRECT children, so when --timeout wraps the CLI (subshell →
-# `timeout` → `claude`), pkill -P kills `timeout` and leaves `claude`
-# orphaned to PID 1, where it keeps burning API tokens. Walk the tree
-# leaves-first via pgrep -P so grandchildren are reaped before their
-# parents disappear. Silent and best-effort: missing pgrep / vanished
-# pids are treated as no-ops, never as errors. (bug-073)
-# Args: $1 = root pid
+# Recursive SIGKILL — pkill -P only walks one level, so `timeout`
+# wrapper grandchildren leak as orphans burning API tokens. (bug-073)
 kill_tree() {
   local _pid="$1"
   [[ -z "$_pid" ]] && return 0
@@ -25,9 +19,7 @@ kill_tree() {
   kill -9 "$_pid" 2>/dev/null || true
 }
 
-# Safely add session to MERGED_SESSIONS with validation.
-# Ensures SESSION_FILE_BASENAME is populated; warns and skips if not.
-# Args: $1 = session id
+# Append to MERGED_SESSIONS; warn and skip if filename is empty.
 add_merged_session() {
   local sid="$1"
   local fname="${SESSION_FILE_BASENAME[$sid]:-}"
@@ -38,17 +30,12 @@ add_merged_session() {
   MERGED_SESSIONS+=("$sid $fname")
 }
 
-# Reap any finished jobs from JOB_PIDS[]/JOB_SIDS[], updating SESSION_STATUS.
-# Uses JOB_PIDS[], JOB_SIDS[] (re-initialised per wave) and
-# SESSION_STATUS[], SESSION_ELAPSED_BY_ID[], SESSION_EXIT_BY_ID[] (global).
 reap_finished_jobs() {
   local i new_pids=() new_sids=()
   for i in "${!JOB_PIDS[@]}"; do
     local pid="${JOB_PIDS[$i]}"
-    # Reap if the process is gone OR is a zombie. `kill -0` and bare `ps -p`
-    # both return success for zombies, so neither alone catches an exited
-    # child whose status we haven't yet collected. Reading the process state
-    # column distinguishes them: empty = vanished, leading 'Z' = zombie.
+    # State column distinguishes vanished (empty) from zombie (Z*) —
+    # kill -0 / bare ps -p succeed for both.
     local pstate
     pstate="$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
     if [[ -z "$pstate" || "$pstate" == Z* ]]; then

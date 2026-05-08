@@ -94,15 +94,8 @@ NO_FINAL_PR=false
 DRY_RUN=false
 PASS_THROUGH=()
 
-# Guard value-bearing flags against a missing `$2`. Same audit class as
-# the run-sessions.sh fix (bug-200): a `--branch` / `--sprint-config` /
-# `--timeout` etc. as the LAST argument crashes with `$2: unbound
-# variable` under `set -u` instead of emitting a meaningful "missing
-# value" diagnostic. The bash error names a positional parameter index,
-# not the flag the user typed, so the user has no signal that they
-# forgot a value. The `=`-form branches are unaffected because they
-# read `${1#*=}` which always succeeds (an empty value just produces
-# an empty string, validated downstream).
+# Guard `$2` for value-bearing flags so missing values produce a
+# clear diagnostic instead of `set -u`'s opaque error. (bug-200)
 require_flag_value() {
   if (( $# < 2 )); then
     err "Missing value for $1"
@@ -129,8 +122,7 @@ while [[ $# -gt 0 ]]; do
     --timeout|--retry|--max-parallel|--wave-timeout)
                             require_flag_value "$@"; PASS_THROUGH+=("$1" "$2"); shift 2 ;;
     --timeout=*|--retry=*|--max-parallel=*|--wave-timeout=*)
-                            # Normalize to space form — run-sessions.sh
-                            # accepts `--flag VALUE` only, not `--flag=VALUE`.
+                            # Normalize `=` form — run-sessions.sh only takes the space form.
                             PASS_THROUGH+=("${1%%=*}" "${1#*=}"); shift ;;
     --strict|--sequential|--skip-plan|--no-worktree|--no-rebase|--no-commit|--no-pr|--keep-worktree|--keep-session-worktrees|--keep-session-docs|--fresh|--show-dag)
                             PASS_THROUGH+=("$1"); shift ;;

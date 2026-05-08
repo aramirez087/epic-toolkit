@@ -13,13 +13,7 @@ classify_error() {
     return
   fi
 
-  # 128 + SIGKILL(9) — the wave-timeout reaper at run-sessions.sh:982 force-
-  # kills hung sessions via kill_tree and records 137. SIGKILL'd processes
-  # don't get to write a 'Killed' line to the log (the kernel doesn't, and
-  # bash job-control prints it only for interactive shells), so without an
-  # explicit branch here 137 falls through to the grep heuristics and lands
-  # on either 'cli_crash' or 'unknown' — losing the diagnosis the runner
-  # already prints to the user. (bug-115)
+  # 137 = SIGKILL from the wave-timeout reaper. (bug-115)
   if [[ "$exit_code" -eq 137 ]]; then
     printf '%s\n' "killed by wave timeout (SIGKILL)" > "${log_file}.errtype"
     echo "wave_timeout"
@@ -32,33 +26,9 @@ classify_error() {
   fi
 
   if [[ "$exit_code" -eq 97 ]]; then
-    # Surface the validator's first ERROR line as error_detail so the
-    # [EPIC_RESULT_START] block gets an `ERROR_DETAIL=...` line naming
-    # the missing deliverable. Without this, bug-102's classification fix
-    # ("error=deliverables_failure" instead of "error=unknown") tells the
-    # user *that* deliverables failed but not *which* ones — the actionable
-    # detail still requires opening the log file by hand. (bug-106)
-    #
-    # Scope the scan to lines AFTER the validator-failure marker that
-    # run_one_session writes (epic-session.sh:614-617). The exec log
-    # concatenates Claude's narrated text + Claude stderr + (validator
-    # stdout, normally empty) + the marker block + validator stderr; an
-    # unanchored grep matched any prose `ERROR: ...` Claude happened to
-    # echo before the validator ran, so the user saw the wrong message
-    # under ERROR_DETAIL=. (bug-109)
-    #
-    # Slurp the indented `  - <path>` lines that follow the header — for
-    # the most common failure (`_matches_declared` returning empty) the
-    # validator emits the header `ERROR: declared deliverables missing
-    # from session diff:` followed by one `  - <path>` line per missing
-    # entry. Capturing only the header (the original bug-106 fix) left
-    # the user with `ERROR_DETAIL=declared deliverables missing from
-    # session diff:` and no path data, defeating the actionable-detail
-    # goal of bug-106. Strip the trailing colon from the header so the
-    # joined output reads `<header>: path1; path2` instead of `<header>::
-    # path1; path2`. The other validator error modes ("session HEAD
-    # advanced", "session committed only metadata") are single-line and
-    # produce only the header — unaffected. (bug-125)
+    # Slurp the validator's ERROR header + indented `  - <path>` lines
+    # so error_detail names the missing files. Scope to lines AFTER the
+    # marker — Claude's prose can include unrelated `ERROR: ...` strings. (bugs 106, 109, 125)
     local err_msg
     err_msg="$(awk '
       /^=== deliverables validation failed \(rc=/ { f=1; next }
@@ -99,21 +69,16 @@ classify_error() {
     return
   fi
 
-  # Check for error markers in the log
   if grep -qE '^\[ERROR\]' "$log_file" 2>/dev/null; then
+    # No pre-escape — json.dump handles it; double-encoding leaks
+    # literal backslashes into error_detail.
     local err_msg
-    # Write the raw single-line error verbatim. write_epic_result later reads
-    # this file and hands it to json.dump, which performs the only escaping
-    # required. The previous sed pre-escape (\ → \\, " → \") double-encoded
-    # against json.dump and surfaced visible literal backslashes in the
-    # user-facing error_detail field.
     err_msg="$(grep -oE '^\[ERROR\] .+' "$log_file" | head -1 | sed 's/^\[ERROR\] //')"
     echo "cli_error"
     printf '%s\n' "$err_msg" > "${log_file}.errtype"
     return
   fi
 
-  # Check for CLI-specific error patterns
   if grep -qE '(exit code|returned|fatal|Segmentation|Killed|out of memory|OOM)' "$log_file" 2>/dev/null; then
     echo "cli_crash"
     return
@@ -126,15 +91,10 @@ classify_error() {
 # Generate epic result file and structured output block for orchestrator
 # ---------------------------------------------------------------------------
 write_epic_result() {
-  local epic_status="$1"  # "success" or "failed"
-  # Result file lives outside the repo so external watchers (orchestrators,
-  # CI, supervisor scripts) get a stable completion sentinel that survives:
-  #   - `git add -A` in the cleanup commit (would otherwise stage it as new)
-  #   - the orchestrator artifact cleanup loop
-  #   - worktree teardown
-  # Persisted on both success and failure for symmetry — file-based pollers
-  # were previously broken on success because the file was deleted (#bug:
-  # success-path watchers hung indefinitely). Override base via EPIC_RESULT_DIR.
+  local epic_status="$1"
+  # Result file lives outside the repo so external watchers see a stable
+  # completion sentinel that survives cleanup + worktree teardown.
+  # Persisted on success AND failure. Override via EPIC_RESULT_DIR.
   local result_dir="${EPIC_RESULT_DIR:-${TMPDIR:-/tmp}/epic-toolkit}"
   mkdir -p "$result_dir" 2>/dev/null || true
   local repo_id
@@ -149,11 +109,8 @@ write_epic_result() {
   end_ts="$(date +%s)"
   local runtime=$(( end_ts - start_ts ))
 
-  # Write session data to temp file for Python to consume.
-  # Iterate the actual DAG session ids — not 1..999 with break — so:
-  #   (a) gaps in session numbering (1, 2, 5) don't truncate the report;
-  #   (b) sessions in unreached waves (epic failed early) still appear,
-  #       defaulted to "pending" instead of vanishing from the result.
+  # Iterate actual DAG ids (not 1..999) so id-gaps and unreached waves
+  # both appear in the report.
   local tmp_data
   tmp_data="$(mktemp)"
   local _sids_sorted
@@ -178,7 +135,6 @@ write_epic_result() {
     echo "${key}|${status}|${slug}|${elapsed}|${exit_code}|${error_type}|${log_path}|${stderr_path}" >> "$tmp_data"
   done <<< "$_sids_sorted"
 
-  # Build merged sessions list via temp file
   local tmp_merged
   tmp_merged="$(mktemp)"
   for entry in "${MERGED_SESSIONS[@]:-}"; do
@@ -200,7 +156,6 @@ write_epic_result() {
     epic_status_lower="failed"
   fi
 
-  # Write result file using Python for safe JSON generation
   EPIC_NAME="$EPIC_NAME_SLUG" EPIC_STATUS="$epic_status_lower" \
   RESULT_WAVE="$result_wave" RUNTIME_SECS="$runtime" \
   START_TS="$start_ts" END_TS="$end_ts" \
@@ -250,18 +205,13 @@ PYEOF_RESULT
 
   rm -f "$tmp_data" "$tmp_merged"
 
-  # Clean up .errtype temp files created by classify_error.
-  # Iterate every known session (gaps allowed) — see comment on the data loop above.
   while IFS= read -r sid; do
     [[ -z "$sid" ]] && continue
     rm -f "$TRUNK_SESSIONS_DIR/.session-$(printf '%02d' "$sid")-exec.log.errtype"
   done <<< "$_sids_sorted"
 
-  # Print structured output block for orchestrator consumption.
-  # RESULT_FILE is emitted on both success and failure so the calling tool
-  # (Claude / OpenCode / external watcher) reads the JSON from a path the
-  # script itself reports — no second source of truth in the command docs
-  # to drift out of sync with the actual write location.
+  # Emit RESULT_FILE so command docs read the path from the script's
+  # output rather than re-stating it (kept in sync this way).
   echo ""
   echo "[EPIC_RESULT_START]"
   echo "RESULT_FILE=$result_file"
@@ -285,8 +235,4 @@ else:
 PYEOF_PRINT
   echo "[EPIC_RESULT_END]"
   echo ""
-
-  # Result file is always retained (success and failure) — see path-computation
-  # comment above. External watchers can poll EPIC_RESULT_FILE as a uniform
-  # completion sentinel.
 }

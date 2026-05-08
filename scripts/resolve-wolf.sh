@@ -15,8 +15,18 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GIT_DIR="$(git rev-parse --git-dir)"
 
-# cd to repo root — `git diff --name-only` prints top-level paths but
-# `git checkout/add -- <pathspec>` is cwd-relative. (bug-160)
+# Anchor cwd at the repo root before any git pathspec call. `git diff
+# --name-only` prints paths from the top-level regardless of cwd, but
+# `git checkout -- <pathspec>` and `git add -- <pathspec>` treat the
+# pathspec as cwd-relative. Running this script from any subdirectory
+# previously mismatched the two conventions: the diff returned `.wolf/…`,
+# the checkout looked for `<subdir>/.wolf/…`, and every resolve failed
+# with `pathspec did not match any file(s) known to git` — set -e then
+# killed the script before `commit --no-edit` / `rebase --continue` ran,
+# leaving the merge/rebase paused with conflict markers in place. Same
+# convention the runner's auto-resolver uses (it threads `git -C
+# "$workdir"` through every call); cd is the simpler fix here because the
+# script invokes git directly in many places. (bug-160)
 cd "$REPO_ROOT"
 
 # Detect operation in progress and choose default side accordingly:
@@ -41,9 +51,7 @@ if [[ -z "$SIDE" ]]; then
   fi
 fi
 
-# core.quotePath=false — default quoting wraps non-ASCII paths and
-# breaks the `^\.wolf/` filter. (bug-213)
-CONFLICTED="$(git -c core.quotePath=false diff --name-only --diff-filter=U)"
+CONFLICTED="$(git diff --name-only --diff-filter=U)"
 if [[ -z "$CONFLICTED" ]]; then
   echo "No conflicts to resolve."
   exit 0
@@ -52,7 +60,14 @@ fi
 NON_WOLF="$(printf '%s\n' "$CONFLICTED" | grep -Ev '^\.wolf/' | grep -v '^$' || true)"
 if [[ -n "$NON_WOLF" ]]; then
   echo "Refusing to auto-resolve: non-.wolf/ conflicts present:" >&2
-  # while-read — unquoted printf would word-split and glob-expand. (bug-163)
+  # Iterate via while-read so paths that contain whitespace or shell-glob
+  # meta (`* ? [`) are printed verbatim. The previous `printf ... $NON_WOLF`
+  # was unquoted on purpose to split lines into separate %s args, but that
+  # also subjects each line to word-splitting AND pathname expansion against
+  # cwd — a conflicted `app/[id]/page.tsx` would either fragment around
+  # spaces or get glob-expanded to whatever happened to match in the user's
+  # working dir, hiding the real conflict from the operator before the
+  # script exits 1.
   while IFS= read -r _f; do
     [[ -z "$_f" ]] && continue
     printf '  %s\n' "$_f" >&2
@@ -62,6 +77,7 @@ if [[ -n "$NON_WOLF" ]]; then
   exit 1
 fi
 
+# Resolve each .wolf/ file
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   git checkout "--$SIDE" -- "$f"
@@ -69,6 +85,7 @@ while IFS= read -r f; do
   echo "  resolved $f (kept $SIDE)"
 done <<< "$CONFLICTED"
 
+# Continue the merge/rebase
 if [[ -f "$GIT_DIR/MERGE_HEAD" ]]; then
   git -c core.editor=true commit --no-edit
   echo "✓ merge committed"

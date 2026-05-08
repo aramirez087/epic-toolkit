@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T03:46:34.157Z
-> Files: 68 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T04:57:57.947Z
+> Files: 69 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -22,6 +22,7 @@
 - `commit-msg-bug-211.txt` — Declares as (~1013 tok)
 - `commit-msg-bug-212.txt` — Declares as (~1366 tok)
 - `commit-msg-bug-213.txt` — Declares as (~1198 tok)
+- `commit-msg-bug-218.txt` — Declares as (~954 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
 - `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` — Declares as (~1512 tok)
@@ -95,23 +96,23 @@
 
 ## scripts/
 
-- `epic-dag.py` — - supabase/migrations/*auth* (~13510 tok)
-- `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~7983 tok)
-- `epic-ui.py` — as: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~5832 tok)
-- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~24869 tok)
-- `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3238 tok)
-- `validate-session-deliverables.py` — /page.tsx` (~4737 tok)
+- `epic-dag.py` — - supabase/migrations/*auth* (~8000 tok)
+- `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~5269 tok)
+- `epic-ui.py` — EpicUI: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~4333 tok)
+- `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~15682 tok)
+- `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3099 tok)
+- `validate-session-deliverables.py` — /", PH_MID) (~3028 tok)
 
 ## scripts/lib/
 
-- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~4805 tok)
-- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~3160 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~7175 tok)
-- `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~839 tok)
+- `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~2744 tok)
+- `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2230 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5169 tok)
+- `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~612 tok)
 
 ## scripts/wolf-merge/
 
 - `gitattributes-snippet` — Git attributes block for OpenWolf merge drivers (~120 tok)
-- `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~341 tok)
-- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~4116 tok)
-- `resolve-wolf.sh` — resolve-wolf.sh — One-shot resolver for in-progress merge/rebase conflicts (~1214 tok)
+- `install-merge-driver.sh` — Idempotently register the OpenWolf JSON merge driver in the local git config. (~260 tok)
+- `merge-wolf-json.py` — Git custom merge driver for OpenWolf JSON metadata files. (~1809 tok)
+- `resolve-wolf.sh` — resolve-wolf.sh — One-shot resolver for in-progress merge/rebase conflicts (~685 tok)

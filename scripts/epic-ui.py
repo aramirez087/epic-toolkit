@@ -99,26 +99,8 @@ def shorten(s: str, max_len: int) -> str:
 # ── Plan / status I/O ────────────────────────────────────────────────────────
 
 def parse_bash_plan(plan_file: str) -> dict:
-    """Parse epic-dag.py --bash output into a structured plan dict.
-
-    Skip malformed WAVE / SESSION lines instead of crashing the dashboard.
-    The plan file is shared protocol state — written by epic-dag.py via
-    `cp` from a temp file, then read by both the run-sessions.sh init
-    heredoc AND this consumer. Producer-emittable corruption modes the
-    previous bare `int(parts[1])` couldn't survive: a partial-flush from
-    a SIGKILL'd cp / disk-full mid-write that leaves a half-written
-    SESSION line missing the numeric wave or id field, an NFS read
-    racing a write, schema drift from a future writer, or a hand-edit
-    for debugging. Both call sites raised an unhandled ValueError —
-    parse_bash_plan crashed during EpicUI init, so the live dashboard
-    never launched and the user lost progress visibility for the entire
-    run with no diagnostic. Same audit class as bug-185/186/188/189:
-    every consumer of producer-emitted data must reject inputs the
-    producer can emit but the consumer can't interpret. The bug-188
-    `if len(parts) < 6: continue` already handled the truncation case;
-    extending the same skip-on-malformed pattern to non-numeric
-    wave/id values closes the remaining gap. Same coerce-and-skip
-    pattern as `_print_changes` for non-dict session entries (bug-185).
+    """Parse epic-dag.py --bash output. Skip malformed lines — a bare
+    int() in the consumer would crash the whole dashboard. (bugs 185-189)
     """
     waves: dict[int, list] = {}
     sessions: dict[int, dict] = {}
@@ -166,23 +148,7 @@ def parse_bash_plan(plan_file: str) -> dict:
 
 
 def load_status(path: str) -> dict:
-    """Load shared status JSON. Returns empty dict on any error.
-
-    Defends the OUTER level against producer-emitted null shapes the
-    consumer can't interpret. dict.get's default fires only for ABSENT
-    keys, not null values: a status file with `"sessions": null` (a
-    hand-edit, a schema-drift artefact from a future writer, or a buggy
-    hook overwriting the file outside the lock protocol) returns the
-    literal None at `.get('sessions', {})`, and downstream callers
-    (`self.status.items()` in _print_changes, `self.status.get(str(sid),
-    {})` in _get) raise AttributeError on the None — the dashboard's
-    main loop dies and the live progress display goes dead until the
-    user re-launches the runner. Same audit class as
-    bug-167/175/178/183/184 — every consumer of `.get(key, default)`
-    must reject inputs the producer can emit but the consumer can't
-    interpret. Coerce non-dict shapes to {} so downstream call sites
-    can trust the type.
-    """
+    """Load shared status JSON. Returns {} on error or non-dict shape. (bug-186)"""
     try:
         with open(path, encoding='utf-8') as f:
             sessions = json.load(f).get('sessions', {})
@@ -191,27 +157,9 @@ def load_status(path: str) -> dict:
     return sessions if isinstance(sessions, dict) else {}
 
 
-# Type-coerce one session entry's scalar fields. Same audit class as
-# bug-178/179/180/183/184 extended to the next consumer: every field the
-# renderer reads can be emitted by the producer as null or a non-conforming
-# shape (hand-edit, schema drift, out-of-band writer), and `dict.get(key,
-# default)` only fires its default for ABSENT keys — null/list/dict pass
-# through verbatim. The renderer's downstream operations crash mid-tick on
-# the type mismatch:
-#   • `fmt_elapsed(elapsed)` calls `int(elapsed)` — None → TypeError, "abc"
-#     → ValueError, [1,2] → TypeError; kills _build_lines() / _redraw() and
-#     the live UI thread dies.
-#   • `f'{step:2d}'` requires int — None / "abc" / list raise on the
-#     format spec.
-#   • `tool or ''` only catches falsy values; a truthy non-str (`[1]`,
-#     `{"a":1}`) passes through and `f'{tool:<10}'` raises TypeError.
-#   • The previous bug-185 guard handled non-dict entries at the OUTER
-#     level but trusted the INNER fields, mirroring the bug-176 → bug-180
-#     gap in epic-progress.py and bug-182 → bug-183/184 in merge-wolf-json.py.
-# Coerce non-conforming shapes to the existing per-field defaults so the
-# malformed entry degrades to "pending / 0 / ''" rather than crashing the
-# tick. `bool` is rejected from numeric paths because `isinstance(True,
-# int)` would otherwise accept `True`/`False` and silently coerce them to 1/0.
+# Coerce per-field types — null/non-str/non-finite values would crash
+# format specs mid-tick. bool rejected so True/False don't pass
+# isinstance(int). (bugs 188, 189)
 def _normalize_entry(d: dict) -> dict:
     status  = d.get('status',  'pending')
     step    = d.get('step',    0)
@@ -226,20 +174,7 @@ def _normalize_entry(d: dict) -> dict:
         tool = ''
     if not isinstance(target, str):
         target = ''
-    # Reject NaN/±Inf alongside non-numeric shapes. Both pass
-    # `isinstance(elapsed, (int, float))` (NaN and Inf are valid floats), so
-    # the previous guard let them through — and `fmt_elapsed`'s `int(secs)`
-    # then crashed mid-render with `ValueError: cannot convert float NaN to
-    # integer` (NaN) or `OverflowError: cannot convert float infinity to
-    # integer` (Inf), killing `_build_lines()` / `_redraw()` and the live UI
-    # thread. Python's `json.load` accepts the non-standard `NaN` / `Infinity`
-    # / `-Infinity` tokens by default, and `update_status_file` /
-    # `mark_session` round-trip them verbatim through `json.dump` — so once a
-    # producer (hand-edit, schema drift from a future writer, out-of-band
-    # hook) lands a non-finite scalar in the status file, every subsequent
-    # tick crashes until manual repair. Same audit class as bug-188 extended
-    # to the non-finite float subspace `isinstance(x, float)` admits but the
-    # consumer can't interpret. (bug-189)
+    # NaN/±Inf pass isinstance(float) but crash int() in fmt_elapsed. (bug-189)
     if (isinstance(elapsed, bool)
             or not isinstance(elapsed, (int, float))
             or not math.isfinite(elapsed)):
@@ -270,16 +205,8 @@ class EpicUI:
     # ── helpers ─────────────────────────────────────────────────────────────
 
     def _get(self, sid: int) -> dict:
-        # Symmetric INNER-level guard alongside load_status's outer-level
-        # one. dict.get's default fires only for ABSENT keys, not null
-        # values: a status file with `"sessions": {"1": null}` (one
-        # session entry written as null by a hand-edit, schema drift,
-        # or a buggy out-of-band writer) returns the literal None here,
-        # and the next `d.get(...)` raises AttributeError — the
-        # dashboard's _build_lines() / _redraw() crashes mid-render,
-        # the main loop dies, and the live progress display goes dead.
-        # Same audit class as bug-167/175/178/183/184. Coerce non-dict
-        # entries to {} so the per-field defaults below apply cleanly.
+        # Inner null guard — `{"sessions": {"1": null}}` returns None
+        # from .get and crashes downstream. (bug-185)
         d = self.status.get(str(sid), {})
         if not isinstance(d, dict):
             d = {}
@@ -442,14 +369,7 @@ class EpicUI:
     def _print_changes(self) -> None:
         """Print one line per status transition (no cursor movement)."""
         for sid_str, st_data in self.status.items():
-            # Symmetric guard to _get above. The Claude Code / piped
-            # non-TTY path iterates entries directly, so a single null
-            # session entry crashes the per-tick UI update without
-            # killing the runner — but the user loses every subsequent
-            # status-transition line, defeating the append-only fallback.
-            # Coerce-and-skip rather than coerce-to-{} since there are no
-            # meaningful fields to print for an entry that was never
-            # populated. (bug-185)
+            # Skip non-dict entries — coerce-and-skip preserves later transitions. (bug-185)
             if not isinstance(st_data, dict):
                 continue
             entry  = _normalize_entry(st_data)
