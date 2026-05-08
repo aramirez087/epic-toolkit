@@ -5018,6 +5018,83 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T13:48:58Z"
+    },
+    {
+      "id": "bug-249",
+      "timestamp": "2026-05-08T14:02:41.297Z",
+      "error_message": "Incorrect value in code",
+      "file": "docs/epic-guide.md",
+      "root_cause": "Had `autoCommit`",
+      "fix": "Changed to `waveTimeout`",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T14:02:41.297Z"
+    },
+    {
+      "id": "bug-250",
+      "timestamp": "2026-05-08T14:02:44.541Z",
+      "error_message": "Incorrect value in code",
+      "file": "commands/epic.md",
+      "root_cause": "Had `--base main`",
+      "fix": "Changed to `--base <repo-default>`",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-08T14:02:48.108Z"
+    },
+    {
+      "id": "bug-251",
+      "timestamp": "2026-05-08T14:03:23Z",
+      "error_message": "docs/epic-guide.md:247-258 'Configuration File Reference' table omitted `waveTimeout`, the 10th JSON config key that scripts/run-sessions.sh:224 fully wires. Users following the canonical user-facing reference (the same docs/epic-guide.md that the README at line 142 explicitly markets as 'See docs/epic-guide.md for the full reference') would not learn that `.epic-config.json` accepts a `waveTimeout` key alongside the documented `timeout`/`retry`/`cli`/`model`/`maxParallel`/`autoCommit`/`autoPr`/`skipPlan`/`keepWorktree` keys, and would have to read run-sessions.sh source or trip the silent default of 0 (auto) to discover it.",
+      "file": "docs/epic-guide.md",
+      "root_cause": "Same audit-gap shape as bug-244/246 but on a NEW surface \u2014 the Configuration File Reference table inside the long-form guide. bug-246 closed the Options table side of epic-guide.md (the CLI-flags surface) by adding the four missing flags including `--wave-timeout`; the symmetric JSON-config-key side was never re-audited. The runner has supported `waveTimeout` since bug-153's wired-in fix landed (line 224 reads `\\\"waveTimeout\\\"[[:space:]]*:[[:space:]]*([0-9]+)` from `.epic-config.json`), and the CLI flag `--wave-timeout` is documented at line 242 of epic-guide.md, so the CLI surface and the runtime parser are in sync \u2014 the docs reference for the JSON config equivalent is the only drift. Same 'code has the option, docs reference doesn't list it at all' shape as bug-244 (which patched run-sessions.sh's own --help header for --keep-session-docs).",
+      "fix": "Insert one row into the Configuration File Reference table between `maxParallel` (the last number-typed key) and `autoCommit` (the first boolean), preserving the existing type-grouped ordering: `| `waveTimeout` | number | 0 | Max minutes before the entire wave is killed (0 = auto-derive per wave). CLI: `--wave-timeout` |`. Cross-references the CLI flag so the table itself documents the 1:1 mapping and the next audit can spot the pair drifting together. Verified by grep that all 10 config keys now appear in the table: timeout/retry/cli/model/maxParallel/waveTimeout/autoCommit/autoPr/skipPlan/keepWorktree. Purely doc-only change; no behavioural impact.",
+      "tags": [
+        "docs",
+        "audit-gap",
+        "user-facing-string",
+        "config-file",
+        "wave-timeout",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-153",
+        "bug-244",
+        "bug-246"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T14:03:23Z"
+    },
+    {
+      "id": "bug-252",
+      "timestamp": "2026-05-08T14:03:23Z",
+      "error_message": "commands/epic.md:30 and .opencode/commands/epic.md:30 'Defaults' line claimed `--base main` for both Claude Code and OpenCode surfaces, but the runner's actual default is the repo's default branch read from `origin/HEAD` via `git symbolic-ref refs/remotes/origin/HEAD` (run-sessions.sh:689-691), with the literal string `main` only as the ultimate fallback when that resolution fails. Users on master/develop/trunk repos following the slash-command palette docs would believe the default base is `main`, leading to wrong assumptions about where their epic branches off (e.g., a user expecting to rebase onto `main` when the runner actually used `develop`).",
+      "file": "commands/epic.md, .opencode/commands/epic.md",
+      "root_cause": "Symmetric audit-gap drift across the two epic-command surfaces. Same defect class as bug-205 (success-path 'Next step: gh pr create --base main' was hardcoded `main`) and bug-209 (failure-path resume advice omitted `--base $BASE_BRANCH`), both of which patched the *runtime* sites but missed the *docs* sites: commands/epic.md and .opencode/commands/epic.md. The script's own --help header at run-sessions.sh:34 already says `(default: repo default)` correctly, and docs/epic-guide.md line 231 says `repo default` correctly \u2014 only the slash-command palette docs in commands/ and .opencode/commands/ retained the stale hardcoded value. Bug-245's recent audit of these same files added every missing flag to the Defaults line but did not re-check the existing `--base main` claim, since it was scoped to additive coverage rather than full-line re-validation.",
+      "fix": "Replace `--base main` with `--base <repo-default>` in both commands/epic.md:30 and .opencode/commands/epic.md:30 Defaults strings. Templated form (`<repo-default>`) is consistent with the adjacent `--branch epic/<name>` entry on the same line, which already uses templated default notation. Verified by reading run-sessions.sh:689-691: when the user passes no --base, BASE_BRANCH is set from `git symbolic-ref refs/remotes/origin/HEAD` parsed via `sed 's@^refs/remotes/origin/@@'`, falling back to literal `main` only if that produces an empty string. Purely doc-only change in the slash-command palette descriptions; no behavioural impact on the runner or sprint orchestrator.",
+      "tags": [
+        "docs",
+        "audit-gap",
+        "user-facing-string",
+        "base-branch",
+        "found-by-bug-hunt"
+      ],
+      "related_bugs": [
+        "bug-205",
+        "bug-209",
+        "bug-245"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T14:03:23Z"
     }
   ]
 }

@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T13:48:24.537Z
-> Files: 70 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T14:02:48.100Z
+> Files: 71 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -24,6 +24,7 @@
 - `commit-msg-bug-212.txt` — Declares as (~1366 tok)
 - `commit-msg-bug-213.txt` — Declares as (~1198 tok)
 - `commit-msg-bug-218.txt` — Declares as (~954 tok)
+- `commit-msg-bug-246-247.txt` — Declares as (~1027 tok)
 - `commit-msg-bughunt.txt` — Declares as (~620 tok)
 - `commit-msg-fix.txt` (~397 tok)
 - `commit-msg.txt` — Declares as (~1512 tok)
@@ -75,7 +76,7 @@
 ## .opencode/commands/
 
 - `epic.generate.md` — /epic.generate - Generate session files (~4515 tok)
-- `epic.md` — Validate (~839 tok)
+- `epic.md` — Validate (~842 tok)
 - `sprint.md` — Validate (~854 tok)
 
 ## .wolf/
@@ -87,12 +88,12 @@
 ## commands/
 
 - `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4608 tok)
-- `epic.md` — Validate (~878 tok)
+- `epic.md` — Validate (~881 tok)
 - `sprint.md` — Validate (~889 tok)
 
 ## docs/
 
-- `epic-guide.md` — Epic Sessions Guide (~3470 tok)
+- `epic-guide.md` — Epic Sessions Guide (~3502 tok)
 - `epic-prompt-template.md` — Epic Prompt Template (~2170 tok)
 
 ## scripts/

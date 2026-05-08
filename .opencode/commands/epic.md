@@ -27,7 +27,7 @@ parallel_safe: true
 /epic epic-2-name
 ```
 
-Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base main`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`, `--keep-session-docs false`, `--no-pr false`, `--no-rebase false`, `--no-commit false`, `--skip-plan false`, `--wave-timeout 0` (auto), `--fresh false`.
+Defaults: `name` (required), `--start 1`, `--end all`, `--max-parallel 4`, `--strict false`, `--sequential false`, `--show-dag false`, `--model sonnet`, `--cli auto`, `--branch epic/<name>`, `--base <repo-default>`, `--dry-run false`, `--no-worktree false`, `--timeout 0`, `--retry 0`, `--keep-worktree false`, `--keep-session-worktrees false`, `--keep-session-docs false`, `--no-pr false`, `--no-rebase false`, `--no-commit false`, `--skip-plan false`, `--wave-timeout 0` (auto), `--fresh false`.
 
 ## Validate
 1. Confirm `docs/claude-sessions/<name>/` exists. If not, list available under `docs/claude-sessions/` and ask user to pick.

@@ -253,6 +253,7 @@ Create `.epic-config.json` in your repository root to set defaults:
 | `cli` | string | "" | Force CLI: "opencode" or "claude" (empty = auto-detect) |
 | `model` | string | "sonnet" | Default model for all sessions |
 | `maxParallel` | number | 4 | Max concurrent sessions per wave |
+| `waveTimeout` | number | 0 | Max minutes before the entire wave is killed (0 = auto-derive per wave). CLI: `--wave-timeout` |
 | `autoCommit` | boolean | true | Auto-commit on session success |
 | `autoPr` | boolean | true | Auto-create GitHub PR |
 | `skipPlan` | boolean | false | Single-pass execution (no plan phase) |
