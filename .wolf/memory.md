@@ -1215,3 +1215,18 @@
 
 | Time | Action | File(s) | Outcome | ~Tokens |
 |------|--------|---------|---------|--------|
+| 13:24 | Edited scripts/validate-session-deliverables.py | modified _load_external_baselines() | ~486 |
+| 13:24 | Edited scripts/validate-session-deliverables.py | 6→7 lines | ~108 |
+| 13:25 | Edited scripts/validate-session-deliverables.py | modified isinstance() | ~760 |
+| 13:25 | Edited scripts/validate-session-deliverables.py | modified print() | ~204 |
+| 13:25 | Edited scripts/lib/epic-session.sh | expanded (+6 lines) | ~203 |
+| 13:25 | Edited scripts/epic-external-baselines.py | modified classify() | ~226 |
+| 13:29 | Session end: 6 writes across 3 files (validate-session-deliverables.py, epic-session.sh, epic-external-baselines.py) | 3 reads | ~16961 tok |
+
+## Session: 2026-05-08 13:29
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 13:35 | Edited scripts/validate-session-deliverables.py | added error handling | ~197 |
+| 13:35 | Edited scripts/validate-session-deliverables.py | modified isinstance() | ~501 |
+| 13:35 | Edited scripts/epic-external-baselines.py | added error handling | ~197 |

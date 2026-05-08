@@ -5673,6 +5673,110 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T19:26:55.000Z"
+    },
+    {
+      "id": "bug-280",
+      "timestamp": "2026-05-08T19:35:38.301Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "Code path had no error handling \u2014 exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T19:35:38.301Z"
+    },
+    {
+      "id": "bug-281",
+      "timestamp": "2026-05-08T19:35:50.927Z",
+      "error_message": "Significant refactor of ",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 11\u219230 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T19:35:50.927Z"
+    },
+    {
+      "id": "bug-282",
+      "timestamp": "2026-05-08T19:35:59.667Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "scripts/epic-external-baselines.py",
+      "root_cause": "Code path had no error handling \u2014 exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "py"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T19:35:59.667Z"
+    },
+    {
+      "id": "bug-283",
+      "timestamp": "2026-05-08T19:37:17Z",
+      "error_message": "validate-session-deliverables.py crashes with TypeError when external_paths sidecar entry has unhashable repo_root or non-iterable relative; surfaces as opaque vrc=1 \u2192 session falsely flagged rc=97 with traceback buried in exec log.",
+      "file": "scripts/validate-session-deliverables.py",
+      "root_cause": "bug-279 fixed the OUTER `isinstance(ext, dict)` guard at the missing-deliverable site but trusted the INNER scalar fields. After the dict check passed, `repo_root = ext.get('repo_root', '')` and `rel = ext.get('relative', decl)` were used as-is: a corrupt sidecar where repo_root is a list/dict (unhashable) crashes `ext_changed.get(repo_root)` with TypeError; a non-iterable rel (None / int) crashes `_matches_declared` at `c in declared for c in '*?['`. Same audit class as bug-178/179/180 (per-stream scalar shape), bug-183/184 (merge-driver inner scalars), and the symmetric outer-vs-inner audit-chain that bug-279 itself was opening.",
+      "fix": "Reject inner-scalar shapes after the existing isinstance(ext, dict) guard: require both `isinstance(repo_root, str) and repo_root` and `isinstance(rel, str) and rel`; on failure, append a 'malformed sidecar entry' diagnostic to `missing` (naming the cached file the user should delete) instead of trusting the values into hashing/iteration sites. Verified with a corrupt-sidecar repro (repo_root=[1,2], relative=None) that previously crashed TypeError now returns rc=1 with a clear remediation message. Happy-path snapshot+validate against a real sibling repo still returns rc=0.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "silent-failure",
+        "cross-repo",
+        "deliverables-validator",
+        "inner-shape",
+        "symmetric-to-bug-279",
+        "symmetric-to-bug-178",
+        "symmetric-to-bug-179",
+        "symmetric-to-bug-180",
+        "symmetric-to-bug-183",
+        "symmetric-to-bug-184"
+      ],
+      "related_bugs": [
+        "bug-279",
+        "bug-178",
+        "bug-179",
+        "bug-180",
+        "bug-183",
+        "bug-184"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T19:37:17Z"
+    },
+    {
+      "id": "bug-284",
+      "timestamp": "2026-05-08T19:37:17Z",
+      "error_message": "Hand-edited / corrupted external-baselines sidecar with non-UTF-8 bytes crashes both `_load_external_baselines` (in validate-session-deliverables.py) and `cmd_advanced` (in epic-external-baselines.py) with an unhandled UnicodeDecodeError. Validator rc=1 \u2192 session falsely flagged rc=97 'deliverables validation failed', with the actual cause buried in the exec-log traceback rather than a clear 'sidecar unreadable' diagnostic.",
+      "file": "scripts/validate-session-deliverables.py + scripts/epic-external-baselines.py",
+      "root_cause": "Both call sites caught `(OSError, json.JSONDecodeError)`. UnicodeDecodeError is a subclass of ValueError (not OSError, not JSONDecodeError), so it escapes the catch when `json.load(f)` reads the file lazily and the utf-8 decoder hits an invalid continuation byte. The runner's `|| echo \"no\"` wrapper around cmd_advanced shielded the no-op guard from a hard crash but still produced a misleading symptom (no-op detected when we couldn't actually read the sidecar); the validator path had no such wrapper, so the session was hard-failed with an opaque cause.",
+      "fix": "Broadened both except clauses to `(OSError, ValueError)`. ValueError is the common superclass of json.JSONDecodeError and UnicodeDecodeError, so a corrupt-encoding sidecar now degrades the same way a malformed-JSON sidecar already did: validator emits a clear 'could not read --external-baselines \u2026' WARNING and treats external paths as missing; cmd_advanced prints 'no' (no external advance) so the runner's no-op guard stays conservative. Verified with a hand-crafted latin-1-bytes sidecar that previously raised UnicodeDecodeError; now both helpers degrade gracefully with an empty-shell return.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "silent-failure",
+        "cross-repo",
+        "exception-handling",
+        "unicode-decode-error",
+        "user-facing-string",
+        "symmetric-to-bug-279"
+      ],
+      "related_bugs": [
+        "bug-279",
+        "bug-283"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T19:37:17Z"
     }
   ]
 }

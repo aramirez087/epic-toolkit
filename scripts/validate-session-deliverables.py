@@ -193,7 +193,12 @@ def _load_external_baselines(path: str | None) -> dict[str, Any]:
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError covers json.JSONDecodeError AND UnicodeDecodeError —
+        # a hand-edited / corrupted sidecar with non-UTF-8 bytes would
+        # otherwise escape the catch and crash the validator with an
+        # unhandled exception (rc=1 → "deliverables validation failed",
+        # cause buried in the exec-log traceback).
         print(
             f"WARNING: could not read --external-baselines {path}: {exc} "
             f"(external paths in produces: will be treated as missing)",
@@ -388,8 +393,27 @@ def main() -> int:
             # is guarded in _load_external_baselines but inner values were
             # trusted.
             if isinstance(ext, dict):
-                repo_root = ext.get("repo_root", "")
-                rel = ext.get("relative", decl)
+                repo_root = ext.get("repo_root")
+                rel = ext.get("relative")
+                # Inner-scalar shape rejection: bug-279 guarded the OUTER
+                # ext-is-dict shape, but the inner scalars were trusted.
+                # A corrupt sidecar where repo_root is unhashable (list/dict)
+                # crashes `ext_changed.get(repo_root)` with TypeError; a
+                # non-iterable rel (None, int) crashes `_matches_declared`
+                # at `c in declared`. Both surface as an unhandled exception
+                # (validator rc=1 → session falsely flagged rc=97 with the
+                # traceback buried in the exec log). Same audit class as
+                # bug-178/179/180/183/184.
+                if not (isinstance(repo_root, str) and repo_root
+                        and isinstance(rel, str) and rel):
+                    missing.append((
+                        decl,
+                        "external_paths sidecar entry is malformed "
+                        "(missing or non-string repo_root/relative); "
+                        "delete the cached "
+                        ".session-NN-external-baselines.json and retry",
+                    ))
+                    continue
                 ch_for_repo = ext_changed.get(repo_root)
                 if ch_for_repo is None:
                     # Snapshot listed it as external, but its diff is

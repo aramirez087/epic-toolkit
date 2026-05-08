@@ -353,7 +353,14 @@ def cmd_advanced(args: argparse.Namespace) -> int:
     try:
         with open(args.baselines, encoding="utf-8") as f:
             data = json.load(f)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
+        # ValueError covers json.JSONDecodeError AND UnicodeDecodeError —
+        # the latter (subclass of ValueError, not OSError) would otherwise
+        # escape the catch on a hand-edited / corrupted sidecar with non-
+        # UTF-8 bytes. The runner's `|| echo "no"` fallback would still
+        # produce "no" via stderr-to-stdout coercion, but the helper itself
+        # should fail closed: any unreadable sidecar means we can't prove
+        # external HEAD movement, so the no-op guard stays conservative.
         print("no")
         return 0
     repos = data.get("repos") if isinstance(data, dict) else None

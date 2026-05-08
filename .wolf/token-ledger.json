@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 6446829,
-    "total_reads": 1321,
-    "total_writes": 645,
-    "total_sessions": 110,
-    "anatomy_hits": 1269,
+    "total_tokens_estimated": 6463790,
+    "total_reads": 1324,
+    "total_writes": 651,
+    "total_sessions": 111,
+    "anatomy_hits": 1272,
     "anatomy_misses": 52,
-    "repeated_reads_blocked": 767,
-    "estimated_savings_vs_bare_cli": 11848373
+    "repeated_reads_blocked": 769,
+    "estimated_savings_vs_bare_cli": 11859187
   },
   "sessions": [
     {
@@ -13710,6 +13710,71 @@
         "writes_count": 12,
         "repeated_reads_blocked": 3,
         "anatomy_lookups": 6
+      }
+    },
+    {
+      "id": "session-2026-05-08-1317",
+      "started": "2026-05-08T19:17:00.415Z",
+      "ended": "2026-05-08T19:29:39.525Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-external-baselines.py",
+          "tokens_estimated": 4068,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 5107,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
+          "tokens_estimated": 5784,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 486,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 108,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 760,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 204,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
+          "tokens_estimated": 218,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-external-baselines.py",
+          "tokens_estimated": 226,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 14959,
+        "output_tokens_estimated": 2002,
+        "reads_count": 3,
+        "writes_count": 6,
+        "repeated_reads_blocked": 2,
+        "anatomy_lookups": 3
       }
     }
   ],
