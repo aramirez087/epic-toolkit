@@ -191,6 +191,21 @@ Run epics sequentially. Each epic must merge to trunk before the next starts:
 /epic-toolkit:epic epic-2-another-subsystem
 ```
 
+For 2+ related epics, prefer `/epic-toolkit:sprint` — it runs them
+back-to-back on a shared trunk branch and opens a single PR for the whole
+sprint instead of one PR per epic. `/epic-toolkit:epic.generate` emits a
+ready-to-run `docs/claude-sessions/<sprint>.sprint.json` whenever it splits
+work across multiple epics:
+
+```bash
+# Multi-epic sprint with one PR at the end (recommended for 2+ related epics).
+/epic-toolkit:sprint docs/claude-sessions/<sprint>.sprint.json
+
+# Or pass epic directories directly with a shared --branch.
+/epic-toolkit:sprint docs/claude-sessions/epic-1 docs/claude-sessions/epic-2 \
+  --branch epic/<sprint-name>
+```
+
 ### Cross-epic handoffs
 
 Later epics reference prior epic handoffs in their session Continuity sections:

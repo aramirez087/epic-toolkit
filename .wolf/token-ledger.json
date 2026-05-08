@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-01T00:13:26.145Z",
   "lifetime": {
-    "total_tokens_estimated": 5842188,
-    "total_reads": 1124,
-    "total_writes": 603,
-    "total_sessions": 100,
-    "anatomy_hits": 1081,
-    "anatomy_misses": 43,
-    "repeated_reads_blocked": 707,
-    "estimated_savings_vs_bare_cli": 11159847
+    "total_tokens_estimated": 5897436,
+    "total_reads": 1143,
+    "total_writes": 606,
+    "total_sessions": 101,
+    "anatomy_hits": 1099,
+    "anatomy_misses": 44,
+    "repeated_reads_blocked": 708,
+    "estimated_savings_vs_bare_cli": 11179595
   },
   "sessions": [
     {
@@ -12083,6 +12083,152 @@
         "writes_count": 3,
         "repeated_reads_blocked": 0,
         "anatomy_lookups": 7
+      }
+    },
+    {
+      "id": "session-2026-05-08-0755",
+      "started": "2026-05-08T13:55:01.183Z",
+      "ended": "2026-05-08T14:04:50.634Z",
+      "reads": [
+        {
+          "file": "/Users/aramirez/.claude/projects/-Users-aramirez-Code-epic-toolkit/memory/openwolf_auto_hooks.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sessions.sh",
+          "tokens_estimated": 16148,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/run-sprint.sh",
+          "tokens_estimated": 3415,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/README.md",
+          "tokens_estimated": 1668,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/docs/epic-guide.md",
+          "tokens_estimated": 3470,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/commands/epic.md",
+          "tokens_estimated": 878,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.opencode/commands/epic.md",
+          "tokens_estimated": 839,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-git.sh",
+          "tokens_estimated": 3011,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/docs/epic-prompt-template.md",
+          "tokens_estimated": 2170,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-result.sh",
+          "tokens_estimated": 2230,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-wave.sh",
+          "tokens_estimated": 612,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/validate-session-deliverables.py",
+          "tokens_estimated": 3028,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/merge-wolf-json.py",
+          "tokens_estimated": 1809,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/install-merge-driver.sh",
+          "tokens_estimated": 260,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/wolf-merge/resolve-wolf.sh",
+          "tokens_estimated": 685,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/lib/epic-session.sh",
+          "tokens_estimated": 5169,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/commands/sprint.md",
+          "tokens_estimated": 889,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.opencode/commands/sprint.md",
+          "tokens_estimated": 854,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/scripts/epic-dag.py",
+          "tokens_estimated": 8000,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/docs/epic-guide.md",
+          "tokens_estimated": 75,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/commands/epic.md",
+          "tokens_estimated": 19,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/aramirez/Code/epic-toolkit/.opencode/commands/epic.md",
+          "tokens_estimated": 19,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 55135,
+        "output_tokens_estimated": 113,
+        "reads_count": 19,
+        "writes_count": 3,
+        "repeated_reads_blocked": 1,
+        "anatomy_lookups": 18
       }
     }
   ],

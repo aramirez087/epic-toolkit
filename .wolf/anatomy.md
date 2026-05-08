@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T14:02:48.100Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T15:02:58.981Z
 > Files: 71 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -61,7 +61,7 @@
 - `AGENTS.md` — OpenWolf (~519 tok)
 - `CLAUDE.md` — OpenWolf (~642 tok)
 - `LICENSE` — Project license (~290 tok)
-- `README.md` — Project documentation (~1668 tok)
+- `README.md` — Project documentation (~1817 tok)
 
 ## .claude-plugin/
 
@@ -93,7 +93,7 @@
 
 ## docs/
 
-- `epic-guide.md` — Epic Sessions Guide (~3502 tok)
+- `epic-guide.md` — Epic Sessions Guide (~3663 tok)
 - `epic-prompt-template.md` — Epic Prompt Template (~2170 tok)
 
 ## scripts/

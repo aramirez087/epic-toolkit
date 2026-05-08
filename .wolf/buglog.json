@@ -5095,6 +5095,70 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T14:03:23Z"
+    },
+    {
+      "id": "bug-253",
+      "timestamp": "2026-05-08T15:02:36.565Z",
+      "error_message": "Significant refactor of ",
+      "file": "README.md",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 9\u219214 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:02:36.565Z"
+    },
+    {
+      "id": "bug-254",
+      "timestamp": "2026-05-08T15:05:00Z",
+      "error_message": "README.md was missing every reference to /epic-toolkit:sprint \u2014 the third user-visible slash command shipped by the plugin. Line 7 claimed 'Adds two slash commands' (factually wrong since commit 64078a0 added sprint). The bullet list (lines 9-12) only enumerated /epic-toolkit:epic.generate and /epic-toolkit:epic. The OpenCode equivalents line (lines 14-15) listed only `/epic.generate` and `/epic`. The install-then-run example (lines 26-31) showed only the two-command form. The Files tree (lines 168-189) omitted commands/sprint.md, .opencode/commands/sprint.md, and scripts/run-sprint.sh. README is the most prominently-displayed plugin-surface document \u2014 every potential installer reads it before deciding to install, and any user looking for a sprint orchestrator searches for 'sprint' and finds nothing.",
+      "file": "README.md",
+      "root_cause": "Same audit-gap shape as bug-247 (which patched .claude-plugin/plugin.json's description for the same omission). Sprint orchestration was added (commit 64078a0 'feat: added sprints') with commands/sprint.md, .opencode/commands/sprint.md, and scripts/run-sprint.sh \u2014 but README.md was never updated. The bug-247 audit chain reached the marketplace-listing description and the per-command slash docs (bug-245), but stopped short of README.md and docs/epic-guide.md (the link target the README markets as 'the full reference'). README is a higher-visibility surface than plugin.json's description because users read it BEFORE installing AND after \u2014 both audiences saw the wrong command count.",
+      "fix": "Updated four sites in README.md to enumerate all three commands symmetrically: (a) line 7 'Adds two slash commands' \u2192 'Adds three slash commands' with a third bullet describing /epic-toolkit:sprint as the multi-epic orchestrator. The /epic.generate bullet now also notes that it emits a sprint config when it splits work across multiple epics (matches commands/epic.generate.md:209-239's actual behavior). (b) Line 20 OpenCode equivalents updated from '`/epic.generate` and `/epic`' to '`/epic.generate`, `/epic`, and `/sprint`'. (c) Line 36 install-then-run example added '/epic-toolkit:sprint <sprint.json>' with a 'multi-epic, one PR' inline comment. (d) Files tree (lines 184-191) added sprint.md under both commands/ and .opencode/commands/, and run-sprint.sh under scripts/. Verified by `grep sprint README.md` showing all three commands are now mentioned in every section that previously listed only two. Purely doc-only change; no behavioural impact.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "user-facing-string",
+        "readme",
+        "command-enumeration-drift",
+        "symmetric-to-bug-247"
+      ],
+      "related_bugs": [
+        "bug-247",
+        "bug-245",
+        "bug-244",
+        "bug-253"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:05:00Z"
+    },
+    {
+      "id": "bug-255",
+      "timestamp": "2026-05-08T15:05:00Z",
+      "error_message": "docs/epic-guide.md \u2014 the canonical long-form reference linked from README.md:142 \u2014 never mentioned /epic-toolkit:sprint. The 'Multi-Epic Workflows' section (lines 150-215) was the natural home for sprint guidance: it described EXACTLY the use case sprint automates (multiple related epics on a shared trunk that must run sequentially) but instructed users to invoke `/epic-toolkit:epic` manually for each, with a `# wait for completion, then:` comment between calls. Users following the long-form reference for multi-epic work would never learn the sprint orchestrator existed, and would manually orchestrate sprint runs (running each epic by hand and getting one PR per epic instead of one for the whole sprint).",
+      "file": "docs/epic-guide.md",
+      "root_cause": "Same audit-gap class as bug-254 (README) and bug-247 (plugin.json) \u2014 sprint orchestration was added but the docs surface that already covered multi-epic was never re-audited. The existing section even documented the manual workflow that sprint exists to replace, making the omission especially misleading: every concrete reason to use sprint was already named in the section, the only thing missing was the sprint command itself. Bug-251's recent audit of this same file added the missing `waveTimeout` config row but didn't extend to the multi-epic narrative, so this one slipped through.",
+      "fix": "Added a paragraph after the manual sequential-invocation example (line 192) that names /epic-toolkit:sprint, links it to its automated behaviour (back-to-back execution on a shared trunk + single PR), and references commands/epic.generate.md:209-239's emitted sprint.json so the user knows the artifact already exists. Includes both invocation forms \u2014 `/epic-toolkit:sprint <sprint.json>` for the generated config and `/epic-toolkit:sprint <epic-dir>... --branch <name>` for ad-hoc bundling of existing epics. Verified by grep that sprint is now mentioned in every multi-epic narrative site (README + epic-guide). Purely doc-only change; no behavioural impact.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "user-facing-string",
+        "epic-guide-md",
+        "long-form-reference",
+        "symmetric-to-bug-247",
+        "symmetric-to-bug-254"
+      ],
+      "related_bugs": [
+        "bug-247",
+        "bug-251",
+        "bug-254"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T15:05:00Z"
     }
   ]
 }

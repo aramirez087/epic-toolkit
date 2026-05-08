@@ -4,15 +4,20 @@ Run multi-session epics as a **directed acyclic graph**, with **parallel sibling
 executing in their own git worktrees** and merging back into a coordinator trunk
 branch wave by wave. Works with both **Claude Code** and **OpenCode**.
 
-Adds two slash commands:
+Adds three slash commands:
 
 - Claude Code: `/epic-toolkit:epic.generate <problem statement>` — turns a problem statement into a
-  sequence of session prompt files with DAG metadata.
+  sequence of session prompt files with DAG metadata. For large multi-subsystem
+  initiatives it splits the work into multiple epic directories and emits a
+  matching sprint config.
 - Claude Code: `/epic-toolkit:epic <name>` — runs the generated epic, fanning out parallel waves and
   auto-creating a PR when done.
+- Claude Code: `/epic-toolkit:sprint <sprint.json | epic-dir...>` — runs N epics
+  back-to-back on a shared trunk branch and opens a single PR for the whole
+  sprint (multi-epic orchestrator).
 
 OpenCode exposes the same commands without the Claude plugin namespace:
-`/epic.generate` and `/epic`.
+`/epic.generate`, `/epic`, and `/sprint`.
 
 ## Install
 
@@ -28,6 +33,7 @@ Then run the namespaced Claude Code commands:
 ```
 /epic-toolkit:epic.generate <problem statement>
 /epic-toolkit:epic <name>
+/epic-toolkit:sprint <sprint.json>          # multi-epic, one PR
 ```
 
 For terminal/scripted setup, the equivalent commands are:
@@ -40,8 +46,8 @@ claude plugin install epic-toolkit@epic-toolkit
 **OpenCode:**
 
 The `.opencode/commands/` directory is auto-detected. Clone the repo or symlink
-`.opencode/commands/` into your project and the `/epic` and `/epic.generate`
-commands will be available.
+`.opencode/commands/` into your project and the `/epic`, `/epic.generate`, and
+`/sprint` commands will be available.
 
 ## Release / update policy
 
@@ -175,11 +181,14 @@ CLI flags override config file values. All keys are optional.
   commands/                # OpenCode slash commands
     epic.md
     epic.generate.md
+    sprint.md
 commands/
   epic.md                  # Claude Code /epic-toolkit:epic slash command
   epic.generate.md         # Claude Code /epic-toolkit:epic.generate slash command
+  sprint.md                # Claude Code /epic-toolkit:sprint slash command (multi-epic)
 scripts/
   run-sessions.sh          # wave orchestrator (dual-tool: claude or opencode)
+  run-sprint.sh            # multi-epic sprint orchestrator (one PR for N epics)
   epic-dag.py              # DAG builder + wave scheduler
   epic-progress.py         # stream-json progress display (claude and opencode)
   epic-ui.py               # live terminal dashboard (used by run-sessions.sh)
