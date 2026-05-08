@@ -4419,6 +4419,30 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T03:47:20Z"
+    },
+    {
+      "id": "bug-218",
+      "timestamp": "2026-05-08T04:30:00Z",
+      "error_message": "scripts/run-sessions.sh:1562-1575 success-path scaffolding-cleanup commit body claimed `Removes docs/claude-sessions/${_EPIC_SLUG}/ and any per-epic roadmap handoffs` regardless of whether `--keep-session-docs` actually preserved those files. With `--keep-session-docs` the dual-removal block at lines 1546-1560 is skipped, so the only staged deletions at the commit site are the dotfile artefacts swept at line 1539 (.session-*-plan.md, .epic-*.json, STATUS_FILE, DAG_PLAN_FILE, .lock, .tmp). The OK message branch at line 1570 already differentiated the two cases ('session docs preserved via --keep-session-docs' vs 'PR diff contains only product code'), but the commit body was a single template that fired in BOTH branches. Reviewers reading the commit message in `git log` / the PR's commit list got a wrong picture of what shipped: a 'chore: remove epic session scaffolding' commit whose tree shows the docs/claude-sessions/* tree intact. A future operator bisecting for 'when did session scaffolding last get removed' lands on a commit that didn't actually remove it, and an automated PR-description scraper that pattern-matches the commit subject inflates a misleading scaffolding-removal claim into the PR body.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "Asymmetric audit gap with the OK-message branch. The branch-on-flag pattern was applied at line 1570 (OK message) but not at line 1563 (commit body) — the commit body was a single static `-m` argument, while the OK message used an `if $KEEP_SESSION_DOCS; then ... else ... fi` to vary its text. Same audit class as bug-205 (success-path 'Next step' advice naming the wrong base branch — a single-template user-facing string that didn't reflect the actual code path) and bug-211/212/217 (push-site messages that hard-coded one case while the surrounding code branched on local-vs-remote state): every user-facing string the runner emits must reflect the actual code path it took, not a single template that happens to match the most common case.",
+      "fix": "Branch the `git commit -m` body on `$KEEP_SESSION_DOCS` to mirror the OK-message branch immediately below. The keep-session-docs branch uses subject `chore: remove epic orchestrator artefacts` and a body naming the dotfile artefacts that were actually swept (`.session-*-plan.md, .epic-*.json, status and lock files`) plus an explicit note that session prompts and roadmap handoffs are preserved. The default branch keeps the original subject `chore: remove epic session scaffolding` and body verbatim. The OK message at line 1570 stays unchanged — it already differentiated the two cases correctly. `bash -n scripts/run-sessions.sh` passes; no behavioural change for the happy path (no --keep-session-docs: identical commit body and OK message); change is scoped to the previously-misleading flag-on path. Same minimum-scope discipline as bug-205/211/212/217 — the fix is purely additive branching on `$KEEP_SESSION_DOCS`; the dotfile-cleanup loop at line 1536-1541 and the dual-removal block at line 1546-1560 are unchanged. The narrative buglog entry is appended at bug-218 per the OpenWolf auto-hooks convention; tags include `found-by-bug-hunt`, `audit-gap`, `commit-message`, `symmetric-to-bug-205`, `keep-session-docs` to flag this as the symmetric closing of the bug-205 audit chain on the cleanup-commit-body side.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "commit-message",
+        "symmetric-to-bug-205",
+        "keep-session-docs",
+        "user-facing-string"
+      ],
+      "related_bugs": [
+        "bug-205",
+        "bug-211",
+        "bug-212",
+        "bug-217"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T04:30:00Z"
     }
   ]
 }

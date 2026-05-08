@@ -1560,16 +1560,44 @@ if ! $EPIC_FAILED; then
     fi
 
     if ! git diff --cached --quiet 2>/dev/null; then
-      git commit -q -m "chore: remove epic session scaffolding
+      # Commit body must reflect what was ACTUALLY cleaned. With
+      # --keep-session-docs the dual-removal block at lines 1546-1560 is
+      # skipped, so the staged deletions at this point are ONLY the dotfile
+      # artefacts swept at line 1539 (.session-*-plan.md, .epic-*.json,
+      # STATUS_FILE, DAG_PLAN_FILE, .lock, .tmp). The previous body claimed
+      # "Removes docs/claude-sessions/${_EPIC_SLUG}/ and any per-epic roadmap
+      # handoffs" verbatim in BOTH branches — the OK message at line 1570
+      # already differentiated the two cases ("session docs preserved via
+      # --keep-session-docs" vs "PR diff contains only product code") but
+      # the commit body was the unaudited site that still claimed the
+      # session-doc removal regardless of the flag. The misleading body
+      # surfaces in the PR diff (a "chore: remove epic session scaffolding"
+      # commit whose tree shows the docs/claude-sessions/* tree intact) and
+      # in `git log` history forever; reviewers reading the commit message
+      # get a wrong picture of what shipped, and a future operator
+      # bisecting for "when did session scaffolding last get removed" lands
+      # on a commit that didn't actually remove it. Same audit class as
+      # bug-205 (success-path "Next step" advice naming the wrong base
+      # branch) — every user-facing string the runner emits must reflect
+      # the actual code path it took, not a single template that happens
+      # to match the most common case.
+      if $KEEP_SESSION_DOCS; then
+        git commit -q -m "chore: remove epic orchestrator artefacts
+
+Removes dotfile artefacts (.session-*-plan.md, .epic-*.json, status and
+lock files). Session prompt files (docs/claude-sessions/${_EPIC_SLUG}/)
+and per-epic roadmap handoffs are preserved via --keep-session-docs.
+
+Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
+        ok "Cleaned orchestrator artefacts (session docs preserved via --keep-session-docs)"
+      else
+        git commit -q -m "chore: remove epic session scaffolding
 
 Removes docs/claude-sessions/${_EPIC_SLUG}/ and any per-epic roadmap
 handoffs. These files served as AI orchestration scaffolding during the
 run; they do not belong in the final PR diff or repository history.
 
 Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
-      if $KEEP_SESSION_DOCS; then
-        ok "Cleaned orchestrator artefacts (session docs preserved via --keep-session-docs)"
-      else
         ok "Cleaned session scaffolding — PR diff contains only product code"
       fi
     fi
