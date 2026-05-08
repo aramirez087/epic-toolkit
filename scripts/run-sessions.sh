@@ -554,7 +554,7 @@ if $SEQUENTIAL; then
   for _seq_sid in "${!_SEQ_SESSION_WAVE_OF[@]}"; do
     SESSION_WAVE_OF[$_seq_sid]="${_SEQ_SESSION_WAVE_OF[$_seq_sid]}"
   done
-  unset _seq_tmp _old_wave_count _new_wave _ids _sid _seq_wn _seq_sid _seq_model _seq_cli
+  unset _seq_tmp _old_wave_count _old_wn _new_wave _ids _sid _seq_wn _seq_sid _seq_model _seq_cli
   unset _SEQ_WAVE_IDS _SEQ_SESSION_WAVE_OF
 fi
 

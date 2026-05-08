@@ -1164,3 +1164,11 @@
 | 10:00 | Edited AGENTS.md | inline fix | ~17 |
 | 10:00 | Edited CLAUDE.md | inline fix | ~17 |
 | 10:00 | Edited README.md | 9→14 lines | ~254 |
+| 10:10 | Session end: 4 writes across 3 files (AGENTS.md, CLAUDE.md, README.md) | 19 reads | ~54975 tok |
+
+## Session: 2026-05-08 10:18
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:32 | Edited scripts/epic-dag.py | modified _strip_inline_comment() | ~430 |
+| 10:32 | Edited scripts/run-sessions.sh | 2→2 lines | ~38 |

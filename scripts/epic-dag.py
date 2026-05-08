@@ -76,6 +76,21 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         stripped = line.lstrip()
         leading_ws = len(line) - len(stripped)
 
+        # Pre-scan the key portion (positions 1..first `:`) for an inline
+        # comment marker. Without this, a `:` that sits INSIDE a comment
+        # (e.g., `key  # has : in comment`) would be misread by the
+        # value_start logic below as the key/value separator, jumping the
+        # scan cursor past the `#` and leaving the comment un-stripped —
+        # parse_frontmatter then partitions at the comment's `:` and
+        # records a bogus key/value pair. Unquoted YAML keys have no
+        # quoted regions, so a plain linear scan is sufficient here.
+        # (bug-268)
+        _colon_pos = line.find(":")
+        _key_end = _colon_pos if _colon_pos >= 0 else len(line)
+        for _j in range(1, _key_end):
+            if line[_j] == "#" and line[_j - 1] in (" ", "\t"):
+                return line[:_j].rstrip()
+
         value_start = -1
         if len(stripped) >= 2 and stripped[0] == "-" and stripped[1] in (" ", "\t"):
             value_start = leading_ws + 2
