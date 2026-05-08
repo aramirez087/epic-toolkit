@@ -13,6 +13,7 @@ Frontmatter the validator reads:
       - "src/Users/UsersService.cs"
       - "src/Users/UsersController.cs"
       - "src/Users/Models/*.cs"
+      - "../sibling-repo/path/to/file.cs"     # cross-repo: see below
 
     skip_deliverables_check: true   # opt out (kickoff/docs-only sessions)
 
@@ -22,14 +23,27 @@ Modes:
        (any status except D). Globs use fnmatch semantics.
   2. produces: not declared
        Metadata-only heuristic: if every changed path matches
-       ^\\.wolf/ or ^docs/roadmap/.*-handoff\\.md$ the session is
-       rejected — it committed nothing real.
+       ^\\.wolf/ or ^docs/roadmap/.*-handoff\\.md$ AND no external repo
+       advanced, the session is rejected — it committed nothing real.
 
-Args:
+Cross-repo (`../sibling/...` or absolute) paths:
+  When the runner captured `--external-baselines <json>` at session start,
+  the validator groups declared paths by their containing git repo and
+  diffs each repo against its own captured HEAD. A path declared as
+  `../masterSignalR-clone/Services/Foo.cs` thus passes when Foo.cs shows
+  up in the masterSignalR-clone diff, even though the epic worktree
+  itself only contains metadata changes.
+
+Args (positional):
   <session_md>  path to session-NN-*.md
   <worktree>    git working directory of the session branch
   <base_ref>    commit-ish the session was branched from (use the captured
                 baseline_head; works in both worktree and --no-worktree mode)
+
+Optional:
+  --external-baselines <json>  sidecar written by epic-external-baselines.py.
+                               Without it, all declared paths are matched
+                               only against the worktree diff (back-compat).
 
 Exit codes:
   0 — passed
@@ -39,12 +53,15 @@ Exit codes:
 
 from __future__ import annotations
 
-import fnmatch
+import argparse
+import fnmatch  # noqa: F401  — kept for back-compat / external imports
 import importlib.util
+import json
 import os
 import re
 import subprocess
 import sys
+from typing import Any
 
 HEURISTIC_METADATA_PATTERNS = [
     re.compile(r"^\.wolf/"),
@@ -160,11 +177,118 @@ def _read_diff(worktree: str, base_ref: str) -> tuple[list[str], list[str]]:
     return changed, deleted
 
 
+def _load_external_baselines(path: str | None) -> dict[str, Any]:
+    """Load the sidecar JSON; return an empty shell when absent or
+    malformed so callers can stay shape-agnostic."""
+    empty = {"external_paths": {}, "repos": {}}
+    if not path:
+        return empty
+    if not os.path.isfile(path):
+        print(
+            f"WARNING: --external-baselines file not found: {path} "
+            f"(external paths in produces: will be treated as missing)",
+            file=sys.stderr,
+        )
+        return empty
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(
+            f"WARNING: could not read --external-baselines {path}: {exc} "
+            f"(external paths in produces: will be treated as missing)",
+            file=sys.stderr,
+        )
+        return empty
+    if not isinstance(data, dict):
+        return empty
+    external_paths = data.get("external_paths")
+    if not isinstance(external_paths, dict):
+        external_paths = {}
+    repos = data.get("repos")
+    if not isinstance(repos, dict):
+        repos = {}
+    return {"external_paths": external_paths, "repos": repos}
+
+
+def _read_external_diffs(
+    repos: dict[str, Any],
+) -> tuple[dict[str, list[str]], dict[str, list[str]], list[str]]:
+    """For each external repo with a captured baseline HEAD, run
+    `git diff baseline..HEAD` inside that repo. Returns
+    (changed_by_repo, deleted_by_repo, errors)."""
+    changed_by_repo: dict[str, list[str]] = {}
+    deleted_by_repo: dict[str, list[str]] = {}
+    errors: list[str] = []
+    for repo_root, info in repos.items():
+        if not isinstance(info, dict):
+            continue
+        baseline = info.get("head")
+        if not isinstance(baseline, str) or not baseline:
+            continue
+        if not os.path.isdir(repo_root):
+            errors.append(
+                f"external repo no longer present at {repo_root!r} "
+                f"(captured baseline {baseline[:12]})"
+            )
+            continue
+        try:
+            ch, de = _read_diff(repo_root, baseline)
+        except RuntimeError as exc:
+            errors.append(
+                f"git diff failed for external repo {repo_root!r}: {exc}"
+            )
+            continue
+        changed_by_repo[repo_root] = ch
+        deleted_by_repo[repo_root] = de
+    return changed_by_repo, deleted_by_repo, errors
+
+
+def _print_diff_summary(
+    label: str,
+    changed: list[str],
+    deleted: list[str],
+    *,
+    limit: int = 30,
+    max_deleted: int = 5,
+) -> None:
+    print(f"{label}", file=sys.stderr)
+    shown = 0
+    for p in changed:
+        if shown >= limit:
+            break
+        print(f"  + {p}", file=sys.stderr)
+        shown += 1
+    for p in deleted[:max_deleted]:
+        print(f"  - {p} (deleted)", file=sys.stderr)
+    remaining = len(changed) + len(deleted) - shown - min(len(deleted), max_deleted)
+    if remaining > 0:
+        print(f"  ... and {remaining} more", file=sys.stderr)
+
+
 def main() -> int:
-    if len(sys.argv) != 4:
-        print(__doc__, file=sys.stderr)
-        return 2
-    session_md, worktree, base_ref = sys.argv[1], sys.argv[2], sys.argv[3]
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        # Keep usage consistent with the historical positional invocation
+        # so callers that pass exactly three args still work.
+    )
+    ap.add_argument("session_md")
+    ap.add_argument("worktree")
+    ap.add_argument("base_ref")
+    ap.add_argument(
+        "--external-baselines",
+        default=None,
+        help="JSON sidecar from epic-external-baselines.py snapshot",
+    )
+
+    try:
+        args = ap.parse_args()
+    except SystemExit as exc:
+        # argparse calls sys.exit(2) on bad args — preserve that.
+        return int(exc.code) if isinstance(exc.code, int) else 2
+
+    session_md, worktree, base_ref = args.session_md, args.worktree, args.base_ref
 
     if not os.path.isfile(session_md):
         print(f"ERROR: session file not found: {session_md}", file=sys.stderr)
@@ -210,6 +334,13 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
+    baselines = _load_external_baselines(args.external_baselines)
+    external_paths: dict[str, dict[str, str]] = baselines["external_paths"]
+    repos: dict[str, Any] = baselines["repos"]
+    ext_changed, ext_deleted, ext_errors = _read_external_diffs(repos)
+    for e in ext_errors:
+        print(f"WARNING: {e}", file=sys.stderr)
+
     # Reject non-list shapes — `produces: false` / `0` / `""` would
     # silently fall through to the metadata-only heuristic. (bug-171)
     produces = fm.get("produces", [])
@@ -237,28 +368,69 @@ def main() -> int:
     produces = [str(p).strip() for p in produces if str(p).strip()]
 
     if produces:
-        missing = [d for d in produces if not _matches_declared(d, changed)]
+        missing: list[tuple[str, str]] = []
+        for decl in produces:
+            ext = external_paths.get(decl)
+            if ext:
+                repo_root = ext.get("repo_root", "")
+                rel = ext.get("relative", decl)
+                ch_for_repo = ext_changed.get(repo_root)
+                if ch_for_repo is None:
+                    # Snapshot listed it as external, but its diff is
+                    # missing — repo gone, git failed, or invalid baseline.
+                    missing.append((decl, "external repo could not be diffed"))
+                    continue
+                if not _matches_declared(rel, ch_for_repo):
+                    missing.append((decl, f"not in {repo_root} diff"))
+            else:
+                # Either truly internal, or external-but-not-snapshotted
+                # (older runner, or snapshot helper failed). Try the
+                # worktree diff; if it's clearly outside the worktree we'll
+                # report a clearer error below.
+                if not _matches_declared(decl, changed):
+                    looks_external = decl.startswith("../") or os.path.isabs(decl)
+                    if looks_external and not external_paths:
+                        missing.append((
+                            decl,
+                            "looks external but no --external-baselines was "
+                            "provided to the validator",
+                        ))
+                    else:
+                        missing.append((decl, "not in session diff"))
         if missing:
             print(
                 "ERROR: declared deliverables missing from session diff:",
                 file=sys.stderr,
             )
-            for m in missing:
-                print(f"  - {m}", file=sys.stderr)
+            for decl, reason in missing:
+                print(f"  - {decl}  ({reason})", file=sys.stderr)
             print("", file=sys.stderr)
-            print("Session diff vs baseline:", file=sys.stderr)
-            shown = 0
-            for p in changed:
-                if shown >= 30:
-                    break
-                print(f"  + {p}", file=sys.stderr)
-                shown += 1
-            for p in deleted[:5]:
-                print(f"  - {p} (deleted)", file=sys.stderr)
-            remaining = len(changed) + len(deleted) - shown - min(len(deleted), 5)
-            if remaining > 0:
-                print(f"  ... and {remaining} more", file=sys.stderr)
+            _print_diff_summary("Session diff vs baseline (epic worktree):",
+                                changed, deleted)
+            for repo_root, ch_for_repo in ext_changed.items():
+                de_for_repo = ext_deleted.get(repo_root, [])
+                short = repos.get(repo_root, {}).get("head_short", "")
+                _print_diff_summary(
+                    f"External diff in {repo_root} vs baseline {short}:",
+                    ch_for_repo, de_for_repo,
+                )
+            if not external_paths:
+                print(
+                    "\nHint: produces: entries that point outside the epic "
+                    "repo (e.g. `../sibling-repo/...`) need the runner to "
+                    "snapshot the sibling repo at session start. Make sure "
+                    "the runner passed --external-baselines.",
+                    file=sys.stderr,
+                )
             return 1
+        return 0
+
+    # No produces: declared. Run the metadata-only heuristic, but only if
+    # nothing real happened in any external repo either — otherwise a
+    # session that legitimately committed only to a sibling repo would be
+    # falsely rejected.
+    any_external_advance = any(bool(v) for v in ext_changed.values())
+    if any_external_advance:
         return 0
 
     if _is_metadata_only(changed):
@@ -286,7 +458,9 @@ def main() -> int:
         )
         print("    skip_deliverables_check: true", file=sys.stderr)
         print(
-            "Otherwise add a `produces:` list of expected output paths.",
+            "Otherwise add a `produces:` list of expected output paths "
+            "(cross-repo paths like `../sibling-repo/file` are supported "
+            "when the runner snapshots external baselines).",
             file=sys.stderr,
         )
         return 1

@@ -1191,3 +1191,27 @@
 | 12:17 | Edited scripts/wolf-merge/install-merge-driver.sh | expanded (+12 lines) | ~198 |
 | 12:18 | Created ../../../../tmp/epic-toolkit-commit-msg-1.txt | — | ~446 |
 | 12:18 | Created ../../../../tmp/epic-toolkit-commit-msg-2.txt | — | ~172 |
+| 12:19 | Session end: 5 writes across 4 files (plugin.json, install-merge-driver.sh, epic-toolkit-commit-msg-1.txt, epic-toolkit-commit-msg-2.txt) | 20 reads | ~54597 tok |
+
+## Session: 2026-05-08 12:21
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 12:33 | Created scripts/epic-external-baselines.py | — | ~3931 |
+| 12:34 | Created scripts/validate-session-deliverables.py | — | ~5107 |
+| 12:35 | Edited scripts/lib/epic-session.sh | expanded (+19 lines) | ~332 |
+| 12:35 | Edited scripts/lib/epic-session.sh | expanded (+16 lines) | ~435 |
+| 12:36 | Edited scripts/lib/epic-session.sh | 25→30 lines | ~365 |
+| 12:37 | Created ../../../../tmp/test-cross-repo.sh | — | ~2174 |
+| 12:38 | Edited scripts/epic-external-baselines.py | modified relative_to_repo() | ~284 |
+| 12:39 | Edited commands/epic.generate.md | 2→2 lines | ~252 |
+| 12:39 | Edited commands/epic.generate.md | 4→4 lines | ~482 |
+| 12:39 | Edited .opencode/commands/epic.generate.md | 2→2 lines | ~252 |
+| 12:40 | Edited .opencode/commands/epic.generate.md | 4→4 lines | ~482 |
+| 12:40 | Edited docs/epic-guide.md | expanded (+26 lines) | ~718 |
+| 12:42 | Session end: 12 writes across 6 files (epic-external-baselines.py, validate-session-deliverables.py, epic-session.sh, test-cross-repo.sh, epic.generate.md) | 6 reads | ~40563 tok |
+
+## Session: 2026-05-08 13:17
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|

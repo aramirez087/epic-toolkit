@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T18:18:59.538Z
-> Files: 73 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T18:40:46.514Z
+> Files: 75 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -39,6 +39,7 @@
 - `repro-bug-194.sh` — Confirm MAX_PARALLEL=0 is now rejected at validation, not silently looping. (~181 tok)
 - `test-arr.sh` (~172 tok)
 - `test-bug-181.sh` — Reproduce bug-181: log call inside map_model_shorthand leaks into captured stdout (~461 tok)
+- `test-cross-repo.sh` — Test the cross-repo deliverables flow end to end. (~2174 tok)
 
 ## ../../../../tmp/sprint-test/
 
@@ -77,7 +78,7 @@
 
 ## .opencode/commands/
 
-- `epic.generate.md` — /epic.generate - Generate session files (~4515 tok)
+- `epic.generate.md` — /epic.generate - Generate session files (~4760 tok)
 - `epic.md` — Validate (~898 tok)
 - `sprint.md` — Validate (~854 tok)
 
@@ -89,29 +90,30 @@
 
 ## commands/
 
-- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4608 tok)
+- `epic.generate.md` — /epic-toolkit:epic.generate - Generate Claude session files (~4853 tok)
 - `epic.md` — Validate (~945 tok)
 - `sprint.md` — Validate (~889 tok)
 
 ## docs/
 
-- `epic-guide.md` — Epic Sessions Guide (~3684 tok)
+- `epic-guide.md` — Epic Sessions Guide (~4058 tok)
 - `epic-prompt-template.md` — Epic Prompt Template (~2170 tok)
 
 ## scripts/
 
 - `epic-dag.py` — - supabase/migrations/*auth* (~8243 tok)
+- `epic-external-baselines.py` — epic-external-baselines.py (~4068 tok)
 - `epic-progress.py` — epic-progress.py — Live progress display for AI-CLI stream-json output. (~5269 tok)
 - `epic-ui.py` — EpicUI: strip_ansi, visible_len, pad_right, fmt_elapsed + 3 more (~4333 tok)
 - `run-sessions.sh` — run-sessions.sh — DAG-aware epic runner. Executes a directed acyclic graph (~16231 tok)
 - `run-sprint.sh` — run-sprint.sh — Multi-epic sprint orchestrator. Runs N epics sequentially (~3415 tok)
-- `validate-session-deliverables.py` — /", PH_MID) (~3028 tok)
+- `validate-session-deliverables.py` — /", PH_MID) (~5107 tok)
 
 ## scripts/lib/
 
 - `epic-git.sh` — epic-git.sh — Git/repo utility functions for the epic runner. (~3011 tok)
 - `epic-result.sh` — epic-result.sh — Result reporting functions for the epic runner. (~2230 tok)
-- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5169 tok)
+- `epic-session.sh` — epic-session.sh — Session execution functions for the epic runner. (~5784 tok)
 - `epic-wave.sh` — epic-wave.sh — Wave scheduling utilities for the epic runner. (~612 tok)
 
 ## scripts/wolf-merge/

@@ -85,8 +85,8 @@ has no frontmatter.
 | `depends_on` | yes | List of prior session numbers this depends on. Empty `[]` for the charter. Omitting it falls back to a linear chain (defeats parallelism) |
 | `touches` | recommended | List of file globs this session may modify. The runner uses these to detect overlaps between parallel siblings |
 | `parallel_safe` | yes | `false` forces a solo wave (charter, CI gate, anything mutating shared state). Default `true` |
-| `produces` | recommended | List of paths or `fnmatch` globs the session must create or modify. After the session commits, the runner verifies every entry shows up in its diff vs the wave-start commit; missing entries fail the session before it merges into trunk |
-| `skip_deliverables_check` | optional | Set to `true` only on docs-only / kickoff sessions whose only output is a handoff doc and `.wolf/*` updates. Without this opt-out a metadata-only commit fails the deliverables validator |
+| `produces` | recommended | List of paths or `fnmatch` globs the session must create or modify. After the session commits, the runner verifies every entry shows up in its diff vs the wave-start commit; missing entries fail the session before it merges into trunk. Cross-repo paths (`../sibling-repo/Foo.cs` or absolute) are supported — the runner snapshots each external repo's HEAD at session start and validates against that repo's diff |
+| `skip_deliverables_check` | optional | Set to `true` only on docs-only / kickoff sessions whose only output is a handoff doc and `.wolf/*` updates. Without this opt-out a metadata-only commit fails the deliverables validator. Don't reach for this for cross-repo work — declare the external paths in `produces:` instead |
 
 ### Deliverables validation
 
@@ -95,12 +95,38 @@ inside the session's worktree. Two modes:
 
 1. **`produces:` declared** — every entry must appear in the session's diff vs the
    wave-start commit (any status except deletion). Globs use `fnmatch` semantics.
+   Entries that resolve outside the epic repo are matched against the diff of
+   their containing git repo, using the per-repo HEAD captured by
+   `scripts/epic-external-baselines.py snapshot` at session start.
 2. **No `produces:`** — metadata-only heuristic. If every changed path matches
-   `^.wolf/` or `^docs/roadmap/.*-handoff\.md$`, the session is rejected as
-   no-real-output. Set `skip_deliverables_check: true` to opt out.
+   `^.wolf/` or `^docs/roadmap/.*-handoff\.md$` *and* no external repo's HEAD
+   moved during the session, the session is rejected as no-real-output. Set
+   `skip_deliverables_check: true` to opt out.
 
 A failure marks the session failed (rc=97), halts the wave before merging into
 trunk, and writes a missing-paths summary to `.session-NN-exec.log`.
+
+### Cross-repo sessions
+
+A session can produce files in a sibling git repo (e.g. monorepo-adjacent
+service code) by listing those paths in `produces:`:
+
+```yaml
+produces:
+  - "../masterSignalR-clone/Services/OrderService.cs"
+  - "../masterSignalR-clone/Models/*.cs"
+  - "internal-only.md"
+```
+
+`../`-style paths anchor at the original epic repo, not the per-session
+worktree — write them as you'd normally write them next to the epic repo.
+Absolute paths also work. At session start the runner captures the HEAD of
+every external git repo referenced this way; afterwards the validator diffs
+each of those repos against its captured HEAD and confirms each declared
+deliverable shows up. The no-op guard treats a HEAD advance in any external
+repo as real work, so a session that legitimately commits only into a
+sibling repo passes. Sessions still need to commit their own work in the
+sibling repo — the auto-commit fallback runs only inside the epic worktree.
 
 ### Per-Session Overrides
 

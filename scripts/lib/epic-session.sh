@@ -349,6 +349,25 @@ run_one_session() {
   local baseline_head
   baseline_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
 
+  # Cross-repo: snapshot HEAD of every external git repo referenced by
+  # this session's `produces:` / `touches:` frontmatter, so the no-op
+  # guard and the deliverables validator can both reason about
+  # sibling-repo work (e.g. `produces: [../masterSignalR-clone/Foo.cs]`).
+  # Path resolution is anchored at ORIG_REPO_ROOT — the user's original
+  # repo, not this per-session worktree — to match how authors mentally
+  # write `../sibling/...` when designing the epic.
+  local ext_baselines_file="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-external-baselines.json"
+  local ext_helper="$CLAUDE_PLUGIN_ROOT/scripts/epic-external-baselines.py"
+  if [[ -f "$ext_helper" && -n "${ORIG_REPO_ROOT:-}" ]]; then
+    if ! "$PYTHON_CMD" "$ext_helper" snapshot \
+         --session-md "$session_path" \
+         --orig-repo-root "$ORIG_REPO_ROOT" \
+         --output "$ext_baselines_file" 2>>"$exec_log"; then
+      warn "  ⚠ session $sid: external baseline snapshot failed (continuing; cross-repo deliverables won't be validated)"
+      rm -f "$ext_baselines_file"
+    fi
+  fi
+
   while [[ $attempt -le $max_attempts ]]; do
     rc=0
     if [[ $attempt -gt 1 ]]; then
@@ -507,14 +526,30 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
   fi
 
   # No-op guard: rc=0 + zero output = treat as failure. Otherwise
-  # dependent sessions read missing artifacts.
+  # dependent sessions read missing artifacts. A session that committed
+  # only into a sibling repo is NOT a no-op — the external-baselines
+  # check below reads the per-repo HEAD snapshots captured at session
+  # start and accepts movement in any of them.
   if [[ $rc -eq 0 && -n "$baseline_head" ]]; then
     local current_head
     current_head="$(git rev-parse HEAD 2>/dev/null || echo "")"
+    local internal_noop="false"
     if [[ "$current_head" == "$baseline_head" ]] \
        && git diff --quiet HEAD 2>/dev/null \
        && [[ -z "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
-      echo "ERROR: session $sid completed with rc=0 but produced no output (no commits, no diff, no untracked files). Treating as failure." >> "$exec_log"
+      internal_noop="true"
+    fi
+    local external_noop="true"
+    if [[ "$internal_noop" == "true" && -f "$ext_baselines_file" && -f "$ext_helper" ]]; then
+      # Only spend the subprocess when the worktree itself looks empty —
+      # otherwise the session clearly did something internally and we
+      # don't need to interrogate siblings.
+      local ext_check_out
+      ext_check_out="$("$PYTHON_CMD" "$ext_helper" advanced --baselines "$ext_baselines_file" 2>/dev/null || echo "no")"
+      [[ "$ext_check_out" == "yes" ]] && external_noop="false"
+    fi
+    if [[ "$internal_noop" == "true" && "$external_noop" == "true" ]]; then
+      echo "ERROR: session $sid completed with rc=0 but produced no output (no commits, no diff, no untracked files in epic worktree, and no external-repo HEAD movement). Treating as failure." >> "$exec_log"
       warn "  ⚠ session $sid produced no output — marking failed (likely model no-op)"
       rc=99
     fi
@@ -522,27 +557,32 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
 
   # Deliverables validator: catches sessions that committed only handoff
   # docs + .wolf/* metadata. Opt out with `skip_deliverables_check: true`.
+  # We intentionally do NOT gate this on internal-HEAD-advance: a session
+  # that did all its real work in a sibling repo (and so left the epic
+  # worktree HEAD untouched) still needs to have its declared deliverables
+  # checked there. The no-op guard above already short-circuits truly
+  # empty sessions to rc=99 before we get here.
   if [[ $rc -eq 0 && -n "$baseline_head" ]]; then
-    local current_head_v
-    current_head_v="$(git rev-parse HEAD 2>/dev/null || echo "")"
-    if [[ -n "$current_head_v" && "$current_head_v" != "$baseline_head" ]]; then
-      local validator="$CLAUDE_PLUGIN_ROOT/scripts/validate-session-deliverables.py"
-      if [[ -f "$validator" ]]; then
-        local validate_err; validate_err="$(mktemp)"
-        local vrc=0
-        "$PYTHON_CMD" "$validator" "$session_path" "$wt_dir" "$baseline_head" \
-            >>"$exec_log" 2>"$validate_err" || vrc=$?
-        if [[ $vrc -ne 0 ]]; then
-          {
-            echo ""
-            echo "=== deliverables validation failed (rc=$vrc) ==="
-            cat "$validate_err"
-          } >> "$exec_log"
-          warn "  ⚠ session $sid deliverables validation failed (see ${exec_log/#$REPO_ROOT\//})"
-          rc=97
-        fi
-        rm -f "$validate_err"
+    local validator="$CLAUDE_PLUGIN_ROOT/scripts/validate-session-deliverables.py"
+    if [[ -f "$validator" ]]; then
+      local validate_err; validate_err="$(mktemp)"
+      local vrc=0
+      local validator_args=("$session_path" "$wt_dir" "$baseline_head")
+      if [[ -f "$ext_baselines_file" ]]; then
+        validator_args+=(--external-baselines "$ext_baselines_file")
       fi
+      "$PYTHON_CMD" "$validator" "${validator_args[@]}" \
+          >>"$exec_log" 2>"$validate_err" || vrc=$?
+      if [[ $vrc -ne 0 ]]; then
+        {
+          echo ""
+          echo "=== deliverables validation failed (rc=$vrc) ==="
+          cat "$validate_err"
+        } >> "$exec_log"
+        warn "  ⚠ session $sid deliverables validation failed (see ${exec_log/#$REPO_ROOT\//})"
+        rc=97
+      fi
+      rm -f "$validate_err"
     fi
   fi
 
