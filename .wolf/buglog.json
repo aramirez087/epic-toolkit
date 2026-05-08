@@ -5850,6 +5850,35 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T19:49:57.399Z"
+    },
+    {
+      "id": "bug-288",
+      "timestamp": "2026-05-08T20:18:20.207Z",
+      "error_message": "scripts/epic-dag.py `_strip_inline_comment` pre-scan added by bug-268 silently truncates block-list values that contain `#`. The pre-scan computed `_key_end = _colon_pos if _colon_pos >= 0 else len(line)`, but when a line has NO `:` (block-list item like `- \"docs/note # historical.md\"` or `- 'src/foo.cs # is real'`), `_key_end` falls through to `len(line)` and the whole-line scan strips at the first `#` preceded by space/tab — including ones legitimately INSIDE the quoted value. The main scanner below has full quote/flow-aware tracking that correctly preserves `#` in quoted block-list items, but it never gets a chance to run because the pre-scan returns first. Audit-class follow-up to bugs 117/123/124/126/132/134/135/136 — every parser site that consumes a token boundary must respect quotes, but the bug-268 fix added a NEW unquoted whole-line scan that bypassed the quote-aware logic. Filenames containing `#` (e.g. `Issue#42`, GitHub fragment refs, doc cross-refs) and any quoted block-list value with a comment-like substring are the affected real-world cases.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "bug-268's pre-scan was meant to find `#` only in the KEY portion of `key  # has : in comment` lines (where the comment's `:` confused the value_start logic). But `_key_end = _colon_pos if _colon_pos >= 0 else len(line)` made the pre-scan fall through to a WHOLE-LINE scan when no colon was present. Block-list items have no colon and the entire line — including the quoted value — got swept by the linear `# preceded by space` test, which has zero quote awareness.",
+      "fix": "Restrict the pre-scan to fire only when `_colon_pos >= 0`. Block-list items without colons skip pre-scan entirely and fall through to the main quote-aware scanner, which already handles `# in quoted block-list value` correctly via the `stripped[0] == '-'` value_start branch. Bug-268's original repro (`key  # has : in comment`) still has `_colon_pos` pointing INTO the comment, so the pre-scan's `range(1, _colon_pos)` still finds the `#` and strips correctly. Verified with 10 cases: bug-288 repros (double-quoted, single-quoted, adjacent-#) all pass; bug-268 regression passes; flow-list / legitimate trailing comment / whole-line / indented comment / key:value-with-quoted-# regressions all pass.",
+      "tags": [
+        "found-by-bug-hunt",
+        "yaml-parser",
+        "audit-gap",
+        "frontmatter",
+        "block-list",
+        "quote-aware"
+      ],
+      "related_bugs": [
+        "bug-117",
+        "bug-123",
+        "bug-124",
+        "bug-126",
+        "bug-132",
+        "bug-134",
+        "bug-135",
+        "bug-136",
+        "bug-268"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T20:18:20.207Z"
     }
   ]
 }

@@ -84,12 +84,17 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         # parse_frontmatter then partitions at the comment's `:` and
         # records a bogus key/value pair. Unquoted YAML keys have no
         # quoted regions, so a plain linear scan is sufficient here.
-        # (bug-268)
+        # Skip when there is no `:` on the line — block-list items
+        # (`- "src/Issue#42.cs"`, `- 'docs/note # historical.md'`) have
+        # no key/value boundary, and a whole-line scan would silently
+        # truncate at any `#` preceded by whitespace, including ones
+        # legitimately inside the quoted value. The main scanner's
+        # quote-aware state machine below handles those correctly. (bug-288)
         _colon_pos = line.find(":")
-        _key_end = _colon_pos if _colon_pos >= 0 else len(line)
-        for _j in range(1, _key_end):
-            if line[_j] == "#" and line[_j - 1] in (" ", "\t"):
-                return line[:_j].rstrip()
+        if _colon_pos >= 0:
+            for _j in range(1, _colon_pos):
+                if line[_j] == "#" and line[_j - 1] in (" ", "\t"):
+                    return line[:_j].rstrip()
 
         value_start = -1
         if len(stripped) >= 2 and stripped[0] == "-" and stripped[1] in (" ", "\t"):
