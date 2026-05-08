@@ -51,7 +51,20 @@ if [[ -z "$SIDE" ]]; then
   fi
 fi
 
-CONFLICTED="$(git diff --name-only --diff-filter=U)"
+# `core.quotePath=false`: git's default quotes any path with bytes >= 0x80
+# (and whitespace/control chars) as `".wolf/foo\xxxx"`. The downstream
+# `^\.wolf/` filter then misclassifies the quoted line as a non-wolf
+# conflict, the script refuses to auto-resolve, and the user sees
+# "non-.wolf/ conflicts present" pointing at the quoted line — for a file
+# that IS in .wolf/, just with a non-ASCII char in its name (em-dash,
+# accented letter, CJK, smart quote). Same audit class as bug-104/107 in
+# validate-session-deliverables.py's `_read_diff` — that fix added
+# `-c core.quotePath=false` to the same `git diff` call shape but stopped
+# at the validator and missed the symmetric resolver path. Forcing raw
+# bytes here lets the regex compare two consistently-encoded strings, and
+# the subsequent `git checkout`/`git add` accept the unquoted UTF-8 path
+# as pathspec.
+CONFLICTED="$(git -c core.quotePath=false diff --name-only --diff-filter=U)"
 if [[ -z "$CONFLICTED" ]]; then
   echo "No conflicts to resolve."
   exit 0

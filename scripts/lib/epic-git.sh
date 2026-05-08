@@ -114,7 +114,21 @@ provision_wolf_merge() {
 auto_resolve_wolf_conflicts() {
   local workdir="$1" side="$2"
   local conflicted non_wolf
-  conflicted="$(git -C "$workdir" diff --name-only --diff-filter=U 2>/dev/null || true)"
+  # `core.quotePath=false`: git's default quotes any path with bytes >= 0x80
+  # (and whitespace/control chars) as `".wolf/foo\xxxx"`. The downstream
+  # `^\.wolf/` filter then misclassifies the quoted line as a non-wolf
+  # conflict (the line starts with `"`, not `.`), the function returns 1,
+  # and the caller bails as if a real code conflict existed — silently
+  # disabling the .wolf/-only auto-resolve for any session whose conflicted
+  # .wolf/ file has a non-ASCII char in its name (em-dash, accented letter,
+  # CJK, smart quote). Same audit class as bug-104/107 in
+  # validate-session-deliverables.py's `_read_diff`; that fix added
+  # `-c core.quotePath=false` to the same `git diff` call shape but stopped
+  # at the validator and missed the symmetric merge-driver path. Forcing
+  # raw bytes here lets the regex compare two consistently-encoded strings,
+  # and the subsequent `git checkout`/`git add` accept the unquoted UTF-8
+  # path as pathspec.
+  conflicted="$(git -C "$workdir" -c core.quotePath=false diff --name-only --diff-filter=U 2>/dev/null || true)"
   [[ -z "$conflicted" ]] && return 2
   non_wolf="$(printf '%s\n' "$conflicted" | grep -Ev '^\.wolf/' | grep -v '^$' || true)"
   [[ -n "$non_wolf" ]] && return 1

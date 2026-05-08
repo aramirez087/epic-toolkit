@@ -4312,6 +4312,33 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T00:39:10Z"
+    },
+    {
+      "id": "bug-213",
+      "timestamp": "2026-05-08T01:17:48Z",
+      "error_message": "scripts/lib/epic-git.sh:117 (auto_resolve_wolf_conflicts) and scripts/wolf-merge/resolve-wolf.sh:54 read `git diff --name-only --diff-filter=U` without `-c core.quotePath=false`. Git's default quotePath=true wraps any path with bytes >= 0x80 (and whitespace / control chars) as a C-string-escaped, double-quoted line: a conflicted `.wolf/foo\u2014bar.md` (em-dash, accented letter, CJK, smart quote) prints as `\".wolf/foo\\342\\200\\224bar.md\"` \u2014 leading byte `\"`, not `.`. The downstream `grep -Ev '^\\.wolf/'` filter then misclassifies the quoted line as a non-wolf conflict (every quoted-and-escaped path fails the literal `^\\.wolf/` test), the helper returns 1 (caller bails as if a real code conflict existed), and the .wolf/-only auto-resolve is silently disabled for any session whose conflicted .wolf/ file has a non-ASCII char in its filename. Two surfaces affected: (1) `auto_resolve_wolf_conflicts` is invoked from BOTH the runner's wave-merge phase (run-sessions.sh:1383, where bailing as 'non-wolf conflicts' falsely trips bug-087's case-1 branch and aborts the entire epic with `MERGE CONFLICT merging session NN into trunk`) AND from `rebase_with_wolf_resolve` (epic-git.sh:175, called from the auto-rebase block at run-sessions.sh:1618, where bailing aborts the rebase via `git rebase --abort` and surfaces 'non-.wolf/ conflicts require manual resolution on the PR' \u2014 even though the only conflicts are .wolf/ files); (2) `resolve-wolf.sh` is the one-shot user-facing resolver invoked manually after a conflict, and runs under `set -euo pipefail` with NO `|| true` on its `git checkout` / `git add` arms (lines 81-86), so even if a user explicitly passes `--ours`/`--theirs` to force-resolve a .wolf/ conflict with a non-ASCII filename, the script first prints the misleading 'Refusing to auto-resolve: non-.wolf/ conflicts present:' (line 62) naming the quoted-and-escaped path back at them, then exits 1 without resolving anything. The user has no signal that the non-ASCII filename is the cause; the printed path looks like a real code path until they stare at it and realise the leading `\"` and `\\342...` bytes are git's quoted form. Same audit class as bug-104/107 \u2014 validate-session-deliverables.py's `_read_diff` had the exact same shape (`git diff --name-status` consumed by a string-equality compare) and was patched to add `-c core.quotePath=false`, but the audit chain stopped at the validator and missed the two symmetric merge-driver call sites. The runner happens not to fire the bug in OpenWolf's stock layout (anatomy.md, buglog.json, cerebrum.md, OPENWOLF.md, identity.md, hooks/_session.json, scripts/*.sh, scripts/*.py \u2014 every name is ASCII), so the audit chain didn't surface it from production telemetry; but any consuming repo that adds a non-ASCII .wolf/ file (notes, designqc-captures named after a feature with a smart quote, manually-exported logs with em-dashes) silently falls into the bug. The third call site of the same `git diff --name-only --diff-filter=U` pattern, at epic-git.sh:181 inside `rebase_with_wolf_resolve`'s loop, only checks `| grep -q .` for any non-empty output \u2014 quoted or not, the line is non-empty so the probe correctly detects the still-present conflict; that site does not need the fix. Symmetric audit pattern: every consumer of `git diff` output that string-compares the path field (literal equality, prefix filter, glob match, hash-key lookup) MUST pass `-c core.quotePath=false` or git's default quoting will silently mismatch any non-ASCII path. Validated empirically: created `.wolf/foo\u2014bar.md` with conflicting edits on two branches, ran the merge, observed pre-fix `auto_resolve_wolf_conflicts` returns 1 with `non_wolf=[\".wolf/foo\\342\\200\\224bar.md\"]`; post-fix returns 0 with the conflict auto-resolved and `git diff --diff-filter=U` empty. `bash -n` passes on both files.",
+      "file": "scripts/lib/epic-git.sh, scripts/wolf-merge/resolve-wolf.sh",
+      "root_cause": "git's default `core.quotePath=true` wraps non-ASCII path bytes in C-string-escaped, double-quoted lines (`\".wolf/foo\\xxx\"`). The `^\\.wolf/` filter checks the literal `.` character at start-of-line, but a quoted path starts with `\"` instead. Same audit class as bug-104/107, missed at the two merge-driver call sites.",
+      "fix": "Add `-c core.quotePath=false` to both `git diff --name-only --diff-filter=U` calls so paths arrive raw. epic-git.sh:117 becomes `git -C \"$workdir\" -c core.quotePath=false diff --name-only --diff-filter=U`; resolve-wolf.sh:54 becomes `git -c core.quotePath=false diff --name-only --diff-filter=U`. The downstream regex compare and the subsequent `git checkout`/`git add` pathspec calls all accept raw UTF-8, so no further changes are needed.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "quotepath",
+        "git-diff",
+        "merge-driver",
+        "auto-resolve",
+        "non-ascii",
+        "symmetric-to-bug-104",
+        "symmetric-to-bug-107"
+      ],
+      "related_bugs": [
+        "bug-104",
+        "bug-107",
+        "bug-087",
+        "bug-160"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T01:17:48Z"
     }
   ]
 }
