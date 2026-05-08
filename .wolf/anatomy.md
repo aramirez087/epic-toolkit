@@ -1,6 +1,6 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T13:41:54.834Z
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T13:48:24.537Z
 > Files: 70 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
@@ -65,7 +65,7 @@
 ## .claude-plugin/
 
 - `marketplace.json` (~95 tok)
-- `plugin.json` (~162 tok)
+- `plugin.json` (~176 tok)
 
 ## .opencode/
 
@@ -92,7 +92,7 @@
 
 ## docs/
 
-- `epic-guide.md` — Epic Sessions Guide (~3362 tok)
+- `epic-guide.md` — Epic Sessions Guide (~3470 tok)
 - `epic-prompt-template.md` — Epic Prompt Template (~2170 tok)
 
 ## scripts/

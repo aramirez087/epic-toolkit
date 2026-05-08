@@ -231,12 +231,16 @@ Within each epic, individual sessions can override via frontmatter `model:` fiel
 | `--base B` | repo default | Base for new trunk branch |
 | `--no-commit` | off | Skip auto-commit fallback |
 | `--no-pr` | off | Skip auto-PR creation |
+| `--no-rebase` | off | Skip pre-PR rebase onto `origin/<default>` (default: rebase + auto-resolve `.wolf/`) |
 | `--skip-plan` | off | Single-pass execution (no plan phase) |
 | `--no-worktree` | off | Run trunk in CWD (forces sequential) |
 | `--keep-worktree` | off | Retain trunk worktree on success |
 | `--keep-session-worktrees` | off | Retain per-session worktrees on success |
+| `--keep-session-docs` | off | Skip removing session prompts and roadmap handoffs from the epic branch on success |
 | `--timeout N` | 0 | Session timeout in minutes (0 = no timeout) |
 | `--retry N` | 0 | Retry failed sessions N times (0 = no retry) |
+| `--wave-timeout MINS` | auto | Max minutes before the entire wave is killed (0 = auto-derive per wave) |
+| `--fresh` | off | Disable resume: ignore cached plans and re-run already-committed sessions |
 
 ## Configuration File Reference
 

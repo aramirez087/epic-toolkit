@@ -4944,6 +4944,80 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T15:00:00Z"
+    },
+    {
+      "id": "bug-246",
+      "timestamp": "2026-05-08T13:48:24.543Z",
+      "error_message": "Incorrect value in code",
+      "file": ".claude-plugin/plugin.json",
+      "root_cause": "Had \"DAG-scheduled multi-session epics with parallel-w",
+      "fix": "Changed to \"DAG-scheduled multi-session epics with parallel-w",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "json"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T13:48:24.543Z"
+    },
+    {
+      "id": "bug-246",
+      "timestamp": "2026-05-08T13:48:58Z",
+      "error_message": "docs/epic-guide.md:219-239 'Options' table omitted four flags that scripts/run-sessions.sh fully wires and surfaces in --help (per the bug-244 audit) and that commands/epic.md fully lists (per the bug-245 audit): --no-rebase, --keep-session-docs, --wave-timeout MINS, and --fresh. The README.md:142 line tells users 'See docs/epic-guide.md for the full reference', so any flag missing from this table is invisible to users who follow that pointer \u2014 they would have to read run-sessions.sh source or hit a confusing error to discover the flag exists. Same audit-gap user-facing-string class as bug-205/218/240/241/244/245 \u2014 the docs Options table is the most prominently linked-to reference and the previous audit chain reached the script header (bug-244) and the slash-command Execute syntax (bug-245) without reaching the long-form guide.",
+      "file": "docs/epic-guide.md",
+      "root_cause": "When --no-rebase / --keep-session-docs / --wave-timeout / --fresh were added to run-sessions.sh, the comment header (bug-244) and the commands/epic.md Execute block (bug-245) were updated piecemeal but the long-form Options table in docs/epic-guide.md was missed, even though README.md:142 explicitly markets it as 'the full reference'. Bug-244's docblock named the cross-site coverage requirement (header AND sed-range) inside run-sessions.sh, but the requirement extends to every user-facing reference site \u2014 and the docs/ guide is the one with the strongest authority claim.",
+      "fix": "Insert four rows into the docs/epic-guide.md Options table mirroring run-sessions.sh's header order: --no-rebase between --no-pr and --skip-plan (logical --no-* grouping); --keep-session-docs immediately after --keep-session-worktrees (--keep-* grouping); --wave-timeout MINS and --fresh after --retry (last). Each row's default column matches run-sessions.sh's actual default state (--no-rebase off = rebase enabled by default; --wave-timeout auto = 0 means auto-derive per wave). Description column matches the script's --help text verbatim where the format permits. Verified by diffing the resulting table flag list against run-sessions.sh's header (lines 23-47) and against commands/epic.md's Defaults+Execute blocks (post-bug-245): all three sites now list the same 23 user-facing flags.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "user-facing-string",
+        "command-docs",
+        "epic-guide-md",
+        "symmetric-to-bug-244",
+        "symmetric-to-bug-245",
+        "asymmetric-drift",
+        "long-form-reference"
+      ],
+      "related_bugs": [
+        "bug-205",
+        "bug-218",
+        "bug-240",
+        "bug-241",
+        "bug-244",
+        "bug-245"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T13:48:58Z"
+    },
+    {
+      "id": "bug-247",
+      "timestamp": "2026-05-08T13:48:58Z",
+      "error_message": ".claude-plugin/plugin.json:4 description field claimed 'Adds /epic-toolkit:epic and /epic-toolkit:epic.generate for Claude Code' \u2014 naming only two slash commands. But commands/sprint.md is fully wired and plugin.json:11 'commands: ./commands/' tells Claude Code to expose every .md under ./commands/ as a namespaced slash command, so /epic-toolkit:sprint is a real command Claude Code surfaces in /help and the marketplace listing. Users browsing the marketplace see the description string verbatim \u2014 anyone looking for a sprint orchestrator searches for 'sprint' and finds nothing in the description; anyone evaluating the plugin's command surface miscounts the offering. Same audit-gap user-facing-string class as bug-205/218/240/241/244/245 \u2014 a marketplace-visible string drifted from the actual command wiring.",
+      "file": ".claude-plugin/plugin.json",
+      "root_cause": "Sprint orchestration was added (commit 64078a0 'feat: added sprints') with commands/sprint.md, .opencode/commands/sprint.md, and scripts/run-sprint.sh \u2014 but the plugin manifest description (the single line marketplace browsers display) was never updated, so it still listed only the original two commands. The bug-244/bug-245 audit chain reached the script's --help header and the per-command docs but stopped short of the marketplace-listing description, even though that string has a wider audience than either (every potential installer sees it; --help and the per-command docs are only seen post-install).",
+      "fix": "Update plugin.json:4 description to enumerate all three commands: 'Adds /epic-toolkit:epic, /epic-toolkit:epic.generate, and /epic-toolkit:sprint (multi-epic orchestrator) for Claude Code.' The parenthetical disambiguates sprint from epic for prospective installers who don't know the difference. Verified the resulting JSON parses cleanly (python -m json.tool) and the description stays on a single line so marketplace tooling that truncates at line breaks shows the full sentence.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "user-facing-string",
+        "plugin-manifest",
+        "marketplace-listing",
+        "symmetric-to-bug-244",
+        "symmetric-to-bug-245",
+        "command-enumeration-drift"
+      ],
+      "related_bugs": [
+        "bug-205",
+        "bug-218",
+        "bug-240",
+        "bug-241",
+        "bug-244",
+        "bug-245",
+        "bug-246"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T13:48:58Z"
     }
   ]
 }
