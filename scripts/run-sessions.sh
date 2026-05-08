@@ -1640,7 +1640,28 @@ Co-Authored-By: AI <noreply@ai>" 2>/dev/null || true
     # sites below.
     DEFAULT_BRANCH="$BASE_BRANCH"
     if [[ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]]; then
-      EXISTING_PR="$(gh pr view "$CURRENT_BRANCH" --json url -q '.url' 2>/dev/null || true)"
+      # Filter to OPEN PRs only. `gh pr view <branch>` falls back to the most
+      # recently-created CLOSED/MERGED PR when no open PR exists on the branch
+      # (verified empirically: `gh pr view <branch> --json state` returns
+      # `{"state":"MERGED"}` for a previously-merged branch with no open PR).
+      # The previous form took that URL verbatim, the runner reported
+      # "PR already exists: <url>" pointing at the stale merged PR, force-
+      # pushed (or push-fallbacked, post-bug-211) to the branch — which on a
+      # MERGED PR does NOT reopen it; the new commits land on the remote
+      # branch but no PR ever wraps them — and skipped `gh pr create` at
+      # line 1759 because the existing-PR branch had already been taken.
+      # User copy-pasted the printed URL expecting the new work and found
+      # the old merged PR still showing the prior epic. Same audit pattern
+      # as cleanup_merged_epic_branches at epic-git.sh:253, which already
+      # uses `gh pr list --head <br> --state all` and case-matches the state
+      # explicitly — that helper differentiates OPEN/DRAFT (keep) from
+      # MERGED/CLOSED (prune); the auto-PR check at this site needs the
+      # same OPEN-only filter so a stale merged PR does not pre-empt the
+      # new-PR path. Use `gh pr list --head ... --state open` instead;
+      # `.[0].url` returns empty when no open PR exists, falling cleanly
+      # through to the `else` branch where `gh pr create` opens a fresh PR.
+      # (bug-214)
+      EXISTING_PR="$(gh pr list --head "$CURRENT_BRANCH" --state open --json url -q '.[0].url' 2>/dev/null || true)"
       if [[ -n "$EXISTING_PR" ]]; then
         ok "PR already exists: $EXISTING_PR"
         # Push so the existing PR reflects the latest commits. Three cases:

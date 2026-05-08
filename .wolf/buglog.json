@@ -4339,6 +4339,49 @@
       ],
       "occurrences": 1,
       "last_seen": "2026-05-08T01:17:48Z"
+    },
+    {
+      "id": "bug-214",
+      "timestamp": "2026-05-08T03:23:57.000Z",
+      "error_message": "globs_overlap's _stem() helper returned a trailing slash for single-star patterns ('src/foo/*' \u2192 'src/foo/'), defeating _is_under's `parent + '/'` join (a child 'src/foo/bar' does NOT start with 'src/foo//'), so the directory-prefix containment fallback under-detects same-wave touches overlap whenever fnmatch can't catch the pair on its own.",
+      "file": "scripts/epic-dag.py",
+      "root_cause": "epic-dag.py:786 used a two-pass `g.split('**')[0].rstrip('/').rstrip('*')`. For 'src/foo/*': the first rstrip('/') is a no-op (string ends with '*'), the second rstrip('*') strips the star and exposes the underlying '/', leaving a final stem of 'src/foo/' with a trailing slash. _is_under(child, parent) at line 793 checks `child.startswith(parent + '/')`; with parent='src/foo/' the join becomes 'src/foo//' and any real child path falls through to False. fnmatch saves most overlap detections (single `*` matches across `/` in fnmatch's grammar), but pure-literal vs single-star pairs that only the directory-prefix branch can flag silently under-detect overlap and the parallel-safety check in find_overlaps stops protecting them. Same audit class as the bug-022/bug-033 literal-prefix glob bugs flagged in the function's own comment \u2014 the fix needs to compose with the separator-anchored compare.",
+      "fix": "Replace the two-pass rstrip chain with a single `rstrip('/*')` that strips ANY trailing '/' or '*' together. Output is identical for 'src/foo', 'src/foo/', and 'src/foo/**' (the cases the original handled); only single-star patterns like 'src/foo/*' change (now 'src/foo' instead of 'src/foo/'). Verified via test fixture: 'src/foo/*' \u2192 'src/foo' (was 'src/foo/'); '/' \u2192 '' (unchanged); '**' \u2192 '' (unchanged); 'src/foo/*.cs' \u2192 'src/foo/*.cs' (unchanged \u2014 known limitation of the lossy-stem heuristic). bash -n passes; python3 -m py_compile passes.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "trailing-slash",
+        "glob-overlap",
+        "parallel-safety"
+      ],
+      "related_bugs": [
+        "bug-022",
+        "bug-033"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T03:23:57.000Z"
+    },
+    {
+      "id": "bug-215",
+      "timestamp": "2026-05-08T03:23:57.000Z",
+      "error_message": "Auto-PR existing-PR check at run-sessions.sh:1643 used `gh pr view <branch>` which falls back to the most recently-created CLOSED/MERGED PR when no open PR exists on the branch \u2014 silently re-opening the stale-merged-PR-as-existing-PR branch and skipping `gh pr create` for the new run.",
+      "file": "scripts/run-sessions.sh",
+      "root_cause": "scripts/run-sessions.sh:1643 read `EXISTING_PR=\"$(gh pr view \"$CURRENT_BRANCH\" --json url -q '.url' 2>/dev/null || true)\"`. Verified empirically against this very repo: `gh pr view epic/epic-next-features --json state,url` returns `MERGED https://github.com/aramirez087/epic-toolkit/pull/1` even though there is no open PR on that branch \u2014 `gh pr view` documents this fallback (it shows the latest PR matching the branch, regardless of state). The downstream check `if [[ -n \"$EXISTING_PR\" ]]` then took the branch as 'PR already exists', the runner printed `PR already exists: <merged-PR-url>`, force-pushed (or push-fallbacked, post-bug-211) to the branch \u2014 which on a MERGED PR does NOT reopen it; new commits land on the remote branch but no PR ever wraps them \u2014 and skipped `gh pr create` at line 1759 because the existing-PR branch had already been taken. User copy-pasted the printed URL expecting their new work and found the prior merged PR. Same audit pattern as cleanup_merged_epic_branches at epic-git.sh:253, which already uses `gh pr list --head <br> --state all` and case-matches the state explicitly to differentiate OPEN/DRAFT (keep) from MERGED/CLOSED (prune); the auto-PR check at this site needs the same OPEN-only filter so a stale merged PR does not pre-empt the new-PR path. Bug-211's commit message ('an open PR \u2014 silently dropped the push') implicitly assumed `EXISTING_PR` only captured open PRs, but the underlying gh pr view behavior includes merged/closed PRs \u2014 the assumption was load-bearing and unverified.",
+      "fix": "Switch from `gh pr view <branch>` to `gh pr list --head <branch> --state open --json url -q '.[0].url'`. This filters to OPEN PRs only (gh pr list's --state defaults to open and accepts the explicit value too); `.[0].url` returns empty when no open PR exists, and the empty EXISTING_PR falls cleanly through to the `else` branch where `gh pr create` opens a fresh PR for the new work. Mirrors the existing `gh pr list --head ... --state all` pattern at cleanup_merged_epic_branches (epic-git.sh:253) \u2014 same primitive, different state filter. Verified against the merged-only branch: pre-fix returned the MERGED PR's URL (mis-reusing it as 'existing'); post-fix returns empty (correctly falling through to gh pr create). bash -n passes.",
+      "tags": [
+        "found-by-bug-hunt",
+        "audit-gap",
+        "gh-cli",
+        "auto-pr",
+        "stale-pr-reuse",
+        "symmetric-to-bug-211"
+      ],
+      "related_bugs": [
+        "bug-211",
+        "bug-122"
+      ],
+      "occurrences": 1,
+      "last_seen": "2026-05-08T03:23:57.000Z"
     }
   ]
 }

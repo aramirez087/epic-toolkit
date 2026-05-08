@@ -783,7 +783,22 @@ def globs_overlap(a_globs: list[str], b_globs: list[str]) -> bool:
     """
 
     def _stem(g: str) -> str:
-        return g.split("**")[0].rstrip("/").rstrip("*")
+        # `rstrip("/*")` strips ANY trailing `/` or `*` together; the previous
+        # two-pass `rstrip("/").rstrip("*")` left a trailing `/` for single-
+        # star patterns like `src/foo/*` (rstrip("/") was a no-op since the
+        # path ended in `*`, then rstrip("*") stripped the star and exposed
+        # the underlying `/` — final stem `src/foo/`). The trailing slash
+        # then defeated `_is_under`'s `parent + "/"` join: a child `src/foo/
+        # bar` does NOT start with `src/foo//`, so the containment test
+        # returned False whenever fnmatch couldn't catch the overlap by
+        # itself. fnmatch saves most cases (single `*` matches across `/`),
+        # but pure-literal vs single-star pairs fall through to _stem and
+        # the trailing-slash drift quietly under-detects overlap. Combining
+        # both classes into one `rstrip("/*")` strips the star and the slash
+        # in one pass and produces the same result the two-pass form already
+        # produced for `src/foo/`, `src/foo`, and `src/foo/**` — only the
+        # single-star case changes (now `src/foo` with no trailing slash).
+        return g.split("**")[0].rstrip("/*")
 
     def _is_under(child: str, parent: str) -> bool:
         # Anchor on the path separator so sibling directories that share a
