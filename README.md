@@ -4,6 +4,8 @@ Run multi-session epics as a **directed acyclic graph**, with **parallel sibling
 executing in their own git worktrees** and merging back into a coordinator trunk
 branch wave by wave. Works with both **Claude Code** and **OpenCode**.
 
+![demo](docs/demo.gif)
+
 Adds three slash commands:
 
 - Claude Code: `/epic-toolkit:epic.generate <problem statement>` — turns a problem statement into a

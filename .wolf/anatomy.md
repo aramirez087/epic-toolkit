@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-05-08T22:10:20.857Z
-> Files: 78 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-05-09T01:13:45.665Z
+> Files: 79 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ../../../../tmp/
 
@@ -66,7 +66,7 @@
 - `AGENTS.md` — OpenWolf (~731 tok)
 - `CLAUDE.md` — OpenWolf (~727 tok)
 - `LICENSE` — Project license (~290 tok)
-- `README.md` — Project documentation (~1898 tok)
+- `README.md` — Project documentation (~1904 tok)
 
 ## .claude-plugin/
 
