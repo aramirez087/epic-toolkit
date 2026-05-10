@@ -14,3 +14,6 @@ docs/claude-sessions/
 docs/roadmap/
 .epic-worktrees/
 .epic-config.json
+
+# OpenWolf session data and hooks
+.wolf/
