@@ -330,7 +330,7 @@ run_one_session() {
   # than prompt. Both gated by --fresh.
   local plan_cached=false
   if ! $FRESH; then
-    if session_completed_on_branch "$sid" HEAD "$wt_dir"; then
+    if session_completed_on_branch "$sid" HEAD "$wt_dir" "$EPIC_NAME_SLUG"; then
       log "  ✓ session ${padded_sid} already committed on this branch — skipping (use --fresh to force re-run)"
       cd "$prev_cwd"
       return 0
@@ -402,7 +402,7 @@ DO:
 3. Run all CI checks. Create the handoff doc if required.
 4. Stage and commit ALL changes:
    git add -A
-   git commit -m "feat: Session ${sid} — ${friendly}"
+   git commit -m "feat: Session ${sid} — ${friendly} [epic: ${EPIC_NAME_SLUG}]"
 SINGLE_EOF
 )"
       local prompt_file; prompt_file="$(mktemp)"
@@ -475,7 +475,7 @@ DO:
 3. Create the handoff doc if required.
 4. Stage and commit ALL changes:
    git add -A
-   git commit -m "feat: Session ${sid} — ${friendly}"
+   git commit -m "feat: Session ${sid} — ${friendly} [epic: ${EPIC_NAME_SLUG}]"
 
 Commit with descriptive message. Execute immediately.
 EXEC_EOF
@@ -503,10 +503,10 @@ EXEC_EOF
     if ! git diff --quiet HEAD 2>/dev/null \
        || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
       git add -A
-      local commit_subject="feat: Session ${sid} — ${friendly}"
+      local commit_subject="feat: Session ${sid} — ${friendly} [epic: ${EPIC_NAME_SLUG}]"
       local commit_note="Automated execution of $fname."
       if [[ $rc -ne 0 ]]; then
-        commit_subject="feat(partial): Session ${sid} — ${friendly}"
+        commit_subject="feat(partial): Session ${sid} — ${friendly} [epic: ${EPIC_NAME_SLUG}]"
         commit_note="Auto-recovered after session exited rc=$rc. Files were created but session did not commit them. Verify before merging."
       fi
       # timeout if available — bare commit can hang on index.lock.

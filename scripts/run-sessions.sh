@@ -1066,7 +1066,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
         if $USE_WORKTREE; then
           sess_branch="${SESSION_BRANCH_BY_ID[$sid]}"
           if git -C "$TRUNK_WORKTREE_DIR" merge --no-ff -q \
-              -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH}" \
+              -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [epic: ${EPIC_NAME_SLUG}]" \
               "$sess_branch"
           then
             ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk"
@@ -1088,7 +1088,7 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
               # `if` wrap — a hook/signing/lock failure here would otherwise
               # abort under set -e and skip write_epic_result. (bug-077)
               if git -C "$TRUNK_WORKTREE_DIR" commit -q \
-                  -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved]
+                  -m "Merge session $(printf '%02d' "$sid") (${slug}) into ${BRANCH} [wolf auto-resolved] [epic: ${EPIC_NAME_SLUG}]
 
 Co-Authored-By: AI <noreply@ai>" 2>/dev/null; then
                 ! $LIVE_UI && ok "  ⇢ merged session $(printf '%02d' "$sid") into trunk (wolf conflicts auto-resolved)"
@@ -1199,7 +1199,7 @@ if ! $EPIC_FAILED; then
   ALL_SESSIONS_DONE=true
   INCOMPLETE_SESSIONS=()
   for sid in "${!SESSION_SLUG_BY_ID[@]}"; do
-    if ! session_completed_on_branch "$sid" "$BRANCH" "$TRUNK_WORKTREE_DIR"; then
+    if ! session_completed_on_branch "$sid" "$BRANCH" "$TRUNK_WORKTREE_DIR" "$EPIC_NAME_SLUG"; then
       ALL_SESSIONS_DONE=false
       INCOMPLETE_SESSIONS+=("session-$(printf '%02d' "$sid") (${SESSION_STATUS[$sid]:-not-run})")
     fi

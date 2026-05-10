@@ -203,17 +203,29 @@ cleanup_merged_epic_branches() {
 }
 
 # Returns 0 if session $1 is already committed on branch $2 in repo $3.
-# Three signals: in-memory status, script-generated wave merge commit,
-# or an AI `feat: Session N` commit (sep is any non-alnum byte to avoid
-# locale issues with em-/en-dash in C-locale grep on Git Bash).
+# $4 is the epic name slug (used to scope detection to the current epic;
+# without it an unrelated epic on the same branch whose session numbers
+# happen to overlap would falsely skip sessions — cross-epic false positive).
+#
+# Signals checked, most-specific first:
+#   (a) in-memory SESSION_STATUS (same-run short-circuit)
+#   (b) new-format merge commit:  "Merge session NN (slug) into BRANCH [epic: SLUG]"
+#   (c) new-format feat commit:   "feat: Session N ... [epic: SLUG]"
+#   (d) old-format merge fallback: "Merge session NN (session_slug) ..."
+#       — matched by session slug so two different epics with the same
+#       session number but different slug are correctly distinguished.
+#   (e) old-format feat fallback: "feat: Session N" (no disambiguation
+#       signal; accepted for backward compat with --no-worktree runs
+#       from before the [epic:] tag was introduced)
 # Excludes `feat(partial):` since that prefix means recovered-but-unfinished.
 session_completed_on_branch() {
-  local sid="$1" branch="$2" repo="$3"
+  local sid="$1" branch="$2" repo="$3" epic_slug="${4:-}"
   if [[ "${SESSION_STATUS[$sid]:-}" == "done" ]]; then
     return 0
   fi
-  local padded subjects rev_range
+  local padded subjects rev_range session_slug
   padded="$(printf '%02d' "$sid")"
+  session_slug="${SESSION_SLUG_BY_ID[$sid]:-}"
 
   # Scope to ${BASE_BRANCH}..${branch}. An unscoped log walks back into
   # main's history and any prior epic's `feat: Session N` subject would
@@ -241,18 +253,40 @@ session_completed_on_branch() {
   # Treat unresolvable base_ref as "not completed" so the session
   # re-runs — wasting work is recoverable; silently skipping a never-
   # executed session is data loss. The in-memory `SESSION_STATUS[$sid]
-  # == done` check above (line ~212) still short-circuits sessions
-  # completed in THIS run, so the only sessions affected are those
-  # claimed-done by a previous run on a now-broken base setup.
+  # == done` check above still short-circuits sessions completed in
+  # THIS run, so the only sessions affected are those claimed-done by
+  # a previous run on a now-broken base setup.
   if [[ -z "$base_ref" ]]; then
     return 1
   fi
   rev_range="${base_ref}..${branch}"
 
   subjects="$(git -C "$repo" log --format='%s' "$rev_range" 2>/dev/null || true)"
-  if grep -qE "^Merge session ${padded} \(" <<<"$subjects"; then
+
+  # (b) new-format merge commit: scoped by [epic: SLUG] tag.
+  if [[ -n "$epic_slug" ]] && \
+     grep -qE "^Merge session ${padded} \([^)]*\) into .*\[epic: $(printf '%s' "$epic_slug" | sed 's/[.[\*^$]/\\&/g')\]" <<<"$subjects"; then
     return 0
   fi
+
+  # (c) new-format feat commit: scoped by [epic: SLUG] tag.
+  if [[ -n "$epic_slug" ]] && \
+     grep -qE "^feat: Session ${sid}([^[:alnum:]]|$).*\[epic: $(printf '%s' "$epic_slug" | sed 's/[.[\*^$]/\\&/g')\]" <<<"$subjects"; then
+    return 0
+  fi
+
+  # (d) old-format merge fallback: match by session slug in parens.
+  # Two different epics that share a session number will have different
+  # slugs, so this correctly distinguishes same-epic from cross-epic.
+  if [[ -n "$session_slug" ]] && \
+     grep -qE "^Merge session ${padded} \($(printf '%s' "$session_slug" | sed 's/[.[\*^$]/\\&/g')\) " <<<"$subjects"; then
+    return 0
+  fi
+
+  # (e) old-format feat fallback: no disambiguation signal available.
+  # Accepted for backward compat with pre-[epic:] runs. The risk of a
+  # cross-epic false positive here is low in practice (feat-only sessions
+  # are --no-worktree mode, which is uncommon), and --fresh bypasses it.
   if grep -qE "^feat: Session ${sid}([^[:alnum:]]|$)" <<<"$subjects"; then
     return 0
   fi
