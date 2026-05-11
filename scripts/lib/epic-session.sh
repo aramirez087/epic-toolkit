@@ -208,6 +208,15 @@ run_cli() {
       fi
       local exit_code=${PIPESTATUS[0]}
       cat "$stderr_tmp" >> "$log_file" 2>/dev/null || true
+      # OpenCode exits 0 even on fatal errors (e.g. model not found).
+      # Errors may appear on stdout (JSON error event, logged as `[ERROR]` by
+      # the progress script) or on stderr (raw text). Check both sources.
+      if [[ $exit_code -eq 0 ]]; then
+        if grep -qiE 'model not found|error:' "$stderr_tmp" 2>/dev/null \
+           || grep -qiE '\[ERROR\].*model not found' "$log_file" 2>/dev/null; then
+          exit_code=1
+        fi
+      fi
       rm -f "$stderr_tmp"
     fi
   else
@@ -224,6 +233,10 @@ run_cli() {
         --dangerously-skip-permissions \
         < "$prompt_file" > "$log_file" 2>&1
       local exit_code=$?
+      # OpenCode exits 0 even on fatal errors (e.g. model not found).
+      if [[ $exit_code -eq 0 ]] && grep -qiE 'model not found|error:' "$log_file" 2>/dev/null; then
+        exit_code=1
+      fi
     fi
   fi
 

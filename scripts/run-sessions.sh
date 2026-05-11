@@ -283,14 +283,19 @@ map_model_shorthand() {
   local cli="$2"
   if [[ "$cli" == "opencode" && "$model" != */* ]]; then
     case "$model" in
-      sonnet)   echo "opencode/claude-sonnet-4" ;;
-      sonnet4)  echo "opencode/claude-sonnet-4" ;;
-      opus)     echo "opencode/claude-opus-4-7" ;;
-      haiku)    echo "opencode/claude-haiku-4-5" ;;
-      gpt5)     echo "opencode/gpt-5" ;;
-      gpt5nano) echo "opencode/gpt-5-nano" ;;
-      gemini)   echo "opencode/gemini-3-flash" ;;
-      glm)      echo "opencode/glm-5.1" ;;
+      sonnet)        echo "opencode/claude-sonnet-4" ;;
+      sonnet4)       echo "opencode/claude-sonnet-4" ;;
+      opus)          echo "opencode/claude-opus-4-7" ;;
+      haiku)         echo "opencode/claude-haiku-4-5" ;;
+      gpt5)          echo "opencode/gpt-5" ;;
+      gpt5nano)      echo "opencode/gpt-5-nano" ;;
+      gemini)        echo "opencode/gemini-3-flash" ;;
+      glm)           echo "opencode/glm-5.1" ;;
+      deepseek)        echo "opencode-go/deepseek-v4-pro" ;;
+      deepseek-pro)    echo "opencode-go/deepseek-v4-pro" ;;
+      deepseek-v4-pro) echo "opencode-go/deepseek-v4-pro" ;;
+      deepseek-flash)  echo "opencode-go/deepseek-v4-flash" ;;
+      deepseek-v4-flash) echo "opencode-go/deepseek-v4-flash" ;;
       # Diagnostics MUST go to stderr — every caller wraps this in $(...)
       # and a stdout log line corrupts the captured model id. (bug-181)
       *)        log "Model '$model' is not a known OpenCode shorthand — using as-is" >&2; echo "$model" ;;
