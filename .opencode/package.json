@@ -1,5 +1,7 @@
 {
+  "name": "@aramirez087/epic-toolkit",
+  "version": "1.15.31",
   "dependencies": {
-    "@opencode-ai/plugin": "1.14.31"
+    "@opencode-ai/plugin": "1.15.31"
   }
 }
