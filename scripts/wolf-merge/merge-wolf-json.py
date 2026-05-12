@@ -24,7 +24,7 @@ def load(path: str):
 
 
 def write(path: str, data) -> None:
-    Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def _bug_signature(bug):
