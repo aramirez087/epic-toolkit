@@ -80,7 +80,19 @@ Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. O
 - `model` — overrides the `--model` CLI arg for this session. Common values: `"opus"` (complex reasoning), `"sonnet"` (balanced), `"haiku"` (fast/simple). Also supports provider-prefixed IDs like `"gpt5"`, `"gemini"`, `"glm"`.
 - `cli` — overrides the CLI for this session. Use `"claude"` or `"opencode"`. Omit to auto-detect.
 - `produces` — list of paths or `fnmatch` globs the session must add or modify. The runner fails the session if any declared entry is missing from its diff. Always declare this for sessions that produce code; without it the runner can only catch fully-empty or metadata-only sessions, not "session wrote some code but missed a file." Cross-repo paths (e.g. `../sibling-repo/Services/Foo.cs` or absolute paths) are supported — the runner snapshots each external repo's HEAD at session start and validates the path against that repo's diff. Anchor `../` paths from the location of your epic repo, not the worktree.
+- `produces_strict` — optional boolean (default `true`). Set `produces_strict: false` on sessions that a charter may reassign to different work: a mismatch is then reported as a **warning** rather than a failure, so the wave still progresses. Use this when the planned deliverable files aren't known until the charter audits the repo.
 - `skip_deliverables_check` — `true` to opt out of the deliverables validator. Use only for kickoff or docs-only sessions. Without this, a session that commits only `.wolf/*` and a handoff doc will fail. **Do not reach for this for cross-repo work** — declare the external paths in `produces:` instead so the validator still runs.
+
+**Charter-can-amend produces (`.epic-produces-overrides.json`):** When the charter session discovers that declared produces are stale (e.g. the planned refactor is already done and it reassigns a session to different work), it should write a JSON sidecar in the sessions directory to replace the generated `produces:` for affected sessions. The validator prefers this file over frontmatter:
+
+    # docs/claude-sessions/<epic-name>/.epic-produces-overrides.json
+    {
+      "session-02-decompose-config": ["exporter/file.rs", "exporter/mod.rs"],
+      "03": {"produces": ["tracker/mod.rs"], "reason": "charter reassigned — original work was already done"},
+      "session-04": ["src/bar.rs"]
+    }
+
+Keys: full filename stem (without `.md`), `session-NN`, or bare `NN`. Values: list of path/glob strings, or a dict with a `"produces"` key (and optional `"reason"` for logging).
 
 Example with all fields:
 
@@ -182,7 +194,7 @@ Inside each fenced prompt for sessions 01 and above, include:
 
 ## Sequencing rules
 
-- **Session 01 is the charter and is always solo** (`depends_on: []`, `parallel_safe: false`). Audit the codebase, define architecture, document decisions, and create empty scaffolds (directories, placeholder files, type signatures) that downstream sessions will fill. Keep code changes minimal but lay the structural foundation for parallel fan-out.
+- **Session 01 is the charter and is always solo** (`depends_on: []`, `parallel_safe: false`). Audit the codebase, define architecture, document decisions, and create empty scaffolds (directories, placeholder files, type signatures) that downstream sessions will fill. Keep code changes minimal but lay the structural foundation for parallel fan-out. **If the charter discovers that a downstream session's planned work is already done or needs to be reassigned to different files**, it must: (a) write or update `.epic-produces-overrides.json` in the sessions directory with the corrected `produces:` for that session, and (b) document the reassignment in its handoff. This prevents the validator from false-failing the reassigned session. Alternatively, set `produces_strict: false` on sessions whose final file set can't be predicted until audit time.
 - **Middle sessions own disjoint file regions and run in parallel** wherever the work allows. Aim for the widest waves the dependency graph supports — e.g., 3-4 feature sessions all depending on the charter, then a composition session depending on the relevant feature siblings.
 - **The final session is a CI gate**, depends on every prior session, and is `parallel_safe: false`. Run the full CI checklist for whatever languages and tools the project actually uses (format check, lint/static analysis, type check, unit/integration tests, build, and any project-specific verification such as DB migration replay or schema diff). Fix every failure including type errors, lint warnings treated as errors, and coverage regressions, and produce a go/no-go report. Its prompt must explicitly list every CI command and instruct the agent to iterate until all pass.
 - Every session must produce a handoff doc listing what was done, decisions made, open issues, and next-session inputs.

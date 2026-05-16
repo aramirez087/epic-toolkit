@@ -15,7 +15,25 @@ Frontmatter the validator reads:
       - "src/Users/Models/*.cs"
       - "../sibling-repo/path/to/file.cs"     # cross-repo: see below
 
-    skip_deliverables_check: true   # opt out (kickoff/docs-only sessions)
+    skip_deliverables_check: true   # opt out entirely (kickoff/docs-only sessions)
+
+    produces_strict: false          # downgrade missing produces from failure to
+                                    # warning — wave still progresses.  Use for
+                                    # sessions a charter may reassign. (bug-298)
+
+Charter-can-amend override (.epic-produces-overrides.json):
+  The charter session can write a JSON sidecar in the same directory as the
+  session files to replace the generated produces: for any downstream session
+  it reassigns.  The validator prefers this file over the frontmatter entry.
+
+    {
+      "session-02-decompose-config": ["exporter/file.rs", "exporter/mod.rs"],
+      "03": {"produces": ["tracker/mod.rs"], "reason": "charter reassigned"},
+      "session-04": ["src/bar.rs"]
+    }
+
+  Keys may be the full filename stem (without .md), "session-NN", or bare "NN".
+  Values may be a list of path/glob strings OR a dict with a "produces" key.
 
 Modes:
   1. produces: declared
@@ -283,6 +301,54 @@ def _read_external_diffs(
     return changed_by_repo, deleted_by_repo, errors
 
 
+def _load_produces_override(session_md: str) -> list[str] | None:
+    """Load .epic-produces-overrides.json from the sessions directory.
+
+    Returns the overridden produces list for this session if an entry exists,
+    or None when no override applies.  The charter session can write this file
+    to replace the generated produces: declaration for any downstream session
+    it reassigns (issue-4: adaptive session support, bug-298).
+
+    Sidecar format — keyed by full filename stem OR session number:
+      {
+        "session-02-decompose-config": ["exporter/file.rs", "exporter/mod.rs"],
+        "03": {"produces": ["tracker/mod.rs"], "reason": "charter reassigned"},
+        "session-04": ["src/bar.rs"]
+      }
+    """
+    session_dir = os.path.dirname(os.path.abspath(session_md))
+    overrides_path = os.path.join(session_dir, ".epic-produces-overrides.json")
+    if not os.path.isfile(overrides_path):
+        return None
+    try:
+        with open(overrides_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    stem = os.path.splitext(os.path.basename(session_md))[0]
+    # Lookup order: full stem → session-NN → bare NN
+    m = re.match(r"^session-(\d+)", stem)
+    nn = m.group(1) if m else None
+    entry = (
+        data.get(stem)
+        or (data.get(f"session-{nn}") if nn else None)
+        or (data.get(nn) if nn else None)
+    )
+    if entry is None:
+        return None
+    if isinstance(entry, list):
+        raw = entry
+    elif isinstance(entry, dict):
+        raw = entry.get("produces", [])
+        if not isinstance(raw, list):
+            return None
+    else:
+        return None
+    return [str(p).strip() for p in raw if str(p).strip()]
+
+
 def _print_diff_summary(
     label: str,
     changed: list[str],
@@ -367,6 +433,23 @@ def main() -> int:
     if skip_raw is True:
         return 0
 
+    # produces_strict: false downgrades a produces: mismatch from failure to
+    # warning so the wave still progresses.  Use when the charter may reassign
+    # a session to different work than what was declared at generation time.
+    # (issue-4, bug-298)
+    produces_strict_raw = fm.get("produces_strict")
+    if produces_strict_raw is not None and not isinstance(produces_strict_raw, bool):
+        print(
+            f"ERROR: produces_strict must be a boolean (true/false), "
+            f"got {type(produces_strict_raw).__name__} {produces_strict_raw!r}. "
+            f"Use `produces_strict: false` to downgrade a missing-produces "
+            f"result from failure to warning (e.g. for sessions a charter may "
+            f"reassign). Unquoted YAML spellings: true/false/yes/no/on/off.",
+            file=sys.stderr,
+        )
+        return 2
+    produces_strict = produces_strict_raw if isinstance(produces_strict_raw, bool) else True
+
     try:
         changed, deleted = _read_diff(worktree, base_ref)
     except RuntimeError as exc:
@@ -406,6 +489,19 @@ def main() -> int:
         )
         return 2
     produces = [str(p).strip() for p in produces if str(p).strip()]
+
+    # Charter-can-amend override: if .epic-produces-overrides.json exists in
+    # the sessions directory with an entry for this session, use those produces
+    # in place of the frontmatter declaration.  The charter writes this file
+    # when it reassigns a downstream session to different work. (issue-4, bug-298)
+    _override = _load_produces_override(session_md)
+    if _override is not None:
+        print(
+            f"INFO: produces: overridden by .epic-produces-overrides.json "
+            f"(was {len(produces)} entries, now {len(_override)})",
+            file=sys.stderr,
+        )
+        produces = _override
 
     if produces:
         missing: list[tuple[str, str]] = []
@@ -490,8 +586,14 @@ def main() -> int:
                     else:
                         missing.append((decl, "not in session diff"))
         if missing:
+            # produces_strict: false — downgrade to warning so the wave
+            # still progresses.  Use when the charter reassigns a session
+            # to different work than what was declared at epic generation.
+            # (issue-4, bug-298)
+            severity = "WARNING" if not produces_strict else "ERROR"
             print(
-                "ERROR: declared deliverables missing from session diff:",
+                f"{severity}: declared deliverables missing from session diff"
+                + (" (produces_strict: false — downgraded to warning)" if not produces_strict else "") + ":",
                 file=sys.stderr,
             )
             for decl, reason in missing:
@@ -521,6 +623,13 @@ def main() -> int:
                     "the runner passed --external-baselines.",
                     file=sys.stderr,
                 )
+            if not produces_strict:
+                print(
+                    "\nHint: set `produces_strict: true` (or remove produces_strict) "
+                    "to treat this as a hard failure again.",
+                    file=sys.stderr,
+                )
+                return 0
             return 1
         return 0
 
