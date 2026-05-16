@@ -88,11 +88,11 @@ Required fields: `session`, `title`, `depends_on`, `touches`, `parallel_safe`. O
     # docs/claude-sessions/<epic-name>/.epic-produces-overrides.json
     {
       "session-02-decompose-config": ["exporter/file.rs", "exporter/mod.rs"],
-      "03": {"produces": ["tracker/mod.rs"], "reason": "charter reassigned — original work was already done"},
+      "03": {"produces": ["tracker/mod.rs"], "strict": false, "reason": "charter reassigned — exact files uncertain"},
       "session-04": ["src/bar.rs"]
     }
 
-Keys: full filename stem (without `.md`), `session-NN`, or bare `NN`. Values: list of path/glob strings, or a dict with a `"produces"` key (and optional `"reason"` for logging).
+Keys: full filename stem (without `.md`), `session-NN`, or bare `NN`. Values: list of path/glob strings, or a dict with a `"produces"` key. Dict values may also supply `"strict": false` to soften the check at runtime (overrides the session's frontmatter `produces_strict`) and an optional `"reason"` string for documentation. Malformed JSON or wrong-shape entries are logged as WARNINGs to the session exec log — the validator does **not** silently fall back, so a typo in the sidecar will be visible.
 
 Example with all fields:
 

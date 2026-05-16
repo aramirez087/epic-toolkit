@@ -28,12 +28,15 @@ Charter-can-amend override (.epic-produces-overrides.json):
 
     {
       "session-02-decompose-config": ["exporter/file.rs", "exporter/mod.rs"],
-      "03": {"produces": ["tracker/mod.rs"], "reason": "charter reassigned"},
+      "03": {"produces": ["tracker/mod.rs"], "strict": false, "reason": "..."},
       "session-04": ["src/bar.rs"]
     }
 
   Keys may be the full filename stem (without .md), "session-NN", or bare "NN".
   Values may be a list of path/glob strings OR a dict with a "produces" key.
+  Dict values may also supply "strict": false to soften the check (overrides
+  the session's frontmatter produces_strict) and an optional "reason" string
+  for documentation.
 
 Modes:
   1. produces: declared
@@ -301,52 +304,106 @@ def _read_external_diffs(
     return changed_by_repo, deleted_by_repo, errors
 
 
-def _load_produces_override(session_md: str) -> list[str] | None:
+def _load_produces_override(
+    session_md: str,
+) -> tuple[list[str] | None, bool | None]:
     """Load .epic-produces-overrides.json from the sessions directory.
 
-    Returns the overridden produces list for this session if an entry exists,
-    or None when no override applies.  The charter session can write this file
-    to replace the generated produces: declaration for any downstream session
-    it reassigns (issue-4: adaptive session support, bug-298).
+    Returns (produces_override, strict_override).  Either or both may be None:
+    - produces_override is None when no override entry applies to this session
+      (file absent, malformed, or no matching key).
+    - strict_override is None when the override entry didn't supply a `strict`
+      field; when set, it takes precedence over frontmatter `produces_strict`.
 
-    Sidecar format — keyed by full filename stem OR session number:
+    The charter session writes this file to replace the generated produces:
+    declaration for any downstream session it reassigns.  Per-entry `strict`
+    lets the charter additionally soften the check when it isn't sure exactly
+    which files the reassigned session will end up producing. (issue-4, bug-298)
+
+    Sidecar format:
       {
         "session-02-decompose-config": ["exporter/file.rs", "exporter/mod.rs"],
-        "03": {"produces": ["tracker/mod.rs"], "reason": "charter reassigned"},
+        "03": {"produces": ["tracker/mod.rs"], "strict": false, "reason": "..."},
         "session-04": ["src/bar.rs"]
       }
+
+    Malformed-sidecar discipline: when the file exists but cannot be used (bad
+    JSON, wrong root shape, wrong entry shape), the function emits a WARNING to
+    stderr and falls back to None — silent fallback would let a typo in the
+    sidecar look like "override applied" while the validator quietly ran against
+    the frontmatter produces.  Missing entries for the current session are NOT
+    warned (the file legitimately may only have entries for sibling sessions).
     """
     session_dir = os.path.dirname(os.path.abspath(session_md))
     overrides_path = os.path.join(session_dir, ".epic-produces-overrides.json")
     if not os.path.isfile(overrides_path):
-        return None
+        return None, None
+    rel = os.path.basename(overrides_path)
     try:
         with open(overrides_path, encoding="utf-8") as f:
             data = json.load(f)
-    except (OSError, ValueError):
-        return None
+    except (OSError, ValueError) as exc:
+        print(
+            f"WARNING: could not read {rel}: {exc} "
+            f"(ignoring; produces: will fall back to frontmatter)",
+            file=sys.stderr,
+        )
+        return None, None
     if not isinstance(data, dict):
-        return None
+        print(
+            f"WARNING: {rel} root must be a JSON object, got "
+            f"{type(data).__name__} (ignoring; produces: will fall back to "
+            f"frontmatter)",
+            file=sys.stderr,
+        )
+        return None, None
     stem = os.path.splitext(os.path.basename(session_md))[0]
     # Lookup order: full stem → session-NN → bare NN
     m = re.match(r"^session-(\d+)", stem)
     nn = m.group(1) if m else None
-    entry = (
-        data.get(stem)
-        or (data.get(f"session-{nn}") if nn else None)
-        or (data.get(nn) if nn else None)
-    )
+    entry = data.get(stem)
+    if entry is None and nn:
+        entry = data.get(f"session-{nn}")
+    if entry is None and nn:
+        entry = data.get(nn)
     if entry is None:
-        return None
+        return None, None
     if isinstance(entry, list):
         raw = entry
+        strict_override: bool | None = None
     elif isinstance(entry, dict):
         raw = entry.get("produces", [])
         if not isinstance(raw, list):
-            return None
+            print(
+                f"WARNING: {rel}[{stem!r}].produces must be a list, got "
+                f"{type(raw).__name__} (ignoring entry; falling back to "
+                f"frontmatter)",
+                file=sys.stderr,
+            )
+            return None, None
+        strict_raw = entry.get("strict")
+        if strict_raw is None:
+            strict_override = None
+        elif isinstance(strict_raw, bool):
+            strict_override = strict_raw
+        else:
+            print(
+                f"WARNING: {rel}[{stem!r}].strict must be a boolean, got "
+                f"{type(strict_raw).__name__} (ignoring strict; produces "
+                f"override still applies)",
+                file=sys.stderr,
+            )
+            strict_override = None
     else:
-        return None
-    return [str(p).strip() for p in raw if str(p).strip()]
+        print(
+            f"WARNING: {rel}[{stem!r}] must be a list or object, got "
+            f"{type(entry).__name__} (ignoring entry; falling back to "
+            f"frontmatter)",
+            file=sys.stderr,
+        )
+        return None, None
+    produces = [str(p).strip() for p in raw if str(p).strip()]
+    return produces, strict_override
 
 
 def _print_diff_summary(
@@ -494,14 +551,23 @@ def main() -> int:
     # the sessions directory with an entry for this session, use those produces
     # in place of the frontmatter declaration.  The charter writes this file
     # when it reassigns a downstream session to different work. (issue-4, bug-298)
-    _override = _load_produces_override(session_md)
-    if _override is not None:
+    _override_produces, _override_strict = _load_produces_override(session_md)
+    if _override_produces is not None:
         print(
             f"INFO: produces: overridden by .epic-produces-overrides.json "
-            f"(was {len(produces)} entries, now {len(_override)})",
+            f"(was {len(produces)} entries, now {len(_override_produces)})",
             file=sys.stderr,
         )
-        produces = _override
+        produces = _override_produces
+    if _override_strict is not None:
+        if _override_strict != produces_strict:
+            print(
+                f"INFO: produces_strict overridden by "
+                f".epic-produces-overrides.json ({produces_strict} → "
+                f"{_override_strict})",
+                file=sys.stderr,
+            )
+        produces_strict = _override_strict
 
     if produces:
         missing: list[tuple[str, str]] = []
