@@ -948,8 +948,11 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
 
     if $USE_WORKTREE; then
       sess_wt="$WORKTREE_BASE/$sess_wt_dir_name"
-      # Wipe stale worktree from a prior failed run, but only if no
-      # process has CWD inside and no unmerged commits exist.
+      # Wipe the prior attempt for this session before re-running it.
+      # The branch is recreated from trunk below, so commits on this
+      # per-session branch are intentionally discarded for in-range
+      # sessions while unrelated stale branches keep the earlier
+      # stale-worktree safety behavior.
       if [[ -d "$sess_wt" ]]; then
         if is_worktree_in_use "$sess_wt"; then
           err "  ✗ worktree for session $sid is in use by another process: $sess_wt"
@@ -962,15 +965,17 @@ for (( wn=1; wn<=WAVE_COUNT; wn++ )); do
           [[ "$ahead" -gt 0 ]] && has_unmerged=true
         fi
         if $has_unmerged; then
-          err "  ✗ session $sid branch '$sess_branch' has unmerged commits ahead of $BRANCH"
-          err "    refusing to delete; aborting. Inspect, merge, or remove the branch manually:"
-          err "    git -C $TRUNK_WORKTREE_DIR log $BRANCH..$sess_branch --oneline"
-          exit 1
+          log "  ↻ discarding prior attempt for session $sid: $sess_branch is $ahead commit(s) ahead of $BRANCH"
+        else
+          log "  ↻ removing stale worktree for session $sid: $sess_wt"
         fi
-        log "  ↻ removing stale worktree for session $sid: $sess_wt"
-        git worktree remove "$sess_wt" --force 2>/dev/null || rm -rf "$sess_wt"
+        git worktree remove "$sess_wt" --force 2>/dev/null || {
+          rm -rf "$sess_wt"
+          git worktree prune 2>/dev/null || true
+        }
       fi
       if git show-ref --verify --quiet "refs/heads/$sess_branch"; then
+        log "  ↻ deleting prior session branch: $sess_branch"
         git branch -D "$sess_branch" 2>/dev/null || true
       fi
       git -C "$TRUNK_WORKTREE_DIR" worktree add -b "$sess_branch" "$sess_wt" "$BRANCH"

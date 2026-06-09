@@ -7,6 +7,7 @@
 # ---------------------------------------------------------------------------
 classify_error() {
   local log_file="$1" exit_code="$2"
+  rm -f "${log_file}.errtype"
 
   if [[ "$exit_code" -eq 124 ]]; then
     echo "timeout"
@@ -27,17 +28,34 @@ classify_error() {
 
   if [[ "$exit_code" -eq 97 ]]; then
     # Slurp the validator's ERROR header + indented `  - <path>` lines
-    # so error_detail names the missing files. Scope to lines AFTER the
-    # marker — Claude's prose can include unrelated `ERROR: ...` strings. (bugs 106, 109, 125)
+    # so error_detail names the missing files. Scope to the last marker:
+    # persisted logs from older runs can contain stale validation blocks.
+    # Claude's prose can include unrelated `ERROR: ...` strings. (bugs 106, 109, 125)
     local err_msg
     err_msg="$(awk '
-      /^=== deliverables validation failed \(rc=/ { f=1; next }
+      function finish_block() {
+        if (f && header_done) {
+          last = paths ? header ": " paths : header
+        }
+        f = 0
+        header_done = 0
+        header = ""
+        paths = ""
+      }
+      /^=== deliverables validation failed \(rc=/ {
+        finish_block()
+        f = 1
+        next
+      }
       f && header_done && /^  - / {
         sub(/^  - /, "")
         paths = paths (paths ? "; " : "") $0
         next
       }
-      f && header_done { exit }
+      f && header_done {
+        finish_block()
+        next
+      }
       f && /^ERROR: / {
         sub(/^ERROR: /, "")
         header = $0
@@ -45,7 +63,10 @@ classify_error() {
         header_done = 1
         next
       }
-      END { if (header_done) print (paths ? header ": " paths : header) }
+      END {
+        finish_block()
+        if (last) print last
+      }
     ' "$log_file" 2>/dev/null)"
     if [[ -n "$err_msg" ]]; then
       printf '%s\n' "$err_msg" > "${log_file}.errtype"

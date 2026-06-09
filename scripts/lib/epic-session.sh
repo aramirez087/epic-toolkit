@@ -329,6 +329,8 @@ run_one_session() {
   local plan_file_session="$wt_dir/$plan_basename"
   local plan_log="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-plan.log"
   local exec_log="$TRUNK_SESSIONS_DIR/.session-${padded_sid}-exec.log"
+  : > "$exec_log"
+  rm -f "${exec_log}.errtype"
   local session_prompt
   session_prompt="$(extract_prompt "$session_path")"
   if [[ -z "$session_prompt" ]]; then
